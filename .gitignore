@@ -1,0 +1,8 @@
+.claude/
+.venv/
+.ipynb_checkpoints/
+__pycache__/
+.vscode/
+export_results/
+*.html
+config.json

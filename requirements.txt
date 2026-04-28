@@ -1,0 +1,24 @@
+# Środowisko i narzędzia
+ipykernel
+nbstripout
+
+# Parsowanie plików i ekstrakcja tekstu
+pdfplumber
+python-docx
+beautifulsoup4
+lxml
+requests
+
+# Analiza tekstu i NLP
+langdetect
+spacy
+numpy
+pandas
+scikit-learn
+tqdm
+# Analiza sentymentu (Hugging Face)
+transformers
+torch
+
+# Generowanie raportu
+markdown
