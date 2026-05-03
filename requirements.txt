@@ -10,15 +10,19 @@ lxml
 requests
 
 # Analiza tekstu i NLP
-langdetect
+lingua-language-detector
 spacy
 numpy
 pandas
 scikit-learn
 tqdm
-# Analiza sentymentu (Hugging Face)
-transformers
-torch
+# Wsparcie dla języka islandzkiego (Hugging Face: IceBERT + MIM-GOLD-22).
+# Odkomentuj obie linie, jeśli analizujesz teksty po islandzku — pozwoli to
+# załadować spaCy + IceBERT-base (wektory) i icelandic-ner-MIM-GOLD-22 (NER)
+# w komórce cell_model. Pobranie tych modeli to ~700 MB przy pierwszym uruchomieniu.
+# Dla pozostałych języków (pl, ru, en, it, fi) te zależności nie są potrzebne.
+# transformers
+# torch
 
 # Generowanie raportu
 markdown

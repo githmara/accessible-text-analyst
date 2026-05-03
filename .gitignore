@@ -1,4 +1,5 @@
 .claude/
+.claude_patches/
 .venv/
 .ipynb_checkpoints/
 __pycache__/
