@@ -26,3 +26,4 @@ tqdm
 
 # Generowanie raportu
 markdown
+markdownify
