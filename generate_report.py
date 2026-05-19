@@ -8,7 +8,7 @@ NOTEBOOK_PATH = "accessible_text_analyst.ipynb"
 OUTPUT_HTML = "raport_analizy.html"
 
 # Ustaw na False, jeśli chcesz w HTMLu widzieć tabele lematyzacji, części mowy i paski ładowania
-REMOVE_NOISE = False
+REMOVE_NOISE = True
 
 try:
     import markdown
