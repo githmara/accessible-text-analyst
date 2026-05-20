@@ -52,6 +52,7 @@ STRINGS = {
         'prophecy.fallback.org': 'zapomnianego zakonu',
         'katla.header': '--- MONOLOG ZAMROŻONYCH BYTÓW (GŁOS: KATLA) ---\n\n',
         'vieno.header': '--- SZAMAŃSKA INWOKACJA ECH (GŁOS: VIENO) ---\n\n',
+        'lumi.header': '--- MELDUNEK OSTATECZNY Z MROŹNEJ PÓŁNOCY (GŁOS: LUMI) ---\n\n',
     },
     'en': {
         'oracle.header': (
@@ -82,6 +83,7 @@ STRINGS = {
         'prophecy.fallback.org': 'a forgotten order',
         'katla.header': '--- MONOLOGUE OF THE FROZEN BEINGS (VOICE: KATLA) ---\n\n',
         'vieno.header': '--- SHAMANIC INVOCATION OF ECHOES (VOICE: VIENO) ---\n\n',
+        'lumi.header': '--- FINAL DISPATCH FROM THE FROZEN NORTH (VOICE: LUMI) ---\n\n',
     },
     'ru': {
         'oracle.header': (
@@ -112,6 +114,7 @@ STRINGS = {
         'prophecy.fallback.org': 'забытого ордена',
         'katla.header': '--- МОНОЛОГ ЗАМЁРЗШИХ СУЩНОСТЕЙ (ГОЛОС: КАТЛА) ---\n\n',
         'vieno.header': '--- ШАМАНСКАЯ ИНВОКАЦИЯ ОТЗВУКОВ (ГОЛОС: ВИЕНО) ---\n\n',
+        'lumi.header': '--- ПОСЛЕДНИЙ ОТЧЁТ С МОРОЗНОГО СЕВЕРА (ГОЛОС: ЛУМИ) ---\n\n',
     },
     'fi': {
         'oracle.header': (
@@ -142,6 +145,7 @@ STRINGS = {
         'prophecy.fallback.org': 'unohdettu veljeskunta',
         'katla.header': '--- JÄÄTYNEIDEN OLENTOJEN MONOLOGI (ÄÄNI: KATLA) ---\n\n',
         'vieno.header': '--- KAIKUJEN SAMAANIKUTSU (ÄÄNI: VIENO) ---\n\n',
+        'lumi.header': '--- VIIMEINEN RAPORTTI KYLMÄSTÄ POHJOLASTA (ÄÄNI: LUMI) ---\n\n',
     },
     'is': {
         'oracle.header': (
@@ -172,6 +176,7 @@ STRINGS = {
         'prophecy.fallback.org': 'gleymd regla',
         'katla.header': '--- EINTAL FROSINNA VERA (RÖDD: KATLA) ---\n\n',
         'vieno.header': '--- SEIÐKALL BERGMÁLA (RÖDD: VIENO) ---\n\n',
+        'lumi.header': '--- LOKASKÝRSLA FRÁ FROSNU NORÐRI (RÖDD: LUMI) ---\n\n',
     },
     'it': {
         'oracle.header': (
@@ -202,6 +207,7 @@ STRINGS = {
         'prophecy.fallback.org': 'un ordine dimenticato',
         'katla.header': '--- MONOLOGO DEGLI ESSERI GHIACCIATI (VOCE: KATLA) ---\n\n',
         'vieno.header': '--- INVOCAZIONE SCIAMANICA DEGLI ECHI (VOCE: VIENO) ---\n\n',
+        'lumi.header': '--- DISPACCIO FINALE DAL NORD GHIACCIATO (VOCE: LUMI) ---\n\n',
     },
 }
 

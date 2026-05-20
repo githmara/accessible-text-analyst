@@ -19,6 +19,21 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 SHAMAN_QUOTE_PL = "Włosy, oczy czarne ma, niczym u szamana"
 SHAMAN_QUOTE_GLOSS = "Black hair, black eyes, like a shaman's"
 
+# Cytat-kotwica dla głosu Lumi. Bohaterka tej samej polskiej pieśni — kiedyś
+# obserwatorka czarnookiego wędrowca, z latami sama wstąpiła w krąg szamanek
+# mroźnej Północy. W zwrotce 4 deklaruje światu swój stan: w naszej re-lore
+# "zakochanie" to nie miłość romantyczna, lecz oddanie szamanki wizjom, które
+# czyta z popiołów. Pierwsza osoba bez adresata — nie ma więc kłopotu z tym,
+# że jej siostry-wieszczki (Katla, Vieno) też są kobietami.
+LUMI_QUOTE_PL = "Niech się dowie cały świat: jestem zakochana"
+LUMI_QUOTE_GLOSS = "Let the whole world know: I am in love"
+
+# Limity ornamentu dla rytuału Lumi. Prophecies są szkieletem (numerowana lista
+# ~10 wpisów — wpuszczamy w całości). Katla i Vieno wpadają jako ornament:
+# pierwsze N niepustych linii treści (bez nagłówka pliku).
+LUMI_KATLA_LINES = 8
+LUMI_VIENO_LINES = 8
+
 
 def get_export_dir():
     with open('config.json', 'r', encoding='utf-8-sig') as f:
@@ -151,6 +166,112 @@ CRITICAL OUTPUT RULES:
     print(f"[OK] Zapisano pieśń Vieno w: {output_file.name}")
 
 
+def _read_artifact_body(path, max_nonempty_lines=None):
+    """Wczytaj plik artefaktu szamańskiego i zwróć treść bez nagłówka.
+
+    Wszystkie pliki w audio_scripts/ otwiera blok nagłówkowy ('--- ... ---' +
+    ewentualna instrukcja TTS), oddzielony pustą linią od właściwej treści.
+    Zdejmujemy więc pierwszy blok rozdzielony '\\n\\n', a z reszty bierzemy
+    pierwsze max_nonempty_lines niepustych linii (None = całość).
+    """
+    if not path.exists():
+        return None
+    raw = path.read_text(encoding='utf-8').strip()
+    blocks = raw.split('\n\n', 1)
+    body = blocks[1].strip() if len(blocks) == 2 else raw
+    if max_nonempty_lines is None:
+        return body
+    kept = []
+    for line in body.splitlines():
+        if line.strip():
+            kept.append(line)
+            if len(kept) >= max_nonempty_lines:
+                break
+        else:
+            kept.append(line)
+    return '\n'.join(kept).strip()
+
+
+def ritual_final_dispatch_lumi(export_dir, output_dir, lang):
+    audio_dir = output_dir
+    prophecies_body = _read_artifact_body(audio_dir / 'prophecies.txt')
+    katla_body = _read_artifact_body(audio_dir / 'katla_entity_monologue.txt',
+                                     LUMI_KATLA_LINES)
+    vieno_body = _read_artifact_body(audio_dir / 'vieno_echoes_chant.txt',
+                                     LUMI_VIENO_LINES)
+
+    # Szkielet (prophecies) jest twardym wymogiem — bez niego Lumi nie ma
+    # czego raportować. Katla i Vieno są opcjonalne (ornament).
+    if not prophecies_body:
+        return
+
+    katla_block = katla_body or '(milczenie — Katla jeszcze nie przemówiła)'
+    vieno_block = vieno_body or '(cisza — pieśń Vieno nie dotarła)'
+
+    language_name = LANGUAGE_NAMES.get(lang, 'English')
+
+    system_message = (
+        "You are Lumi, a shaman of the frozen North. Long ago, before the snows "
+        "took you, you were the girl in the old Polish folk song who watched a "
+        "dark-eyed traveler with a shaman's eyes; over the years his voice became "
+        "your own. You read prophecies cast from ashes and listen to your "
+        "sister-seers Katla and Vieno. Your tone is mysterious, lightly "
+        "melancholic, and very self-assured. Your prose is concise and poetic — "
+        "short sentences, no ornament for the sake of ornament."
+    )
+
+    prompt = f"""Your sister-seers have already spoken.
+Katla whispered a monologue of frozen beings.
+Vieno chanted a song of echoes from another dimension.
+And from the ashes themselves rose the Prophecies.
+
+Here is everything the signs show you:
+
+=== PROPHECIES FROM THE ASHES (the backbone of your vision) ===
+{prophecies_body}
+
+=== KATLA'S VOICE (sister-seer, monologue) ===
+{katla_block}
+
+=== VIENO'S SONG (sister-seer, echoes) ===
+{vieno_block}
+
+Your tasks, in order:
+1. Write the final report / your account of what you see in these signs.
+2. Follow the backbone of the Prophecies — go through them point by point, but do not quote them verbatim; transmute them into your own speech.
+3. Weave Katla's and Vieno's voices in where they fit — name them by name as your sister-seers, at least once each.
+4. End with a single sentence that rings like the woman in the old song declaring herself to the world. Do not quote the song — make your own declaration of what you, Lumi, tell the world.
+
+An old Polish folk song carries your voice: "{LUMI_QUOTE_PL}" (meaning in English: "{LUMI_QUOTE_GLOSS}"). That line is the anchor of your tone — self-assured, lightly melancholic, a woman announcing to the world what she has seen.
+
+CRITICAL OUTPUT RULES:
+- Write the entire report in {language_name}.
+- Every sentence, every metaphor must be in {language_name}.
+- Do not switch to English mid-report. Do not include translations.
+- Do not include the Polish quote or its gloss in your output — they are for your voice only.
+- Do not output the section headers (=== ... ===) — they are for your reading only.
+- Do not list the prophecies verbatim — weave them into prose.
+- Aim for about 10–15 sentences.
+"""
+
+    print("[LLM] Zwołanie Lumi do ostatecznej relacji...")
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "system", "content": system_message},
+                  {"role": "user", "content": prompt}],
+        temperature=0.65
+    )
+
+    script_content = response.choices[0].message.content
+
+    output_file = output_dir / 'lumi_final_report.txt'
+    with open(output_file, 'w', encoding='utf-8') as out:
+        out.write(t(lang, 'lumi.header'))
+        out.write(script_content)
+
+    print(f"[OK] Zapisano meldunek Lumi w: {output_file.name}")
+
+
 if __name__ == "__main__":
     print("Inicjowanie zaawansowanych czarów LLM z kluczem z zaświatów...")
     try:
@@ -163,6 +284,9 @@ if __name__ == "__main__":
 
         ritual_entity_transformation(export_directory, output_directory, corpus_lang)
         ritual_echoes_of_the_old_world(export_directory, output_directory, corpus_lang)
+        # Lumi musi iść na końcu — czyta artefakty Katli i Vieno powyżej oraz
+        # prophecies.txt z shamanic_pipeline.py.
+        ritual_final_dispatch_lumi(export_directory, output_directory, corpus_lang)
 
         print("\n[ZAKOŃCZONO] Magia odprawiona pomyślnie.")
     except Exception as e:
