@@ -6,9 +6,20 @@ from functools import lru_cache
 
 NOTEBOOK_PATH = "accessible_text_analyst.ipynb"
 OUTPUT_HTML = "raport_analizy.html"
+CONFIG_PATH = "config.json"
 
-# Ustaw na False, jeśli chcesz w HTMLu widzieć tabele lematyzacji, części mowy i paski ładowania
-REMOVE_NOISE = True
+# REMOVE_NOISE czytany z config.json (gitignored), żeby przełączanie
+# między widokiem czytelnika a pełnym widokiem diagnostycznym nie
+# brudziło historii repo. Brak pliku lub klucza => domyślnie True
+# (tryb czytelnika: bez tabel lematyzacji, POS i pasków ładowania).
+def _load_remove_noise(path=CONFIG_PATH, default=True):
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            return bool(json.load(f).get("remove_noise", default))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default
+
+REMOVE_NOISE = _load_remove_noise()
 
 try:
     import markdown
