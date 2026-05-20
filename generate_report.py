@@ -269,9 +269,16 @@ EN_HARDCODE_PATTERNS = [
     (r"(\()(en|pl|ru|it|fi|is)(\))",
      r'\1<span lang="en">\2</span>\3'),
 
-    # ISO 639-1 kody wewnątrz dict-podobnych wyjść: {'pl': 5, 'en': 2}
-    (r"&#x27;([a-z]{2})&#x27;(\s*:\s*\d)",
-     r'&#x27;<span lang="en">\1</span>&#x27;\2'),
+    # ISO 639-1 kody wewnątrz pojedynczych cudzysłowów: 'fi', 'en'.
+    # Łapie zarówno dict-output ({&#x27;pl&#x27;: 5}) jak i samodzielne
+    # wystąpienia z cell_multilang_pass ("Язык &#x27;fi&#x27; (финский)").
+    (r"(&#x27;)(en|pl|ru|it|fi|is)(&#x27;)",
+     r'\1<span lang="en">\2</span>\3'),
+
+    # ISO 639-1 na początku wciętej linii w sekcji [ИТОГ] z
+    # cell_multilang_pass: "  fi: предложений — 23".
+    (r"^(\s+)(en|pl|ru|it|fi|is)(:\s+предложений)",
+     r'\1<span lang="en">\2</span>\3'),
 ]
 
 
@@ -553,6 +560,25 @@ def build_accessible_html():
         # &#x27;/&quot; uniformowo we wszystkich wzorcach).
         text = _html.escape(text)
 
+        # === Krok 0: multilang sample (uruchamiany ZAWSZE) ===
+        # cell_multilang_pass drukuje "  [fi] [PERSON] 'Joanna Kos'" — gdzie
+        # ISO z nawiasu to język danego konkretnego cytatu. Tagujemy go tym
+        # ISO, niezależnie od target_lang korpusu, bo nawet w korpusie ru/en
+        # wtrącenia mogą być w dowolnym z {pl, fi, it, is}. Pattern bierze
+        # ISO z grupy \2 i używa go DWA razy: raz jako wartość lang="en"
+        # (sam kod jest anglojęzyczny), drugi raz jako lang="\2" dla tekstu.
+        multilang_always_patterns = [
+            (r'^(\s+\[)(en|pl|ru|it|fi|is)(\]\s+\[)([A-Za-z_]+)(\]\s+&#x27;)(.+?)(&#x27;)\s*$',
+             r'\1<span lang="en">\2</span>\3<span lang="en">\4</span>\5<span lang="\2">\6</span>\7'),
+        ]
+        lines0 = text.split('\n')
+        tagged0 = []
+        for line in lines0:
+            for pat, repl in multilang_always_patterns:
+                line = re.sub(pat, repl, line)
+            tagged0.append(line)
+        text = '\n'.join(tagged0)
+
         # === Krok 1: tagowanie języka korpusu (target_lang) ===
         # Wykonujemy najpierw, bo wzorce są zakotwiczone do nieprzetagowanych
         # prefiksów typu "[orgName] " czy "Абзац N:". Po EN-hardkodzie
@@ -576,6 +602,13 @@ def build_accessible_html():
                 (r"^(\s*\d+\.\s+&#x27;)(.+?)(&#x27;\s*:\s*\d+)$", r'\1<span lang="{}">\2</span>\3'),
                 # Entity: [orgName] &#x27;Name&#x27;
                 (r"^(\s*\[\w+\]\s+&#x27;)(.+?)(&#x27;)$", r'\1<span lang="{}">\2</span>\3'),
+                # Niespójne NER (cell_ner diagnostyka): "    'tekst': LABEL1, LABEL2".
+                # Tekst trafia w jezyk target_lang; LABEL{1,2} sa lapane przez
+                # EN-hardkod (_NER_LABELS) w nastepnym kroku. Wymagamy >= 1
+                # przecinka, zeby nie nachodzic na inne wzorce z pojedyncza
+                # etykieta.
+                (r"^(\s+&#x27;)(.+?)(&#x27;:\s+[A-Za-z][A-Za-z_]*(?:,\s+[A-Za-z][A-Za-z_]*)+)\s*$",
+                 r'\1<span lang="{}">\2</span>\3'),
                 # Unigramy: &#x27;word&#x27; : 10
                 (r"^(\s*&#x27;)(.+?)(&#x27;\s*:\s*\d+.*)$", r'\1<span lang="{}">\2</span>\3'),
 
