@@ -570,6 +570,12 @@ def build_accessible_html():
         multilang_always_patterns = [
             (r'^(\s+\[)(en|pl|ru|it|fi|is)(\]\s+\[)([A-Za-z_]+)(\]\s+&#x27;)(.+?)(&#x27;)\s*$',
              r'\1<span lang="en">\2</span>\3<span lang="en">\4</span>\5<span lang="\2">\6</span>\7'),
+            # cell_multilang_pass per-language лемма-сэмпл:
+            # "      [fi] 'Oletko'                 → 'oletko'"
+            # Tagujemy kod ISO jako en, a obie strony strzałki — jako ten
+            # właśnie ISO (forma i lemma są w tym samym języku).
+            (r'^(\s+\[)(en|pl|ru|it|fi|is)(\]\s+&#x27;)(.+?)(&#x27;\s+→\s+&#x27;)(.+?)(&#x27;)\s*$',
+             r'\1<span lang="en">\2</span>\3<span lang="\2">\4</span>\5<span lang="\2">\6</span>\7'),
         ]
         lines0 = text.split('\n')
         tagged0 = []
