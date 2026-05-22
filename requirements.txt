@@ -29,3 +29,5 @@ markdown
 markdownify
 openai
 python-dotenv
+pypdfium2
+easyocr
