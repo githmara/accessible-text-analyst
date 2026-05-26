@@ -53,6 +53,10 @@ STRINGS = {
         'katla.header': '--- MONOLOG ZAMROŻONYCH BYTÓW (GŁOS: KATLA) ---\n\n',
         'vieno.header': '--- SZAMAŃSKA INWOKACJA ECH (GŁOS: VIENO) ---\n\n',
         'lumi.header': '--- MELDUNEK OSTATECZNY Z MROŹNEJ PÓŁNOCY (GŁOS: LUMI) ---\n\n',
+        'sami.header': (
+            '--- ISKRA SAMI: ENERGETYCZNA SYNTEZA ---\n'
+            'Instrukcja TTS: czytać z ogromnym entuzjazmem, szerokim uśmiechem i wysoką dynamiką.\n\n'
+        ),
     },
     'en': {
         'oracle.header': (
@@ -84,6 +88,10 @@ STRINGS = {
         'katla.header': '--- MONOLOGUE OF THE FROZEN BEINGS (VOICE: KATLA) ---\n\n',
         'vieno.header': '--- SHAMANIC INVOCATION OF ECHOES (VOICE: VIENO) ---\n\n',
         'lumi.header': '--- FINAL DISPATCH FROM THE FROZEN NORTH (VOICE: LUMI) ---\n\n',
+        'sami.header': (
+            '--- SAMI\'S SPARK: ENERGETIC SYNTHESIS ---\n'
+            'TTS Instruction: read with immense enthusiasm, a wide smile, and high dynamics.\n\n'
+        ),
     },
     'ru': {
         'oracle.header': (
@@ -115,6 +123,10 @@ STRINGS = {
         'katla.header': '--- МОНОЛОГ ЗАМЁРЗШИХ СУЩНОСТЕЙ (ГОЛОС: КАТЛА) ---\n\n',
         'vieno.header': '--- ШАМАНСКАЯ ИНВОКАЦИЯ ОТЗВУКОВ (ГОЛОС: ВИЕНО) ---\n\n',
         'lumi.header': '--- ПОСЛЕДНИЙ ОТЧЁТ С МОРОЗНОГО СЕВЕРА (ГОЛОС: ЛУМИ) ---\n\n',
+        'sami.header': (
+            '--- ИСКРА САМИ: ЭНЕРГИЧНЫЙ СИНТЕЗ ---\n'
+            'Инструкция TTS: читать с огромным энтузиазмом, широкой улыбкой и высокой динамикой.\n\n'
+        ),
     },
     'fi': {
         'oracle.header': (
@@ -146,6 +158,10 @@ STRINGS = {
         'katla.header': '--- JÄÄTYNEIDEN OLENTOJEN MONOLOGI (ÄÄNI: KATLA) ---\n\n',
         'vieno.header': '--- KAIKUJEN SAMAANIKUTSU (ÄÄNI: VIENO) ---\n\n',
         'lumi.header': '--- VIIMEINEN RAPORTTI KYLMÄSTÄ POHJOLASTA (ÄÄNI: LUMI) ---\n\n',
+        'sami.header': (
+            '--- SAMIN KIPINÄ: ENERGINEN SYNTEESI ---\n'
+            'TTS-ohje: lue suurella innolla, leveällä hymyllä ja korkealla dynamiikalla.\n\n'
+        ),
     },
     'is': {
         'oracle.header': (
@@ -177,6 +193,10 @@ STRINGS = {
         'katla.header': '--- EINTAL FROSINNA VERA (RÖDD: KATLA) ---\n\n',
         'vieno.header': '--- SEIÐKALL BERGMÁLA (RÖDD: VIENO) ---\n\n',
         'lumi.header': '--- LOKASKÝRSLA FRÁ FROSNU NORÐRI (RÖDD: LUMI) ---\n\n',
+        'sami.header': (
+            '--- NEISTI SAMI: ORKUMIKIL SAMANTEKT ---\n'
+            'TTS leiðbeiningar: lesa með miklum eldmóði, breiðu brosi og mikilli dýnamík.\n\n'
+        ),
     },
     'it': {
         'oracle.header': (
@@ -208,6 +228,10 @@ STRINGS = {
         'katla.header': '--- MONOLOGO DEGLI ESSERI GHIACCIATI (VOCE: KATLA) ---\n\n',
         'vieno.header': '--- INVOCAZIONE SCIAMANICA DEGLI ECHI (VOCE: VIENO) ---\n\n',
         'lumi.header': '--- DISPACCIO FINALE DAL NORD GHIACCIATO (VOCE: LUMI) ---\n\n',
+        'sami.header': (
+            '--- SCINTILLA DI SAMI: SINTESI ENERGETICA ---\n'
+            'Istruzioni TTS: leggere con grande entusiasmo, un ampio sorriso e alta dinamica.\n\n'
+        ),
     },
 }
 
