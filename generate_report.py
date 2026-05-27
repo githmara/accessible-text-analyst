@@ -3,10 +3,13 @@ import json
 import re
 import sys
 from functools import lru_cache
+from pathlib import Path
+from urllib.parse import urlparse
 
 NOTEBOOK_PATH = "accessible_text_analyst.ipynb"
-OUTPUT_HTML = "raport_analizy.html"
 CONFIG_PATH = "config.json"
+EXPORT_ROOT = Path("export_results")
+OUTPUT_HTML_NAME = "raport_analizy.html"
 
 # REMOVE_NOISE czytany z config.json (gitignored), żeby przełączanie
 # między widokiem czytelnika a pełnym widokiem diagnostycznym nie
@@ -20,6 +23,38 @@ def _load_remove_noise(path=CONFIG_PATH, default=True):
         return default
 
 REMOVE_NOISE = _load_remove_noise()
+
+
+# Project directory resolution mirrors cell_corpus in the notebook:
+# slugified filename stem, slugified host_path for URLs, "_default" otherwise.
+# Keeping the logic in sync ensures generate_report.py writes alongside the
+# CSV/JSON/DOCX artefacts produced by the notebook for the same source.
+def _slugify(s, maxlen=80):
+    s = re.sub(r"[^\w\-\.]+", "_", s, flags=re.UNICODE).strip("._")
+    return s[:maxlen] or "_default"
+
+
+def _resolve_project_dir(config_path=CONFIG_PATH):
+    try:
+        with open(config_path, "r", encoding="utf-8-sig") as f:
+            source = (json.load(f).get("source_file") or "").strip()
+    except (FileNotFoundError, json.JSONDecodeError):
+        source = ""
+
+    if not source:
+        name = "_default"
+    elif source.startswith(("http://", "https://")):
+        u = urlparse(source)
+        host = (u.netloc or "url").replace("www.", "")
+        path = u.path.strip("/").replace("/", "_") or "index"
+        name = _slugify(f"{host}_{path}")
+    else:
+        name = _slugify(Path(source).stem)
+    return EXPORT_ROOT / name
+
+
+PROJECT_DIR = _resolve_project_dir()
+OUTPUT_HTML = str(PROJECT_DIR / OUTPUT_HTML_NAME)
 
 try:
     import markdown
@@ -765,9 +800,10 @@ def build_accessible_html():
         "</html>"
     ])
 
+    PROJECT_DIR.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_HTML, 'w', encoding='utf-8') as f:
         f.write("\n".join(html_content))
-    
+
     print(f"[OK] Pomyślnie wygenerowano dostępny raport HTML: {OUTPUT_HTML}")
     print(f"[INFO] Rozpoznany język docelowy tekstu do tagowania: {target_lang}")
     if REMOVE_NOISE:

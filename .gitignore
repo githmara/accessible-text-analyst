@@ -5,7 +5,5 @@
 __pycache__/
 .vscode/
 export_results/
-*.html
 config.json
-raport_dla_notebooklm.md
 *.env

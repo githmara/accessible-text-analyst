@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Two-file project that performs accessibility-oriented multilingual text analytics:
 
 - `accessible_text_analyst.ipynb` — the entire NLP pipeline (36 cells). The notebook narrative and `print()` outputs are in **Russian** and were intentionally written without color, emoji, or pseudographic art so they read cleanly through NVDA/JAWS screen readers. The notebook itself emits two accessibility artefacts (`accessible_text.html`, `accessible_text.docx`) where every paragraph and every foreign-language sentence carries its own `lang` attribute so screen readers and TTS engines switch voice automatically.
-- `generate_report.py` — standalone post-processor that turns the executed notebook into a single accessible HTML file (`raport_analizy.html`). It wraps foreign-language fragments in `<span lang="target_lang">` and **always** wraps technical English fragments (POS tags, NER labels, spaCy/HF model names, ASCII filenames) in `<span lang="en">` regardless of corpus language.
+- `generate_report.py` — standalone post-processor that turns the executed notebook into a single accessible HTML file (`raport_analizy.html`), written into `export_results/<project_dir>/` alongside the notebook artefacts. The script reads `source_file` from `config.json` and applies the same slugify rules as `cell_corpus` to pick the project subdirectory. It wraps foreign-language fragments in `<span lang="target_lang">` and **always** wraps technical English fragments (POS tags, NER labels, spaCy/HF model names, ASCII filenames) in `<span lang="en">` regardless of corpus language.
+- `generate_md.py` — converts the generated `raport_analizy.html` to `raport_dla_notebooklm.md` for NotebookLM. Reads from and writes to the same `export_results/<project_dir>/`.
 
 There is no test suite and no build step.
 
@@ -58,7 +59,7 @@ The notebook's 36 cells are a linear, stateful pipeline — every cell reuses gl
 
 ## HTML report generator
 
-`generate_report.py` reads the saved `.ipynb`, walks `cells`, and emits `raport_analizy.html`. Key behaviors:
+`generate_report.py` reads the saved `.ipynb`, walks `cells`, and emits `export_results/<project_dir>/raport_analizy.html` (project dir resolved from `config.json`'s `source_file`, mirroring the notebook's `_slugify`). Key behaviors:
 
 - **Target-language detection** — scans cell stdout for `Выбран язык: ... (xx)` and uses `xx` as `target_lang`. The whole `<html>` is `lang="ru"` (the narrative is Russian); foreign-corpus content gets per-fragment `<span lang="target_lang">`. When `target_lang == "ru"`, the per-fragment target-lang pass is skipped (corpus is already Russian) but the EN-hardcoding pass below still runs.
 - **`tag_target_language` (target-lang patterns)** — a list of regex patterns matches structured output formats (numbered `[1] ...` excerpts, ranked tables, POS tables, lemmatization tables, RAG result rows, etc.) and wraps just the foreign-corpus portion. When extending the pipeline, output formats must match one of these patterns or content will not be tagged. HTML-escaping happens before regex matching, so quotes appear as `&#x27;`/`&quot;` in the patterns.
@@ -74,4 +75,4 @@ When you add a new pipeline step that prints technical English (a new POS tag se
 - Never introduce ANSI colors, emoji, progress bars, or box-drawing characters into stdout — the entire project's value is screen-reader cleanliness. The Hugging Face/tqdm/transformers mute pattern lives in `cell_model._silence_hf_progress()` (used when loading IceBERT/MIM-GOLD-22 for Icelandic); replicate it for any new model loads.
 - The `_lg` spaCy models are a hard requirement for `cell_topics` to do anything; the cell self-skips on missing vectors, so partial pipelines are valid but lose topic modeling.
 - Notebook patches are applied via one-shot Python scripts under `.claude_patches/` (gitignored). Edit cell sources by writing a new `.py`/`.md` patch file and re-running `apply_patches.py` rather than hand-editing the notebook JSON.
-- `export_results/`, `*.html`, and `.claude_patches/` are gitignored — generated artefacts and local tooling only.
+- `export_results/` and `.claude_patches/` are gitignored — generated artefacts and local tooling only. All generated HTML/Markdown reports live inside `export_results/<project_dir>/`, so no `*.html` or `raport_dla_notebooklm.md` rule is needed at the repo root.

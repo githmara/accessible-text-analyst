@@ -1,5 +1,9 @@
+import json
 import re
 import sys
+from pathlib import Path
+from urllib.parse import urlparse
+
 from bs4 import BeautifulSoup
 
 try:
@@ -14,8 +18,40 @@ except ImportError:
     print("[BŁĄD] Brak biblioteki beautifulsoup4. Wykonaj: pip install beautifulsoup4")
     sys.exit(1)
 
-INPUT_HTML = "raport_analizy.html"
-OUTPUT_MD = "raport_dla_notebooklm.md"
+CONFIG_PATH = "config.json"
+EXPORT_ROOT = Path("export_results")
+INPUT_HTML_NAME = "raport_analizy.html"
+OUTPUT_MD_NAME = "raport_dla_notebooklm.md"
+
+
+# Match cell_corpus in the notebook: slugified stem / host_path / "_default".
+def _slugify(s, maxlen=80):
+    s = re.sub(r"[^\w\-\.]+", "_", s, flags=re.UNICODE).strip("._")
+    return s[:maxlen] or "_default"
+
+
+def _resolve_project_dir(config_path=CONFIG_PATH):
+    try:
+        with open(config_path, "r", encoding="utf-8-sig") as f:
+            source = (json.load(f).get("source_file") or "").strip()
+    except (FileNotFoundError, json.JSONDecodeError):
+        source = ""
+
+    if not source:
+        name = "_default"
+    elif source.startswith(("http://", "https://")):
+        u = urlparse(source)
+        host = (u.netloc or "url").replace("www.", "")
+        path = u.path.strip("/").replace("/", "_") or "index"
+        name = _slugify(f"{host}_{path}")
+    else:
+        name = _slugify(Path(source).stem)
+    return EXPORT_ROOT / name
+
+
+PROJECT_DIR = _resolve_project_dir()
+INPUT_HTML = str(PROJECT_DIR / INPUT_HTML_NAME)
+OUTPUT_MD = str(PROJECT_DIR / OUTPUT_MD_NAME)
 
 def clean_html_for_notebook(html_content):
     """
@@ -53,9 +89,10 @@ def convert_to_markdown():
     # Usuwamy nadmiarowe puste linie
     md_content = re.sub(r'\n{3,}', '\n\n', md_content)
 
+    PROJECT_DIR.mkdir(parents=True, exist_ok=True)
     with open(OUTPUT_MD, 'w', encoding='utf-8') as f:
         f.write(md_content)
-    
+
     print(f"[OK] Raport Markdown gotowy: {OUTPUT_MD}")
 
 if __name__ == "__main__":
