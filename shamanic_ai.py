@@ -109,7 +109,7 @@ def ritual_echoes_of_the_old_world(export_dir, output_dir, lang):
     with open(topics_file, 'r', encoding='utf-8-sig') as f:
         topics = json.load(f)
         keywords = []
-        for i in range(3):
+        for i in range(20):
             if str(i) in topics:
                 keywords.extend(topics[str(i)])
 
@@ -139,6 +139,8 @@ Every few lines, weave in EXACTLY ONE of the sentences below as a raw, foreign e
 1. {sentences[0]}
 2. {sentences[1]}
 3. {sentences[2]}
+4. {sentences[3]}
+5. {sentences[4]}
 
 CRITICAL OUTPUT RULES:
 - Write the entire chant in {language_name}.
