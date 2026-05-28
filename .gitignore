@@ -6,4 +6,5 @@ __pycache__/
 .vscode/
 export_results/
 config.json
+config.ini
 *.env

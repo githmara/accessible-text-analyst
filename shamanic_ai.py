@@ -35,8 +35,16 @@ LUMI_KATLA_LINES = 8
 LUMI_VIENO_LINES = 8
 
 
+def _locate_config():
+    # Akceptujemy config.json i config.ini (treść zawsze JSON).
+    for name in ('config.json', 'config.ini'):
+        if Path(name).is_file():
+            return name
+    return 'config.json'
+
+
 def get_export_dir():
-    with open('config.json', 'r', encoding='utf-8-sig') as f:
+    with open(_locate_config(), 'r', encoding='utf-8-sig') as f:
         config = json.load(f)
     basename = Path(config.get('source_file', '')).stem
     return Path('export_results') / basename
@@ -207,8 +215,8 @@ def ritual_final_dispatch_lumi(export_dir, output_dir, lang):
     if not prophecies_body:
         return
 
-    katla_block = katla_body or '(milczenie — Katla jeszcze nie przemówiła)'
-    vieno_block = vieno_body or '(cisza — pieśń Vieno nie dotarła)'
+    katla_block = katla_body or t(lang, 'lumi.fallback.katla')
+    vieno_block = vieno_body or t(lang, 'lumi.fallback.vieno')
 
     language_name = LANGUAGE_NAMES.get(lang, 'English')
 

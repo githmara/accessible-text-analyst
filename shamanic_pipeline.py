@@ -9,9 +9,17 @@ from shamanic_locale import detect_corpus_lang, t
 # 1. KONFIGURACJA I LOKALIZACJA PLIKÓW
 # ==========================================
 
+def _locate_config():
+    # Akceptujemy config.json i config.ini (treść zawsze JSON).
+    for name in ('config.json', 'config.ini'):
+        if Path(name).is_file():
+            return name
+    return 'config.json'
+
+
 def get_export_dir():
     # Używamy utf-8-sig by uniknąć problemów z BOM
-    with open('config.json', 'r', encoding='utf-8-sig') as f:
+    with open(_locate_config(), 'r', encoding='utf-8-sig') as f:
         config = json.load(f)
 
     source_path = config.get('source_file', '')

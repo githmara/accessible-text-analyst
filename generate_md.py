@@ -18,10 +18,20 @@ except ImportError:
     print("[BŁĄD] Brak biblioteki beautifulsoup4. Wykonaj: pip install beautifulsoup4")
     sys.exit(1)
 
-CONFIG_PATH = "config.json"
+CONFIG_CANDIDATES = ("config.json", "config.ini")
 EXPORT_ROOT = Path("export_results")
 INPUT_HTML_NAME = "raport_analizy.html"
 OUTPUT_MD_NAME = "raport_dla_notebooklm.md"
+
+
+def _locate_config():
+    for name in CONFIG_CANDIDATES:
+        if Path(name).is_file():
+            return name
+    return CONFIG_CANDIDATES[0]
+
+
+CONFIG_PATH = _locate_config()
 
 
 # Match cell_corpus in the notebook: slugified stem / host_path / "_default".
@@ -30,7 +40,9 @@ def _slugify(s, maxlen=80):
     return s[:maxlen] or "_default"
 
 
-def _resolve_project_dir(config_path=CONFIG_PATH):
+def _resolve_project_dir(config_path=None):
+    if config_path is None:
+        config_path = CONFIG_PATH
     try:
         with open(config_path, "r", encoding="utf-8-sig") as f:
             source = (json.load(f).get("source_file") or "").strip()

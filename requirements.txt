@@ -29,5 +29,11 @@ markdown
 markdownify
 openai
 python-dotenv
-pypdfium2
-easyocr
+
+# Wsparcie OCR dla skanowanych PDF-ów i obrazów (.png/.jpg/.jpeg/.tif/.tiff/.bmp/.webp).
+# Odkomentuj obie linie, jeśli twój korpus zawiera skany lub obrazy — pozwoli to
+# renderować strony PDF przez pypdfium2 i rozpoznawać tekst przez easyocr.
+# easyocr ciągnie też torch (+ kilkaset MB modeli OCR przy pierwszym uruchomieniu),
+# więc dla korpusów tekstowych nie ma sensu instalować tej pary.
+# pypdfium2
+# easyocr

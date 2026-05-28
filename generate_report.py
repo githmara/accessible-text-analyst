@@ -7,15 +7,30 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 NOTEBOOK_PATH = "accessible_text_analyst.ipynb"
-CONFIG_PATH = "config.json"
+# Akceptujemy config.json i config.ini (treść zawsze JSON — .ini to tylko
+# kosmetyczne rozszerzenie dla użytkowników nietechnicznych na Windows,
+# który nie zna typu .json, ale zna .ini).
+CONFIG_CANDIDATES = ("config.json", "config.ini")
 EXPORT_ROOT = Path("export_results")
 OUTPUT_HTML_NAME = "raport_analizy.html"
 
-# REMOVE_NOISE czytany z config.json (gitignored), żeby przełączanie
+
+def _locate_config():
+    for name in CONFIG_CANDIDATES:
+        if Path(name).is_file():
+            return name
+    return CONFIG_CANDIDATES[0]
+
+
+CONFIG_PATH = _locate_config()
+
+# REMOVE_NOISE czytany z config (gitignored), żeby przełączanie
 # między widokiem czytelnika a pełnym widokiem diagnostycznym nie
 # brudziło historii repo. Brak pliku lub klucza => domyślnie True
 # (tryb czytelnika: bez tabel lematyzacji, POS i pasków ładowania).
-def _load_remove_noise(path=CONFIG_PATH, default=True):
+def _load_remove_noise(path=None, default=True):
+    if path is None:
+        path = CONFIG_PATH
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
             return bool(json.load(f).get("remove_noise", default))
@@ -34,7 +49,9 @@ def _slugify(s, maxlen=80):
     return s[:maxlen] or "_default"
 
 
-def _resolve_project_dir(config_path=CONFIG_PATH):
+def _resolve_project_dir(config_path=None):
+    if config_path is None:
+        config_path = CONFIG_PATH
     try:
         with open(config_path, "r", encoding="utf-8-sig") as f:
             source = (json.load(f).get("source_file") or "").strip()

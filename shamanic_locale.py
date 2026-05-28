@@ -53,6 +53,8 @@ STRINGS = {
         'katla.header': '--- MONOLOG ZAMROŻONYCH BYTÓW (GŁOS: KATLA) ---\n\n',
         'vieno.header': '--- SZAMAŃSKA INWOKACJA ECH (GŁOS: VIENO) ---\n\n',
         'lumi.header': '--- MELDUNEK OSTATECZNY Z MROŹNEJ PÓŁNOCY (GŁOS: LUMI) ---\n\n',
+        'lumi.fallback.katla': '(milczenie — Katla jeszcze nie przemówiła)',
+        'lumi.fallback.vieno': '(cisza — pieśń Vieno nie dotarła)',
         'sami.header': (
             '--- ISKRA SAMI: ENERGETYCZNA SYNTEZA ---\n'
             'Instrukcja TTS: czytać z ogromnym entuzjazmem, szerokim uśmiechem i wysoką dynamiką.\n\n'
@@ -88,6 +90,8 @@ STRINGS = {
         'katla.header': '--- MONOLOGUE OF THE FROZEN BEINGS (VOICE: KATLA) ---\n\n',
         'vieno.header': '--- SHAMANIC INVOCATION OF ECHOES (VOICE: VIENO) ---\n\n',
         'lumi.header': '--- FINAL DISPATCH FROM THE FROZEN NORTH (VOICE: LUMI) ---\n\n',
+        'lumi.fallback.katla': '(silence — Katla has not yet spoken)',
+        'lumi.fallback.vieno': '(hush — Vieno\'s song has not arrived)',
         'sami.header': (
             '--- SAMI\'S SPARK: ENERGETIC SYNTHESIS ---\n'
             'TTS Instruction: read with immense enthusiasm, a wide smile, and high dynamics.\n\n'
@@ -123,6 +127,8 @@ STRINGS = {
         'katla.header': '--- МОНОЛОГ ЗАМЁРЗШИХ СУЩНОСТЕЙ (ГОЛОС: КАТЛА) ---\n\n',
         'vieno.header': '--- ШАМАНСКАЯ ИНВОКАЦИЯ ОТЗВУКОВ (ГОЛОС: ВИЕНО) ---\n\n',
         'lumi.header': '--- ПОСЛЕДНИЙ ОТЧЁТ С МОРОЗНОГО СЕВЕРА (ГОЛОС: ЛУМИ) ---\n\n',
+        'lumi.fallback.katla': '(молчание — Катла ещё не заговорила)',
+        'lumi.fallback.vieno': '(тишина — песнь Виено не дошла)',
         'sami.header': (
             '--- ИСКРА САМИ: ЭНЕРГИЧНЫЙ СИНТЕЗ ---\n'
             'Инструкция TTS: читать с огромным энтузиазмом, широкой улыбкой и высокой динамикой.\n\n'
@@ -158,6 +164,8 @@ STRINGS = {
         'katla.header': '--- JÄÄTYNEIDEN OLENTOJEN MONOLOGI (ÄÄNI: KATLA) ---\n\n',
         'vieno.header': '--- KAIKUJEN SAMAANIKUTSU (ÄÄNI: VIENO) ---\n\n',
         'lumi.header': '--- VIIMEINEN RAPORTTI KYLMÄSTÄ POHJOLASTA (ÄÄNI: LUMI) ---\n\n',
+        'lumi.fallback.katla': '(hiljaisuus — Katla ei ole vielä puhunut)',
+        'lumi.fallback.vieno': '(vaitiolo — Vienon laulu ei ole saapunut)',
         'sami.header': (
             '--- SAMIN KIPINÄ: ENERGINEN SYNTEESI ---\n'
             'TTS-ohje: lue suurella innolla, leveällä hymyllä ja korkealla dynamiikalla.\n\n'
@@ -193,6 +201,8 @@ STRINGS = {
         'katla.header': '--- EINTAL FROSINNA VERA (RÖDD: KATLA) ---\n\n',
         'vieno.header': '--- SEIÐKALL BERGMÁLA (RÖDD: VIENO) ---\n\n',
         'lumi.header': '--- LOKASKÝRSLA FRÁ FROSNU NORÐRI (RÖDD: LUMI) ---\n\n',
+        'lumi.fallback.katla': '(þögn — Katla hefur ekki enn talað)',
+        'lumi.fallback.vieno': '(kyrrð — söngur Vieno hefur ekki borist)',
         'sami.header': (
             '--- NEISTI SAMI: ORKUMIKIL SAMANTEKT ---\n'
             'TTS leiðbeiningar: lesa með miklum eldmóði, breiðu brosi og mikilli dýnamík.\n\n'
@@ -228,6 +238,8 @@ STRINGS = {
         'katla.header': '--- MONOLOGO DEGLI ESSERI GHIACCIATI (VOCE: KATLA) ---\n\n',
         'vieno.header': '--- INVOCAZIONE SCIAMANICA DEGLI ECHI (VOCE: VIENO) ---\n\n',
         'lumi.header': '--- DISPACCIO FINALE DAL NORD GHIACCIATO (VOCE: LUMI) ---\n\n',
+        'lumi.fallback.katla': '(silenzio — Katla non ha ancora parlato)',
+        'lumi.fallback.vieno': '(quiete — il canto di Vieno non è giunto)',
         'sami.header': (
             '--- SCINTILLA DI SAMI: SINTESI ENERGETICA ---\n'
             'Istruzioni TTS: leggere con grande entusiasmo, un ampio sorriso e alta dinamica.\n\n'
