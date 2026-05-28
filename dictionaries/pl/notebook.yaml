@@ -1,0 +1,76 @@
+cell_langdet:
+  section_header: '--- Detekcja języka (lingua) ---'
+cell_model:
+  section_header: '--- Ładowanie modelu językowego ---'
+cell_tok:
+  section_header: '--- Tokenizacja ---'
+cell_stop:
+  section_header: '--- Filtrowanie stop-słów ---'
+cell_lemma:
+  section_header: '--- Lematyzacja ---'
+cell_pos:
+  section_header: '--- Tagowanie części mowy (POS) ---'
+cell_ner:
+  section_header: '--- Nazwane jednostki (NER) ---'
+cell_bow:
+  section_header: '--- Worek słów (CountVectorizer) ---'
+cell_tfidf:
+  section_header: '--- Wyszukiwanie TF-IDF z autozapytaniem ---'
+cell_para:
+  section_header: '--- Struktura tekstu: akapity ---'
+cell_foreign_resegment:
+  section_header: '--- Resegmentacja bloków obcojęzycznych ---'
+cell_multilang_pass:
+  section_header: '--- Dwuetapowa analiza wielojęzyczna (NER + lematyzacja) ---'
+cell_keywords:
+  section_header: '--- Słowa kluczowe (TF-IDF) ---'
+cell_theses:
+  section_header: '--- Tezy ---'
+cell_topics:
+  section_header: '--- Tematyzacja ---'
+cell_export:
+  section_header: '--- Eksport wyników ---'
+cell_qa_rag:
+  ready: 'System Q&A gotowy.'
+
+cell_summary:
+  rule: '======================================================================'
+  title: 'SPRAWOZDANIE Z ANALIZY TEKSTU'
+  builtin_example: 'wbudowany przykład'
+  unknown: 'nieznany'
+  source_file: 'Plik źródłowy              : {path}'
+  detected_lang: 'Wykryty język              : {language_name} ({lang_code})'
+  spacy_model: 'Model spaCy                : {model}'
+  document_count: 'Liczba dokumentów          : {count}'
+  total_tokens: 'Wszystkich tokenów         : {count}'
+  total_sentences: 'Wszystkich zdań            : {count}'
+  content_words: 'Słów znaczących            : {count}'
+  stopword_count: 'Rozmiar listy stop-słów    : {count}'
+  ner_count: 'Nazwanych jednostek        : {count}'
+  ner_type_row: '  {etype:<12}: {count}'
+  bow_size: 'Słownik BoW (UniGram)      : {count} terminów'
+  tfidf_size: 'Słownik TF-IDF             : {count} terminów'
+  auto_query: 'Zapytanie (auto)           : "{query}"'
+  best_match: 'Najlepszy wynik wyszukiwania: Dokument {n} (kosinus = {score:.4f})'
+  ranking_header: 'Ranking dokumentów (top-10):'
+  ranking_row: '  Miejsce {rank}: Dokument {n} — ocena {score:.4f}'
+  ranking_more: '  ... (pokazane top-{shown} z {total})'
+  fixes_count: 'Automatycznie poprawiono: {count}'
+  fix_row: '  Dokument {n}: {desc}'
+  warnings_header: 'Ostrzeżenia (ręczna weryfikacja): {count}'
+  no_issues: 'Nie wykryto problemów w tekście.'
+  theses_section_label: 'Tezy:'
+  theses_count: '  Sformułowano tez         : {count}'
+  theses_saved_to: '  Zapisane do pliku        : {path}'
+  theses_preview: '    Akapit {n:3d}: {preview}...'
+  topics_count: 'Wykryto tematów            : {count}'
+  topic_row: '  Temat {n}: {keywords}'
+  lang_distribution: 'Rozkład języków (dla eksportu HTML/DOCX):'
+  lang_distribution_para: '  Po akapitach   : {dist}'
+  lang_distribution_sent: '  Po zdaniach    : {dist}'
+  accessible_export_header: 'Dostępny eksport z metkami językowymi:'
+  html_present: '  accessible_text.html : {size:,} bajtów — atrybut lang na każdym <p>/<span>, czytniki ekranu automatycznie zmieniają głos'
+  html_missing: '  accessible_text.html : nie znaleziono (uruchom komórkę eksportu)'
+  docx_present: '  accessible_text.docx : {size:,} bajtów — <w:lang> na każdym Run, poprawna wymowa w Word/SAPI offline'
+  docx_missing: '  accessible_text.docx : nie znaleziono (uruchom komórkę eksportu)'
+  end_of_report: 'Koniec raportu. Wszystkie wyniki są kompatybilne z czytnikami ekranu.'

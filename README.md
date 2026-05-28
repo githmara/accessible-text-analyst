@@ -169,6 +169,8 @@ Contents:
 | `lumi_katla_lines` | integer or null | Optional ornament cap for `shamanic_ai.py`'s Lumi dispatch: how many non-empty lines of Katla's monologue Lumi sees. `null` or missing key = full content; integer N > 0 = first N lines. |
 | `lumi_vieno_lines` | integer or null | Same as `lumi_katla_lines`, but for Vieno's echo chant. |
 
+> **`ui_lang` — scope of localization.** Console output of the four pipeline-adjacent scripts (`generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) is fully localized. The notebook itself is *partially* localized — the 16 section headers (`--- Title ---`), the entire `cell_summary` final report, and `cell_qa_rag`'s "Q&A ready" greeting follow `ui_lang`, but per-step diagnostic prints (corpus loading details, OCR progress, token/POS/NER previews, multilingual-pass diagnostics) stay in Russian. The notebook is a developer-facing tool; the **fully-localized user-facing artefact is `analysis_report.html`** produced by `generate_report.py`. Translations in `fi` / `is` / `it` are drafted but unreviewed — please report rough edges on GitHub.
+
 > **Windows paths and regex — important.** The config content is JSON, and JSON has no raw-string syntax. A single backslash escapes the next character (`\U`, `\d`, `\n` are special), so a Windows path written `"C:\Users\marek\doc.pdf"` will produce a JSON parse error. Two ways to write it correctly:
 >
 > - **Forward slashes** (simplest, works on Windows too): `"C:/Users/marek/doc.pdf"`.

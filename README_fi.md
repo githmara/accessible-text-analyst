@@ -169,6 +169,8 @@ Sisältö:
 | `lumi_katla_lines` | integer tai null | Valinnainen koristerajoitus `shamanic_ai.py`:n Lumin loppuraportille: kuinka monta ei-tyhjää riviä Katlan monologista Lumi näkee. `null` tai puuttuva avain = koko sisältö; integer N > 0 = ensimmäiset N riviä. |
 | `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
 
+> **`ui_lang` — lokalisoinnin laajuus.** Neljän putken ympärillä olevan skriptin (`generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) konsolituloste on täysin lokalisoitu. Itse notebook on lokalisoitu *osittain* — 16 osion otsikkoa (`--- Otsikko ---`), koko lopullinen `cell_summary`-raportti ja `cell_qa_rag`-solun "Q&A valmis"-tervehdys seuraavat `ui_lang`-asetusta, mutta vaihekohtaiset diagnostiset printit (korpuksen latauksen yksityiskohdat, OCR-edistys, tokenien/POS/NER-esikatselut, monikielisen vaiheen diagnostiikka) pysyvät venäjäksi. Notebook on kehittäjälle tarkoitettu työkalu; **täysin lokalisoitu käyttäjälle näkyvä artefakti on `analysis_report.html`**, jonka tuottaa `generate_report.py`. Käännökset `fi` / `is` / `it` ovat luonnoksia eivätkä tarkistettuja — ilmoita epätarkkuuksista GitHubissa.
+
 > **Windows-polut ja regexit — tärkeää.** Asetussisältö on JSON, eikä JSONissa ole raw-string-syntaksia. Yksittäinen kenoviiva escapeaa seuraavan merkin (`\U`, `\d`, `\n` ovat erikoismerkkejä), joten Windows-polku kirjoitettuna `"C:\Users\marek\doc.pdf"` aiheuttaa JSON-jäsennysvirheen. Kaksi oikeaa tapaa kirjoittaa se:
 >
 > - **Etukenoviivat** (yksinkertaisin, toimii myös Windowsissa): `"C:/Users/marek/doc.pdf"`.

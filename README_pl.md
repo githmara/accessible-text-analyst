@@ -169,6 +169,8 @@ Zawartość:
 | `lumi_katla_lines` | integer lub null | Opcjonalny limit ornamentu dla raportu Lumi z `shamanic_ai.py`: ile niepustych linii monologu Katli widzi Lumi. `null` lub brak klucza = cała treść; integer N > 0 = pierwsze N linii. |
 | `lumi_vieno_lines` | integer lub null | To samo co `lumi_katla_lines`, dla pieśni ech Vieno. |
 
+> **`ui_lang` — zakres lokalizacji.** Wyjście konsolowe czterech skryptów wokół potoku (`generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) jest w pełni zlokalizowane. Sam notatnik jest zlokalizowany *częściowo* — 16 nagłówków sekcji (`--- Tytuł ---`), cały końcowy raport `cell_summary` i pozdrowienie „Q&A gotowy" z `cell_qa_rag` podążają za `ui_lang`, ale diagnostyczne printy per krok (szczegóły wczytywania korpusu, postęp OCR, podglądy tokenów/POS/NER, diagnostyka multilang-pass) pozostają po rosyjsku. Notatnik jest narzędziem deweloperskim; **w pełni zlokalizowanym artefaktem user-facing jest `analysis_report.html`** produkowany przez `generate_report.py`. Tłumaczenia w `fi` / `is` / `it` są w wersji draft i nie zweryfikowane — zgłaszaj nieścisłości na GitHubie.
+
 > **Ścieżki Windows i regexy — ważne.** Treść configu jest JSON-em, a JSON nie ma składni raw-string. Pojedynczy backslash escapeuje kolejny znak (`\U`, `\d`, `\n` są specjalne), więc ścieżka windowsowa zapisana jako `"C:\Users\marek\doc.pdf"` da błąd parsowania JSON. Są dwa poprawne sposoby:
 >
 > - **Forward slashe** (najprostsze, działają też na Windows): `"C:/Users/marek/doc.pdf"`.

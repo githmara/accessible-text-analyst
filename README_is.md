@@ -169,6 +169,8 @@ Innihald:
 | `lumi_katla_lines` | heiltala eða null | Valfrjáls skrautmark fyrir lokaskýrslu Lumi úr `shamanic_ai.py`: hve margar ekki-tómar línur einræðu Kötlu Lumi sér. `null` eða vantandi lykill = allt innihald; heiltala N > 0 = fyrstu N línurnar. |
 | `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
 
+> **`ui_lang` — umfang staðfærslu.** Skel-úttak fjögurra skripta í kringum leiðsluna (`generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) er að fullu staðfært. Sjálf minnisbókin er *að hluta* staðfærð — 16 kaflahausar (`--- Heiti ---`), öll lokaskýrslan `cell_summary` og kveðjan „Q&A tilbúið" í `cell_qa_rag` fylgja `ui_lang`, en greiningar-prentanir á hverju þrepi (smáatriði um hleðslu safnsins, OCR-framvinda, forskoðanir tákna/POS/NER, fjöltyngd greining) haldast rússneskar. Minnisbókin er tól fyrir þróunaraðila; **að fullu staðfærður notendaskjár-artefakt er `analysis_report.html`** sem `generate_report.py` býr til. Þýðingar í `fi` / `is` / `it` eru drög og óyfirfarnar — tilkynntu ónákvæmni á GitHub.
+
 > **Windows-slóðir og regex — mikilvægt.** Innihald stillinganna er JSON og JSON hefur enga raw-strengja-málskipan. Ein bakskáslína sleppir næsta staf (`\U`, `\d`, `\n` eru sérstakir), þannig að Windows-slóð skrifuð sem `"C:\Users\marek\doc.pdf"` veldur villu við JSON-túlkun. Tvær réttar leiðir til að skrifa hana:
 >
 > - **Áframslínur** (einfaldast, virkar líka á Windows): `"C:/Users/marek/doc.pdf"`.

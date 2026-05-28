@@ -169,6 +169,8 @@ Contenuto:
 | `lumi_katla_lines` | integer o null  | Limite di ornamento opzionale per il dispaccio finale di Lumi in `shamanic_ai.py`: quante righe non vuote del monologo di Katla vede Lumi. `null` o chiave mancante = tutto il contenuto; integer N > 0 = prime N righe. |
 | `lumi_vieno_lines` | integer o null  | Come `lumi_katla_lines`, ma per il canto di echi di Vieno. |
 
+> **`ui_lang` — ambito della localizzazione.** L'output della console dei quattro script attorno alla pipeline (`generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) è completamente localizzato. Il notebook stesso è localizzato *parzialmente* — i 16 header di sezione (`--- Titolo ---`), l'intero report finale `cell_summary` e il saluto "Q&A pronto" di `cell_qa_rag` seguono `ui_lang`, ma le stampe diagnostiche per ogni passaggio (dettagli di caricamento del corpus, avanzamento OCR, anteprime di token/POS/NER, diagnostica del passaggio multilingue) rimangono in russo. Il notebook è uno strumento per sviluppatori; **l'artefatto user-facing completamente localizzato è `analysis_report.html`** prodotto da `generate_report.py`. Le traduzioni in `fi` / `is` / `it` sono bozze non revisionate — segnala imprecisioni su GitHub.
+
 > **Percorsi Windows e regex — importante.** Il contenuto della configurazione è JSON, e JSON non ha una sintassi raw-string. Una singola barra inversa fa l'escape del carattere successivo (`\U`, `\d`, `\n` sono speciali), quindi un percorso Windows scritto come `"C:\Users\marek\doc.pdf"` produrrà un errore di parsing JSON. Due modi corretti per scriverlo:
 >
 > - **Barre normali** (più semplice, funziona anche su Windows): `"C:/Users/marek/doc.pdf"`.

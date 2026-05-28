@@ -1,0 +1,76 @@
+cell_langdet:
+  section_header: '--- Language detection (lingua) ---'
+cell_model:
+  section_header: '--- Loading language model ---'
+cell_tok:
+  section_header: '--- Tokenization ---'
+cell_stop:
+  section_header: '--- Stop-word filtering ---'
+cell_lemma:
+  section_header: '--- Lemmatization ---'
+cell_pos:
+  section_header: '--- Part-of-speech tagging (POS) ---'
+cell_ner:
+  section_header: '--- Named entities (NER) ---'
+cell_bow:
+  section_header: '--- Bag of words (CountVectorizer) ---'
+cell_tfidf:
+  section_header: '--- TF-IDF search with auto-query ---'
+cell_para:
+  section_header: '--- Text structure: paragraphs ---'
+cell_foreign_resegment:
+  section_header: '--- Foreign-block re-segmentation ---'
+cell_multilang_pass:
+  section_header: '--- Two-stage multilingual analysis (NER + lemmatization) ---'
+cell_keywords:
+  section_header: '--- Keywords (TF-IDF) ---'
+cell_theses:
+  section_header: '--- Theses ---'
+cell_topics:
+  section_header: '--- Topic modeling ---'
+cell_export:
+  section_header: '--- Exporting results ---'
+cell_qa_rag:
+  ready: 'Q&A system ready.'
+
+cell_summary:
+  rule: '======================================================================'
+  title: 'TEXT ANALYSIS SUMMARY REPORT'
+  builtin_example: 'built-in example'
+  unknown: 'unknown'
+  source_file: 'Source file               : {path}'
+  detected_lang: 'Detected language         : {language_name} ({lang_code})'
+  spacy_model: 'spaCy model               : {model}'
+  document_count: 'Document count            : {count}'
+  total_tokens: 'Total tokens              : {count}'
+  total_sentences: 'Total sentences           : {count}'
+  content_words: 'Content words             : {count}'
+  stopword_count: 'Stop-word list size       : {count}'
+  ner_count: 'Named entities            : {count}'
+  ner_type_row: '  {etype:<12}: {count}'
+  bow_size: 'BoW vocabulary (UniGram)  : {count} terms'
+  tfidf_size: 'TF-IDF vocabulary         : {count} terms'
+  auto_query: 'Query (auto)              : "{query}"'
+  best_match: 'Best search result        : Document {n} (cosine = {score:.4f})'
+  ranking_header: 'Document ranking (top-10):'
+  ranking_row: '  Place {rank}: Document {n} — score {score:.4f}'
+  ranking_more: '  ... (showing top-{shown} of {total})'
+  fixes_count: 'Auto-corrected: {count}'
+  fix_row: '  Document {n}: {desc}'
+  warnings_header: 'Warnings (manual review): {count}'
+  no_issues: 'No issues detected in the text.'
+  theses_section_label: 'Theses:'
+  theses_count: '  Theses generated          : {count}'
+  theses_saved_to: '  Saved to file             : {path}'
+  theses_preview: '    Paragraph {n:3d}: {preview}...'
+  topics_count: 'Topics detected           : {count}'
+  topic_row: '  Topic {n}: {keywords}'
+  lang_distribution: 'Language distribution (for HTML/DOCX export):'
+  lang_distribution_para: '  By paragraph   : {dist}'
+  lang_distribution_sent: '  By sentence    : {dist}'
+  accessible_export_header: 'Accessibility-tagged export:'
+  html_present: '  accessible_text.html : {size:,} bytes — lang attribute on every <p>/<span>, screen readers switch voice automatically'
+  html_missing: '  accessible_text.html : not found (run the export cell)'
+  docx_present: '  accessible_text.docx : {size:,} bytes — <w:lang> on every Run, correct pronunciation in Word/SAPI offline'
+  docx_missing: '  accessible_text.docx : not found (run the export cell)'
+  end_of_report: 'End of report. All results are compatible with screen readers.'

@@ -1,0 +1,76 @@
+cell_langdet:
+  section_header: '--- Kielen tunnistus (lingua) ---'
+cell_model:
+  section_header: '--- Kielimallin lataus ---'
+cell_tok:
+  section_header: '--- Tokenisointi ---'
+cell_stop:
+  section_header: '--- Pysäytyssanasuodatus ---'
+cell_lemma:
+  section_header: '--- Lemmatisointi ---'
+cell_pos:
+  section_header: '--- Sanaluokkien merkitseminen (POS) ---'
+cell_ner:
+  section_header: '--- Nimetyt entiteetit (NER) ---'
+cell_bow:
+  section_header: '--- Sanapussi (CountVectorizer) ---'
+cell_tfidf:
+  section_header: '--- TF-IDF-haku automaattisella kyselyllä ---'
+cell_para:
+  section_header: '--- Tekstin rakenne: kappaleet ---'
+cell_foreign_resegment:
+  section_header: '--- Vieraskielisten lohkojen uudelleensegmentointi ---'
+cell_multilang_pass:
+  section_header: '--- Kaksivaiheinen monikielinen analyysi (NER + lemmatisointi) ---'
+cell_keywords:
+  section_header: '--- Avainsanat (TF-IDF) ---'
+cell_theses:
+  section_header: '--- Teesit ---'
+cell_topics:
+  section_header: '--- Aiheiden mallinnus ---'
+cell_export:
+  section_header: '--- Tulosten vienti ---'
+cell_qa_rag:
+  ready: 'Q&A-järjestelmä valmis.'
+
+cell_summary:
+  rule: '======================================================================'
+  title: 'TEKSTIANALYYSIN YHTEENVETORAPORTTI'
+  builtin_example: 'sisäänrakennettu esimerkki'
+  unknown: 'tuntematon'
+  source_file: 'Lähdetiedosto              : {path}'
+  detected_lang: 'Tunnistettu kieli          : {language_name} ({lang_code})'
+  spacy_model: 'spaCy-malli                : {model}'
+  document_count: 'Asiakirjojen määrä         : {count}'
+  total_tokens: 'Tokeneita yhteensä         : {count}'
+  total_sentences: 'Lauseita yhteensä          : {count}'
+  content_words: 'Sisältösanoja              : {count}'
+  stopword_count: 'Pysäytyssanaluettelon koko : {count}'
+  ner_count: 'Nimettyjä entiteettejä     : {count}'
+  ner_type_row: '  {etype:<12}: {count}'
+  bow_size: 'BoW-sanasto (UniGram)      : {count} termiä'
+  tfidf_size: 'TF-IDF-sanasto             : {count} termiä'
+  auto_query: 'Kysely (auto)              : "{query}"'
+  best_match: 'Paras hakutulos            : Asiakirja {n} (kosini = {score:.4f})'
+  ranking_header: 'Asiakirjojen sijoitus (top-10):'
+  ranking_row: '  Sija {rank}: Asiakirja {n} — pisteet {score:.4f}'
+  ranking_more: '  ... (näytetään top-{shown} / {total})'
+  fixes_count: 'Automaattisesti korjattu: {count}'
+  fix_row: '  Asiakirja {n}: {desc}'
+  warnings_header: 'Varoitukset (manuaalinen tarkistus): {count}'
+  no_issues: 'Tekstissä ei havaittu ongelmia.'
+  theses_section_label: 'Teesit:'
+  theses_count: '  Teesejä luotu              : {count}'
+  theses_saved_to: '  Tallennettu tiedostoon     : {path}'
+  theses_preview: '    Kappale {n:3d}: {preview}...'
+  topics_count: 'Aiheita havaittu           : {count}'
+  topic_row: '  Aihe {n}: {keywords}'
+  lang_distribution: 'Kielijakauma (HTML/DOCX-vientiä varten):'
+  lang_distribution_para: '  Kappaleittain  : {dist}'
+  lang_distribution_sent: '  Lauseittain    : {dist}'
+  accessible_export_header: 'Saavutettavuusmerkein varustettu vienti:'
+  html_present: '  accessible_text.html : {size:,} tavua — lang-attribuutti jokaisella <p>/<span>-elementillä, ruudunlukijat vaihtavat äänen automaattisesti'
+  html_missing: '  accessible_text.html : ei löytynyt (suorita vientisolu)'
+  docx_present: '  accessible_text.docx : {size:,} tavua — <w:lang> jokaisella Run-elementillä, oikea ääntämys Word/SAPI:ssa offline-tilassa'
+  docx_missing: '  accessible_text.docx : ei löytynyt (suorita vientisolu)'
+  end_of_report: 'Raportin loppu. Kaikki tulokset ovat yhteensopivia ruudunlukijoiden kanssa.'
