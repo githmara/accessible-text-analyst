@@ -840,7 +840,13 @@ def build_accessible_html():
             md_html = _lingua_word_fallback(md_html, document_lang=UI_LANG)
             # 4. Scal sąsiadujące same-lang spany (TF-IDF, UTF-8 itp.).
             md_html = _coalesce_same_lang_spans(md_html)
-            html_content.append(f'<div class="markdown-cell">\n{md_html}\n</div>')
+            # Jawny lang na kontenerze: gdy klucz YAML jest, treść jest w
+            # UI_LANG; gdy brak — fallback do źródła notebooka, które jest
+            # rosyjskie. Bez tego czytniki czytają rosyjski fallback w głosie
+            # UI (dziś PL ma wszystkie klucze, ale każda nowa narracja bez
+            # tłumaczenia powodowałaby regresję).
+            narrative_lang = UI_LANG if translated else "ru"
+            html_content.append(f'<div class="markdown-cell" lang="{narrative_lang}">\n{md_html}\n</div>')
 
         elif cell["cell_type"] == "code":
             outputs = cell.get("outputs", [])
@@ -863,7 +869,13 @@ def build_accessible_html():
                 # Tagowanie
                 tagged_output = tag_target_language(clean_text, target_lang)
                 if tagged_output.strip():
-                    html_content.append(f'<div class="output-box" aria-label="Вывод системы">\n{tagged_output}\n</div>')
+                    # cell_summary stdout jest w pełni zlokalizowany przez
+                    # _t(UI_LANG, ...); wszystkie pozostałe code-cells emitują
+                    # twardo rosyjskie diagnostyczne printy (udokumentowany
+                    # zakres v1.1), więc muszą mieć lang="ru", żeby czytniki
+                    # nie czytały rosyjskiego w głosie UI.
+                    output_lang = UI_LANG if cell_id == "cell_summary" else "ru"
+                    html_content.append(f'<div class="output-box" aria-label="Вывод системы" lang="{output_lang}">\n{tagged_output}\n</div>')
 
     html_content.extend([
         "</main>",

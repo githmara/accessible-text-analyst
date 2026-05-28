@@ -4,6 +4,36 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.1.2 — accessibility fix: explicit `lang` on report containers
+
+**Severity.** Screen-reader regression for every non-Russian `ui_lang` user. Upgrade strongly recommended if you read the report with NVDA / JAWS / Narrator / VoiceOver / SAPI.
+
+**The bug.** `generate_report.py` wrapped both markdown narrative cells and code-cell stdout outputs in plain `<div>` containers without any `lang` attribute:
+
+```html
+<div class="markdown-cell">...</div>
+<div class="output-box" aria-label="Вывод системы">...</div>
+```
+
+The containers therefore inherited `lang` from `<html lang="UI_LANG">`. For a Polish reader, every diagnostic print from `cell_corpus`, `cell_langdet`, `cell_model`, `cell_pl_corrector`, `cell_tok` … `cell_export` — all of them hardcoded Russian per the documented v1.1 localization scope — was announced in a Polish voice. The same regression would fire on a markdown narrative cell whenever `dictionaries/{ui_lang}/narrative.yaml` was missing a key and the renderer fell back to the notebook's Russian source.
+
+**The fix.** Each container now carries an explicit `lang` attribute:
+
+- Markdown narrative: `lang="UI_LANG"` when the YAML translation exists, `lang="ru"` when the renderer falls back to the notebook source.
+- Code-cell stdout: `lang="ru"` by default, `lang="UI_LANG"` only for `cell_summary`, whose stdout is fully localized via `_t(UI_LANG, ...)`.
+
+The document-level `<html lang="UI_LANG">`, headings, and `<title>` are unchanged — they come from `t()` calls and inherit correctly.
+
+**Out of scope (deferred).** `aria-label="Вывод системы"` is still hardcoded Russian; `tag_target_language` does not yet wrap Polish abbreviations like `'m.in.'` in `cell_pl_corrector` diagnostics. Both are separate localization gaps, not the bug fixed here.
+
+**Upgrade.** Re-run `generate_report.py` against an already-executed notebook. No notebook re-execution, config change, or dependency change required.
+
+### Distribution
+
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.1.1 — critical fix: `t()` shadowed by loop variable in `cell_topics`
 
 **Severity.** v1.1 is unusable in its default configuration. Upgrade is strongly recommended.
