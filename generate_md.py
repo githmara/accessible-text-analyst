@@ -20,8 +20,8 @@ except ImportError:
 
 CONFIG_CANDIDATES = ("config.json", "config.ini")
 EXPORT_ROOT = Path("export_results")
-INPUT_HTML_NAME = "raport_analizy.html"
-OUTPUT_MD_NAME = "raport_dla_notebooklm.md"
+INPUT_HTML_NAME = "analysis_report.html"
+OUTPUT_MD_NAME = "notebooklm_report.md"
 
 
 def _locate_config():

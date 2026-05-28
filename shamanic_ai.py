@@ -28,11 +28,11 @@ SHAMAN_QUOTE_GLOSS = "Black hair, black eyes, like a shaman's"
 LUMI_QUOTE_PL = "Niech się dowie cały świat: jestem zakochana"
 LUMI_QUOTE_GLOSS = "Let the whole world know: I am in love"
 
-# Limity ornamentu dla rytuału Lumi. Prophecies są szkieletem (numerowana lista
-# ~10 wpisów — wpuszczamy w całości). Katla i Vieno wpadają jako ornament:
-# pierwsze N niepustych linii treści (bez nagłówka pliku).
-LUMI_KATLA_LINES = 8
-LUMI_VIENO_LINES = 8
+# Limity ornamentu dla rytuału Lumi pobierane są z configa
+# (lumi_katla_lines, lumi_vieno_lines). Prophecies są szkieletem
+# (numerowana lista ~10 wpisów — wpuszczamy w całości). Katla i Vieno
+# wpadają jako ornament: brak klucza w configu lub null = cała treść;
+# integer N > 0 = pierwsze N niepustych linii treści (bez nagłówka pliku).
 
 
 def _locate_config():
@@ -43,9 +43,29 @@ def _locate_config():
     return 'config.json'
 
 
+def _load_config():
+    try:
+        with open(_locate_config(), 'r', encoding='utf-8-sig') as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _lumi_line_limit(config, key):
+    """None = brak limitu (cała treść). Integer N > 0 = limit linii.
+    Każda inna wartość (null, 0, ujemna, nie-int) traktowana jako brak limitu."""
+    value = config.get(key)
+    if value is None:
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
 def get_export_dir():
-    with open(_locate_config(), 'r', encoding='utf-8-sig') as f:
-        config = json.load(f)
+    config = _load_config()
     basename = Path(config.get('source_file', '')).stem
     return Path('export_results') / basename
 
@@ -204,11 +224,14 @@ def _read_artifact_body(path, max_nonempty_lines=None):
 
 def ritual_final_dispatch_lumi(export_dir, output_dir, lang):
     audio_dir = output_dir
+    config = _load_config()
+    katla_limit = _lumi_line_limit(config, 'lumi_katla_lines')
+    vieno_limit = _lumi_line_limit(config, 'lumi_vieno_lines')
     prophecies_body = _read_artifact_body(audio_dir / 'prophecies.txt')
     katla_body = _read_artifact_body(audio_dir / 'katla_entity_monologue.txt',
-                                     LUMI_KATLA_LINES)
+                                     katla_limit)
     vieno_body = _read_artifact_body(audio_dir / 'vieno_echoes_chant.txt',
-                                     LUMI_VIENO_LINES)
+                                     vieno_limit)
 
     # Szkielet (prophecies) jest twardym wymogiem — bez niego Lumi nie ma
     # czego raportować. Katla i Vieno są opcjonalne (ornament).

@@ -9,8 +9,8 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 ## Zawartość projektu
 
 - `accessible_text_analyst.ipynb` — notatnik Jupyter z kompletnym potokiem analizy (40 komórek: 20 kodu + 20 markdown; narracja w środku notatnika jest po rosyjsku). Zapisuje dwa artefakty dostępnościowe (`accessible_text.html`, `accessible_text.docx`), w których każdy akapit i każde zdanie obcojęzyczne ma własny atrybut `lang` — czytniki ekranu i syntezatory TTS przełączają głos automatycznie, nawet offline.
-- `generate_report.py` — skrypt post-procesujący, który zamienia wykonany notatnik w jeden dostępny plik HTML (`raport_analizy.html`). Fragmenty obcojęzyczne owija w `<span lang="target_lang">`, a — niezależnie od języka korpusu — twardo oznacza `<span lang="en">` przy treściach technicznie angielskich (tagi POS, etykiety NER, identyfikatory modeli spaCy/Hugging Face, ścieżki ASCII). Kod inline i bloki kodu w narracji dostają hurtem `lang="en"`.
-- `generate_md.py` — konwertuje `raport_analizy.html` na `raport_dla_notebooklm.md` do NotebookLM. Spany dostępnościowe są rozpakowywane, bo NotebookLM ich nie konsumuje.
+- `generate_report.py` — skrypt post-procesujący, który zamienia wykonany notatnik w jeden dostępny plik HTML (`analysis_report.html`). Fragmenty obcojęzyczne owija w `<span lang="target_lang">`, a — niezależnie od języka korpusu — twardo oznacza `<span lang="en">` przy treściach technicznie angielskich (tagi POS, etykiety NER, identyfikatory modeli spaCy/Hugging Face, ścieżki ASCII). Kod inline i bloki kodu w narracji dostają hurtem `lang="en"`.
+- `generate_md.py` — konwertuje `analysis_report.html` na `notebooklm_report.md` do NotebookLM. Spany dostępnościowe są rozpakowywane, bo NotebookLM ich nie konsumuje.
 - `shamanic_pipeline.py` *(opcjonalny)* — post-procesor bez LLM, który zamienia eksportowane przez notatnik pliki CSV/JSON w cztery rytualne artefakty tekstowe (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), w pełni zlokalizowane we wszystkich sześciu wspieranych językach.
 - `shamanic_ai.py` *(opcjonalny, oparty na LLM)* — wywołuje OpenAI, by wygenerować cztery głosy narracyjne (`Katla`, `Vieno`, `Lumi`, `Sami`) na tych samych eksportach. Wymaga `OPENAI_API_KEY` w pliku `golden_key.env`.
 - `shamanic_locale.py` — pakiet lokalizacyjny dla obu skryptów szamańskich (szablony, nagłówki i fallbacki Lumi we wszystkich sześciu językach).
@@ -24,7 +24,7 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 5. Reprezentacje wektorowe: Bag of Words, TF-IDF + wyszukiwanie auto-zapytaniem z rankingiem kosinusowym.
 6. Struktura: zdania → akapity (po 3–6 zdań) → tezy (najlepsze zdanie na akapit). Każdy akapit i każde zdanie dostaje wykryty kod ISO 639-1.
 7. Modelowanie tematów przez KMeans na wektorach akapitowych spaCy.
-8. Eksport CSV/JSON + tekstowy raport podsumowujący + dostępny HTML i DOCX + globalny raport HTML (`raport_analizy.html`).
+8. Eksport CSV/JSON + tekstowy raport podsumowujący + dostępny HTML i DOCX + globalny raport HTML (`analysis_report.html`).
 
 ## Wspierane języki
 
@@ -152,16 +152,20 @@ Zawartość:
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"]
+  "ocr_languages": ["en"],
+  "lumi_katla_lines": null,
+  "lumi_vieno_lines": null
 }
 ```
 
-| Klucz             | Typ      | Cel |
-|-------------------|----------|-----|
-| `source_file`     | string   | Ścieżka do pliku (`.pdf`, `.txt`, `.docx`, `.html` lub obraz) **albo** URL (`http://`, `https://`). Pusty string lub brak pliku → wbudowany przykładowy korpus. |
-| `custom_patterns` | string[] | Opcjonalna lista wyrażeń regularnych usuwanych z surowego tekstu (żywe nagłówki, stopki, powtarzające się szablony). Przykład: `["Editorial: .*", "Copyright \\d{4}"]`. |
-| `remove_noise`    | boolean  | Przełącza `generate_report.py` między trybem czytelnika (`true`, ukrywa paski ładowania Hugging Face/torch i tabele lematyzacji/POS) a pełnym trybem diagnostycznym (`false`). |
-| `ocr_languages`   | string[] | Języki dla `easyocr` (używane tylko przy skanowanych PDF-ach lub źródłach-obrazach). W ramach jednej instancji `easyocr.Reader` można łączyć tylko języki tego samego skryptu — np. `["ru", "en"]` dla cyrylicy lub `["en", "pl", "it", "fi", "is"]` dla łaciny. |
+| Klucz              | Typ              | Cel |
+|--------------------|------------------|-----|
+| `source_file`      | string           | Ścieżka do pliku (`.pdf`, `.txt`, `.docx`, `.html` lub obraz) **albo** URL (`http://`, `https://`). Pusty string lub brak pliku → wbudowany przykładowy korpus. |
+| `custom_patterns`  | string[]         | Opcjonalna lista wyrażeń regularnych usuwanych z surowego tekstu (żywe nagłówki, stopki, powtarzające się szablony). Przykład: `["Editorial: .*", "Copyright \\d{4}"]`. |
+| `remove_noise`     | boolean          | Przełącza `generate_report.py` między trybem czytelnika (`true`, ukrywa paski ładowania Hugging Face/torch i tabele lematyzacji/POS) a pełnym trybem diagnostycznym (`false`). |
+| `ocr_languages`    | string[]         | Języki dla `easyocr` (używane tylko przy skanowanych PDF-ach lub źródłach-obrazach). W ramach jednej instancji `easyocr.Reader` można łączyć tylko języki tego samego skryptu — np. `["ru", "en"]` dla cyrylicy lub `["en", "pl", "it", "fi", "is"]` dla łaciny. |
+| `lumi_katla_lines` | integer lub null | Opcjonalny limit ornamentu dla raportu Lumi z `shamanic_ai.py`: ile niepustych linii monologu Katli widzi Lumi. `null` lub brak klucza = cała treść; integer N > 0 = pierwsze N linii. |
+| `lumi_vieno_lines` | integer lub null | To samo co `lumi_katla_lines`, dla pieśni ech Vieno. |
 
 > **Ścieżki Windows i regexy — ważne.** Treść configu jest JSON-em, a JSON nie ma składni raw-string. Pojedynczy backslash escapeuje kolejny znak (`\U`, `\d`, `\n` są specjalne), więc ścieżka windowsowa zapisana jako `"C:\Users\marek\doc.pdf"` da błąd parsowania JSON. Są dwa poprawne sposoby:
 >
@@ -181,13 +185,13 @@ jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
 ```
 
-To jest sekwencyjny potok ze współdzielonym stanem globalnym. **Nie zmieniaj kolejności komórek i nie uruchamiaj ich poza kolejnością.** Notatnik zapisuje `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` i `тезисы.txt`.
+To jest sekwencyjny potok ze współdzielonym stanem globalnym. **Nie zmieniaj kolejności komórek i nie uruchamiaj ich poza kolejnością.** Notatnik zapisuje `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` i `theses.txt`.
 
 ### 2. Raport HTML (zalecany)
 
 ```bash
 python generate_report.py
-# → export_results/<project>/raport_analizy.html
+# → export_results/<project>/analysis_report.html
 ```
 
 `generate_report.py` czyta wyjścia komórek bezpośrednio z pliku `.ipynb`, więc raport HTML musi być generowany ze **świeżo wykonanego** notatnika. `requirements.txt` listuje `nbstripout` — jeśli został aktywowany w lokalnej konfiguracji git, wyjścia notatnika są usuwane przy commicie. Generuj raport _przed_ commitem albo wyłącz nbstripout dla swojego workflow.
@@ -196,7 +200,7 @@ python generate_report.py
 
 ```bash
 python generate_md.py
-# → export_results/<project>/raport_dla_notebooklm.md
+# → export_results/<project>/notebooklm_report.md
 ```
 
 Konwertuje raport HTML na Markdown z rozpakowanymi spanami dostępnościowymi (NotebookLM nie konsumuje `<span lang="…">`). Uruchom tylko jeśli chcesz wczytać raport do NotebookLM.
@@ -246,15 +250,15 @@ Każdy podkatalog zawiera:
 |---------------------------------|-------------------|---------------------------------------------------|
 | `sentences.csv`                 | notatnik          | każde zdanie z jego indeksem i przypisaniem do akapitu |
 | `paragraphs.csv`                | notatnik          | akapity (po 3–6 zdań)                             |
-| `theses.csv`, `тезисы.txt`      | notatnik          | jedna teza na akapit (zdanie o najwyższym TF-IDF) |
+| `theses.csv`, `theses.txt`      | notatnik          | jedna teza na akapit (zdanie o najwyższym TF-IDF); nazwa pliku `.txt` zależy od języka korpusu (np. `tezy.txt` dla polskiego, `тезисы.txt` dla rosyjskiego) |
 | `keywords_tfidf.csv`            | notatnik          | słowa kluczowe (uni/bi/trigramy) z wagami TF-IDF  |
 | `paragraphs_with_topics.csv`    | notatnik          | akapity z przypisanym tematem KMeans              |
 | `topic_keywords.json`           | notatnik          | słowa kluczowe per temat                          |
 | `entities.csv`                  | notatnik          | wszystkie nazwane encje i ich etykiety            |
 | `accessible_text.html`          | notatnik          | atrybuty `lang` na poziomie akapitu i zdania — czytniki ekranu automatycznie przełączają głos per fragment |
 | `accessible_text.docx`          | notatnik          | ta sama treść z `<w:lang>` ustawionym per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word i SAPI używają tego offline, bez detektora online |
-| `raport_analizy.html`           | `generate_report.py` | globalny dostępny raport HTML                  |
-| `raport_dla_notebooklm.md`      | `generate_md.py`     | Markdown gotowy dla NotebookLM                 |
+| `analysis_report.html`           | `generate_report.py` | globalny dostępny raport HTML                  |
+| `notebooklm_report.md`      | `generate_md.py`     | Markdown gotowy dla NotebookLM                 |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | rytualne / narracyjne artefakty tekstowe |
 
 ## Dostępność
@@ -292,11 +296,11 @@ accessible_text_analyst/
         ├── sentences.csv
         ├── paragraphs.csv
         ├── theses.csv
-        ├── тезисы.txt
+        ├── theses.txt              # nazwa zależna od języka korpusu
         ├── accessible_text.html
         ├── accessible_text.docx
-        ├── raport_analizy.html
-        ├── raport_dla_notebooklm.md
+        ├── analysis_report.html
+        ├── notebooklm_report.md
         └── audio_scripts/…
 ```
 

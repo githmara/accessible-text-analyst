@@ -9,8 +9,8 @@
 ## Состав проекта
 
 - `accessible_text_analyst.ipynb` — Jupyter-блокнот с полным аналитическим конвейером (40 ячеек: 20 кода + 20 markdown; повествование внутри блокнота — на русском). Записывает два артефакта доступности (`accessible_text.html`, `accessible_text.docx`), в которых каждый абзац и каждое иноязычное предложение несёт собственный атрибут `lang` — программы экранного доступа и движки TTS переключают голос автоматически, даже офлайн.
-- `generate_report.py` — постпроцессор, превращающий выполненный блокнот в один доступный HTML-файл (`raport_analizy.html`). Иноязычные фрагменты оборачивает в `<span lang="target_lang">`, а — независимо от языка корпуса — жёстко помечает `<span lang="en">` всё технически английское (POS-теги, NER-метки, идентификаторы моделей spaCy/Hugging Face, ASCII-пути). Inline-код и блоки кода в повествовании оптом получают `lang="en"`.
-- `generate_md.py` — конвертирует `raport_analizy.html` в `raport_dla_notebooklm.md` для NotebookLM. Spans доступности распаковываются, так как NotebookLM их не использует.
+- `generate_report.py` — постпроцессор, превращающий выполненный блокнот в один доступный HTML-файл (`analysis_report.html`). Иноязычные фрагменты оборачивает в `<span lang="target_lang">`, а — независимо от языка корпуса — жёстко помечает `<span lang="en">` всё технически английское (POS-теги, NER-метки, идентификаторы моделей spaCy/Hugging Face, ASCII-пути). Inline-код и блоки кода в повествовании оптом получают `lang="en"`.
+- `generate_md.py` — конвертирует `analysis_report.html` в `notebooklm_report.md` для NotebookLM. Spans доступности распаковываются, так как NotebookLM их не использует.
 - `shamanic_pipeline.py` *(опциональный)* — постпроцессор без LLM, превращающий CSV/JSON-экспорт блокнота в четыре ритуальных текстовых артефакта (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), полностью локализованных на все шесть поддерживаемых языков.
 - `shamanic_ai.py` *(опциональный, с LLM)* — обращается к OpenAI, чтобы сгенерировать четыре повествовательных голоса (`Katla`, `Vieno`, `Lumi`, `Sami`) поверх тех же экспортов. Требует `OPENAI_API_KEY` в файле `golden_key.env`.
 - `shamanic_locale.py` — пакет локализации для обоих шаманских скриптов (шаблоны, заголовки и резервные строки Lumi на всех шести языках).
@@ -24,7 +24,7 @@
 5. Векторные представления: Bag of Words, TF-IDF + автозапрос с косинусным ранжированием.
 6. Структура: предложения → абзацы (по 3–6 предложений) → тезисы (лучшее предложение на абзац). Каждый абзац и каждое предложение помечается определённым кодом ISO 639-1.
 7. Тематическое моделирование KMeans поверх абзацных векторов spaCy.
-8. Экспорт CSV/JSON + текстовый сводный отчёт + доступный HTML и DOCX + глобальный HTML-отчёт (`raport_analizy.html`).
+8. Экспорт CSV/JSON + текстовый сводный отчёт + доступный HTML и DOCX + глобальный HTML-отчёт (`analysis_report.html`).
 
 ## Поддерживаемые языки
 
@@ -152,16 +152,20 @@ cp config.example.ini  config.ini
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"]
+  "ocr_languages": ["en"],
+  "lumi_katla_lines": null,
+  "lumi_vieno_lines": null
 }
 ```
 
-| Ключ              | Тип      | Назначение |
-|-------------------|----------|------------|
-| `source_file`     | string   | Путь к файлу (`.pdf`, `.txt`, `.docx`, `.html` или изображению) **или** URL (`http://`, `https://`). Пустая строка или отсутствующий файл → встроенный пример корпуса. |
-| `custom_patterns` | string[] | Необязательный список регулярных выражений, удаляемых из сырого текста (живые колонтитулы, повторяющиеся шаблоны). Пример: `["Editorial: .*", "Copyright \\d{4}"]`. |
-| `remove_noise`    | boolean  | Переключает `generate_report.py` между читательским режимом (`true`, скрывает полосы загрузки Hugging Face/torch и таблицы лемматизации/POS) и полным диагностическим режимом (`false`). |
-| `ocr_languages`   | string[] | Языки для `easyocr` (используются только при сканированных PDF или изображениях). В одном экземпляре `easyocr.Reader` можно смешивать только языки одной письменности — например `["ru", "en"]` для кириллицы или `["en", "pl", "it", "fi", "is"]` для латиницы. |
+| Ключ               | Тип             | Назначение |
+|--------------------|-----------------|------------|
+| `source_file`      | string          | Путь к файлу (`.pdf`, `.txt`, `.docx`, `.html` или изображению) **или** URL (`http://`, `https://`). Пустая строка или отсутствующий файл → встроенный пример корпуса. |
+| `custom_patterns`  | string[]        | Необязательный список регулярных выражений, удаляемых из сырого текста (живые колонтитулы, повторяющиеся шаблоны). Пример: `["Editorial: .*", "Copyright \\d{4}"]`. |
+| `remove_noise`     | boolean         | Переключает `generate_report.py` между читательским режимом (`true`, скрывает полосы загрузки Hugging Face/torch и таблицы лемматизации/POS) и полным диагностическим режимом (`false`). |
+| `ocr_languages`    | string[]        | Языки для `easyocr` (используются только при сканированных PDF или изображениях). В одном экземпляре `easyocr.Reader` можно смешивать только языки одной письменности — например `["ru", "en"]` для кириллицы или `["en", "pl", "it", "fi", "is"]` для латиницы. |
+| `lumi_katla_lines` | integer или null | Необязательный лимит орнамента для итогового отчёта Лумми из `shamanic_ai.py`: сколько непустых строк монолога Катлы видит Лумми. `null` или отсутствие ключа = вся содержимое; integer N > 0 = первые N строк. |
+| `lumi_vieno_lines` | integer или null | То же, что и `lumi_katla_lines`, но для песни отзвуков Виено. |
 
 > **Пути Windows и регулярные выражения — важно.** Содержимое конфигурации — это JSON, а в JSON нет синтаксиса raw-строк. Одиночный обратный слэш экранирует следующий символ (`\U`, `\d`, `\n` — специальные), поэтому путь Windows, записанный как `"C:\Users\marek\doc.pdf"`, даст ошибку парсинга JSON. Два правильных способа:
 >
@@ -181,13 +185,13 @@ jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
 ```
 
-Это последовательный конвейер с общим глобальным состоянием. **Не меняйте порядок ячеек и не выполняйте их вне порядка.** Блокнот пишет `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` и `тезисы.txt`.
+Это последовательный конвейер с общим глобальным состоянием. **Не меняйте порядок ячеек и не выполняйте их вне порядка.** Блокнот пишет `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` и `theses.txt`.
 
 ### 2. HTML-отчёт (рекомендуется)
 
 ```bash
 python generate_report.py
-# → export_results/<project>/raport_analizy.html
+# → export_results/<project>/analysis_report.html
 ```
 
 `generate_report.py` читает вывод ячеек прямо из файла `.ipynb`, поэтому HTML-отчёт должен генерироваться из **свежевыполненного** блокнота. В `requirements.txt` указан `nbstripout` — если он активирован в локальной git-конфигурации, выводы блокнота стираются при коммите. Генерируйте отчёт _до_ коммита либо отключите nbstripout для своего workflow.
@@ -196,7 +200,7 @@ python generate_report.py
 
 ```bash
 python generate_md.py
-# → export_results/<project>/raport_dla_notebooklm.md
+# → export_results/<project>/notebooklm_report.md
 ```
 
 Конвертирует HTML-отчёт в Markdown с распакованными spans доступности (NotebookLM не использует `<span lang="…">`). Запускайте только если хотите загрузить отчёт в NotebookLM.
@@ -246,15 +250,15 @@ OPENAI_API_KEY=sk-...
 |---------------------------------|-------------------|---------------------------------------------------|
 | `sentences.csv`                 | блокнот           | каждое предложение с индексом и привязкой к абзацу |
 | `paragraphs.csv`                | блокнот           | абзацы (по 3–6 предложений)                       |
-| `theses.csv`, `тезисы.txt`      | блокнот           | один тезис на абзац (предложение с максимальным TF-IDF) |
+| `theses.csv`, `theses.txt`      | блокнот           | один тезис на абзац (предложение с максимальным TF-IDF); имя `.txt`-файла зависит от языка корпуса (напр. `tezy.txt` для польского, `тезисы.txt` для русского) |
 | `keywords_tfidf.csv`            | блокнот           | ключевые слова (уни/би/триграммы) с весами TF-IDF |
 | `paragraphs_with_topics.csv`    | блокнот           | абзацы с присвоенной темой KMeans                 |
 | `topic_keywords.json`           | блокнот           | ключевые слова по темам                           |
 | `entities.csv`                  | блокнот           | все именованные сущности и их метки               |
 | `accessible_text.html`          | блокнот           | атрибуты `lang` на уровне абзаца и предложения — программы экранного доступа автоматически переключают голос по фрагменту |
 | `accessible_text.docx`          | блокнот           | то же содержимое с `<w:lang>` на каждом `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word и SAPI используют это офлайн, без онлайн-детектора |
-| `raport_analizy.html`           | `generate_report.py` | глобальный доступный HTML-отчёт                |
-| `raport_dla_notebooklm.md`      | `generate_md.py`     | Markdown, готовый для NotebookLM               |
+| `analysis_report.html`           | `generate_report.py` | глобальный доступный HTML-отчёт                |
+| `notebooklm_report.md`      | `generate_md.py`     | Markdown, готовый для NotebookLM               |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | ритуальные / повествовательные текстовые артефакты |
 
 ## Доступность
@@ -292,11 +296,11 @@ accessible_text_analyst/
         ├── sentences.csv
         ├── paragraphs.csv
         ├── theses.csv
-        ├── тезисы.txt
+        ├── theses.txt              # имя зависит от языка корпуса
         ├── accessible_text.html
         ├── accessible_text.docx
-        ├── raport_analizy.html
-        ├── raport_dla_notebooklm.md
+        ├── analysis_report.html
+        ├── notebooklm_report.md
         └── audio_scripts/…
 ```
 

@@ -9,8 +9,8 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 ## Project contents
 
 - `accessible_text_analyst.ipynb` — a Jupyter notebook with the complete analysis pipeline (40 cells: 20 code + 20 markdown; the in-notebook narrative is in Russian). It writes two accessibility artefacts (`accessible_text.html`, `accessible_text.docx`) where every paragraph and every foreign-language sentence carries its own `lang` attribute so screen readers and TTS engines switch voice automatically — even offline.
-- `generate_report.py` — a post-processing script that turns the executed notebook into a single accessible HTML file (`raport_analizy.html`). It wraps foreign-corpus fragments in `<span lang="target_lang">` and, regardless of corpus language, hardcodes `<span lang="en">` around technical English content (POS tags, NER labels, spaCy/Hugging Face model identifiers, ASCII filenames). Inline code and code blocks in the narrative are blanket-tagged `lang="en"`.
-- `generate_md.py` — converts the generated `raport_analizy.html` into `raport_dla_notebooklm.md` for NotebookLM ingestion. The accessibility spans are unwrapped since NotebookLM does not consume them.
+- `generate_report.py` — a post-processing script that turns the executed notebook into a single accessible HTML file (`analysis_report.html`). It wraps foreign-corpus fragments in `<span lang="target_lang">` and, regardless of corpus language, hardcodes `<span lang="en">` around technical English content (POS tags, NER labels, spaCy/Hugging Face model identifiers, ASCII filenames). Inline code and code blocks in the narrative are blanket-tagged `lang="en"`.
+- `generate_md.py` — converts the generated `analysis_report.html` into `notebooklm_report.md` for NotebookLM ingestion. The accessibility spans are unwrapped since NotebookLM does not consume them.
 - `shamanic_pipeline.py` *(optional)* — a non-LLM post-processor that turns the notebook's CSV/JSON exports into four ritual text artefacts (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), all fully localized across the six supported languages.
 - `shamanic_ai.py` *(optional, LLM-driven)* — calls OpenAI to generate four narrative voices (`Katla`, `Vieno`, `Lumi`, `Sami`) on top of the same exports. Requires `OPENAI_API_KEY` in `golden_key.env`.
 - `shamanic_locale.py` — the localization bundle for both shamanic scripts (templates, headers, and Lumi's fallback strings in all six supported languages).
@@ -24,7 +24,7 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 5. Vector representations: Bag of Words, TF-IDF + auto-query search with cosine ranking.
 6. Structure: sentences → paragraphs (3–6 sentences each) → theses (the best sentence per paragraph). Each paragraph and sentence is tagged with its detected ISO 639-1 code.
 7. Topic modeling with KMeans over spaCy paragraph vectors.
-8. CSV/JSON export + a textual summary report + an accessibility-tagged HTML and DOCX export + a global HTML report (`raport_analizy.html`).
+8. CSV/JSON export + a textual summary report + an accessibility-tagged HTML and DOCX export + a global HTML report (`analysis_report.html`).
 
 ## Supported languages
 
@@ -152,16 +152,20 @@ Contents:
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"]
+  "ocr_languages": ["en"],
+  "lumi_katla_lines": null,
+  "lumi_vieno_lines": null
 }
 ```
 
-| Key               | Type     | Purpose |
-|-------------------|----------|---------|
-| `source_file`     | string   | Path to a file (`.pdf`, `.txt`, `.docx`, `.html`, or an image) **or** a URL (`http://`, `https://`). An empty string or a missing file falls back to the built-in example corpus. |
-| `custom_patterns` | string[] | Optional regular expressions stripped from the raw text (running heads, footers, repetitive boilerplate). Example: `["Editorial: .*", "Copyright \\d{4}"]`. |
-| `remove_noise`    | boolean  | Toggles `generate_report.py` between reader-facing mode (`true`, hides Hugging Face/torch loading bars and lemmatization/POS tables) and full diagnostic mode (`false`). |
-| `ocr_languages`   | string[] | Languages for `easyocr` (used only when a PDF is a scan or the source is an image). Within a single `easyocr.Reader` you can only mix languages of the same script — e.g. `["ru", "en"]` for Cyrillic or `["en", "pl", "it", "fi", "is"]` for Latin. |
+| Key                | Type            | Purpose |
+|--------------------|-----------------|---------|
+| `source_file`      | string          | Path to a file (`.pdf`, `.txt`, `.docx`, `.html`, or an image) **or** a URL (`http://`, `https://`). An empty string or a missing file falls back to the built-in example corpus. |
+| `custom_patterns`  | string[]        | Optional regular expressions stripped from the raw text (running heads, footers, repetitive boilerplate). Example: `["Editorial: .*", "Copyright \\d{4}"]`. |
+| `remove_noise`     | boolean         | Toggles `generate_report.py` between reader-facing mode (`true`, hides Hugging Face/torch loading bars and lemmatization/POS tables) and full diagnostic mode (`false`). |
+| `ocr_languages`    | string[]        | Languages for `easyocr` (used only when a PDF is a scan or the source is an image). Within a single `easyocr.Reader` you can only mix languages of the same script — e.g. `["ru", "en"]` for Cyrillic or `["en", "pl", "it", "fi", "is"]` for Latin. |
+| `lumi_katla_lines` | integer or null | Optional ornament cap for `shamanic_ai.py`'s Lumi dispatch: how many non-empty lines of Katla's monologue Lumi sees. `null` or missing key = full content; integer N > 0 = first N lines. |
+| `lumi_vieno_lines` | integer or null | Same as `lumi_katla_lines`, but for Vieno's echo chant. |
 
 > **Windows paths and regex — important.** The config content is JSON, and JSON has no raw-string syntax. A single backslash escapes the next character (`\U`, `\d`, `\n` are special), so a Windows path written `"C:\Users\marek\doc.pdf"` will produce a JSON parse error. Two ways to write it correctly:
 >
@@ -181,13 +185,13 @@ jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
 ```
 
-This is a sequential pipeline with shared global state. **Do not reorder cells, and do not run them out of order.** The notebook writes `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx`, and `тезисы.txt`.
+This is a sequential pipeline with shared global state. **Do not reorder cells, and do not run them out of order.** The notebook writes `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx`, and `theses.txt`.
 
 ### 2. HTML report (recommended)
 
 ```bash
 python generate_report.py
-# → export_results/<project>/raport_analizy.html
+# → export_results/<project>/analysis_report.html
 ```
 
 `generate_report.py` reads cell outputs directly from the `.ipynb` file, so the HTML report must be generated from a **freshly executed** notebook. `requirements.txt` lists `nbstripout` — if it has been activated in the local git config, notebook outputs are stripped on commit. Generate the report _before_ committing, or disable nbstripout for your workflow.
@@ -196,7 +200,7 @@ python generate_report.py
 
 ```bash
 python generate_md.py
-# → export_results/<project>/raport_dla_notebooklm.md
+# → export_results/<project>/notebooklm_report.md
 ```
 
 This converts the HTML report into a Markdown file with the accessibility spans unwrapped (NotebookLM does not consume `<span lang="…">`). Run this only if you want to feed the report into NotebookLM.
@@ -246,15 +250,15 @@ Each subdirectory contains:
 |---------------------------------|-------------|----------------------------------------------------------|
 | `sentences.csv`                 | notebook    | every sentence with its index and paragraph assignment   |
 | `paragraphs.csv`                | notebook    | paragraphs (3–6 sentences each)                          |
-| `theses.csv`, `тезисы.txt`      | notebook    | one thesis per paragraph (the highest-TF-IDF sentence)   |
+| `theses.csv`, `theses.txt`      | notebook    | one thesis per paragraph (highest-TF-IDF sentence); the `.txt` filename follows the corpus language (e.g. `tezy.txt` for Polish, `тезисы.txt` for Russian) |
 | `keywords_tfidf.csv`            | notebook    | keywords (uni/bi/trigrams) with TF-IDF weights           |
 | `paragraphs_with_topics.csv`    | notebook    | paragraphs with their assigned KMeans topic              |
 | `topic_keywords.json`           | notebook    | keywords per topic                                       |
 | `entities.csv`                  | notebook    | all named entities and their labels                      |
 | `accessible_text.html`          | notebook    | paragraph- and sentence-level `lang` attributes — screen readers switch voice automatically per fragment |
 | `accessible_text.docx`          | notebook    | the same content with `<w:lang>` set per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word and SAPI use it offline, no online detector required |
-| `raport_analizy.html`           | `generate_report.py` | global accessible HTML report                  |
-| `raport_dla_notebooklm.md`      | `generate_md.py`     | NotebookLM-ready Markdown                      |
+| `analysis_report.html`           | `generate_report.py` | global accessible HTML report                  |
+| `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-ready Markdown                      |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | ritual / narrative text artefacts |
 
 ## Accessibility
@@ -292,11 +296,11 @@ accessible_text_analyst/
         ├── sentences.csv
         ├── paragraphs.csv
         ├── theses.csv
-        ├── тезисы.txt
+        ├── theses.txt              # name follows corpus language
         ├── accessible_text.html
         ├── accessible_text.docx
-        ├── raport_analizy.html
-        ├── raport_dla_notebooklm.md
+        ├── analysis_report.html
+        ├── notebooklm_report.md
         └── audio_scripts/…
 ```
 

@@ -12,7 +12,7 @@ NOTEBOOK_PATH = "accessible_text_analyst.ipynb"
 # który nie zna typu .json, ale zna .ini).
 CONFIG_CANDIDATES = ("config.json", "config.ini")
 EXPORT_ROOT = Path("export_results")
-OUTPUT_HTML_NAME = "raport_analizy.html"
+OUTPUT_HTML_NAME = "analysis_report.html"
 
 
 def _locate_config():

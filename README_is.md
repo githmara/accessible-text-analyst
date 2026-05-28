@@ -9,8 +9,8 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 ## Innihald verkefnisins
 
 - `accessible_text_analyst.ipynb` — Jupyter-minnisbók með heilli greiningarleiðslu (40 hólf: 20 kóða + 20 markdown; frásögnin innan minnisbókarinnar er á rússnesku). Hún skrifar tvö aðgengisgripi (`accessible_text.html`, `accessible_text.docx`), þar sem hver málsgrein og hver erlend setning ber sitt eigið `lang`-eiginleika — skjálesarar og TTS-vélar skipta um rödd sjálfkrafa, jafnvel án nets.
-- `generate_report.py` — eftirvinnsluforrit sem breytir framkvæmdri minnisbók í eina aðgengilega HTML-skrá (`raport_analizy.html`). Það vefur erlend brot inn í `<span lang="target_lang">` og — óháð tungumáli safnsins — þvingar `<span lang="en">` utan um tæknilegt enskt innihald (POS-merki, NER-merki, auðkenni spaCy/Hugging Face líkana, ASCII-skráarnöfn). Inline-kóði og kóðablokkir í frásögn fá öll `lang="en"` í einu lagi.
-- `generate_md.py` — breytir `raport_analizy.html` í `raport_dla_notebooklm.md` fyrir NotebookLM. Aðgengis-spans eru afpökkuð því NotebookLM notar þau ekki.
+- `generate_report.py` — eftirvinnsluforrit sem breytir framkvæmdri minnisbók í eina aðgengilega HTML-skrá (`analysis_report.html`). Það vefur erlend brot inn í `<span lang="target_lang">` og — óháð tungumáli safnsins — þvingar `<span lang="en">` utan um tæknilegt enskt innihald (POS-merki, NER-merki, auðkenni spaCy/Hugging Face líkana, ASCII-skráarnöfn). Inline-kóði og kóðablokkir í frásögn fá öll `lang="en"` í einu lagi.
+- `generate_md.py` — breytir `analysis_report.html` í `notebooklm_report.md` fyrir NotebookLM. Aðgengis-spans eru afpökkuð því NotebookLM notar þau ekki.
 - `shamanic_pipeline.py` *(valfrjálst)* — eftirvinnsluforrit án LLM sem breytir CSV/JSON-útflutningi minnisbókarinnar í fjóra helgisiðatextagripi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), öll að fullu staðfærð fyrir sex studdu tungumálin.
 - `shamanic_ai.py` *(valfrjálst, byggt á LLM)* — kallar í OpenAI til að búa til fjórar frásagnarraddir (`Katla`, `Vieno`, `Lumi`, `Sami`) ofan á sömu útflutninga. Krefst `OPENAI_API_KEY` í `golden_key.env`.
 - `shamanic_locale.py` — staðfærsluböggull fyrir bæði shamanísku forritin (sniðmát, hausa og fallback-strengi Lumi á öllum sex tungumálum).
@@ -24,7 +24,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 5. Vektorframsetning: Bag of Words, TF-IDF + sjálfsfyrirspurnaleit með cosinus-röðun.
 6. Bygging: setningar → málsgreinar (3–6 setningar hver) → meginsetningar (besta setning per málsgrein). Hver málsgrein og setning er merkt með sínu ISO 639-1 kóða.
 7. Þemamódel með KMeans yfir málsgreinavektorum spaCy.
-8. CSV/JSON-útflutningur + textaleg samantektarskýrsla + aðgengilegt HTML og DOCX + heildar HTML-skýrsla (`raport_analizy.html`).
+8. CSV/JSON-útflutningur + textaleg samantektarskýrsla + aðgengilegt HTML og DOCX + heildar HTML-skýrsla (`analysis_report.html`).
 
 ## Studd tungumál
 
@@ -152,16 +152,20 @@ Innihald:
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"]
+  "ocr_languages": ["en"],
+  "lumi_katla_lines": null,
+  "lumi_vieno_lines": null
 }
 ```
 
-| Lykill            | Tegund   | Tilgangur |
-|-------------------|----------|-----------|
-| `source_file`     | string   | Slóð á skrá (`.pdf`, `.txt`, `.docx`, `.html` eða mynd) **eða** URL (`http://`, `https://`). Tómur strengur eða týnd skrá → innbyggður sýnishornssafn. |
-| `custom_patterns` | string[] | Valfrjáls listi af reglulegum tjáningum sem eru fjarlægðar úr hráum texta (hlaupandi hausar, fætur, endurtekið kjarnamál). Dæmi: `["Editorial: .*", "Copyright \\d{4}"]`. |
-| `remove_noise`    | boolean  | Skiptir `generate_report.py` á milli lesendaham (`true`, felur Hugging Face/torch hleðslulínur og uppsláttar/POS-töflur) og fullum greiningarham (`false`). |
-| `ocr_languages`   | string[] | Tungumál fyrir `easyocr` (notuð aðeins þegar PDF er skann eða uppspretta er mynd). Innan eins `easyocr.Reader` má aðeins blanda tungumálum úr sama letri — t.d. `["ru", "en"]` fyrir kýrillíska eða `["en", "pl", "it", "fi", "is"]` fyrir latneska. |
+| Lykill             | Tegund          | Tilgangur |
+|--------------------|-----------------|-----------|
+| `source_file`      | string          | Slóð á skrá (`.pdf`, `.txt`, `.docx`, `.html` eða mynd) **eða** URL (`http://`, `https://`). Tómur strengur eða týnd skrá → innbyggður sýnishornssafn. |
+| `custom_patterns`  | string[]        | Valfrjáls listi af reglulegum tjáningum sem eru fjarlægðar úr hráum texta (hlaupandi hausar, fætur, endurtekið kjarnamál). Dæmi: `["Editorial: .*", "Copyright \\d{4}"]`. |
+| `remove_noise`     | boolean         | Skiptir `generate_report.py` á milli lesendaham (`true`, felur Hugging Face/torch hleðslulínur og uppsláttar/POS-töflur) og fullum greiningarham (`false`). |
+| `ocr_languages`    | string[]        | Tungumál fyrir `easyocr` (notuð aðeins þegar PDF er skann eða uppspretta er mynd). Innan eins `easyocr.Reader` má aðeins blanda tungumálum úr sama letri — t.d. `["ru", "en"]` fyrir kýrillíska eða `["en", "pl", "it", "fi", "is"]` fyrir latneska. |
+| `lumi_katla_lines` | heiltala eða null | Valfrjáls skrautmark fyrir lokaskýrslu Lumi úr `shamanic_ai.py`: hve margar ekki-tómar línur einræðu Kötlu Lumi sér. `null` eða vantandi lykill = allt innihald; heiltala N > 0 = fyrstu N línurnar. |
+| `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
 
 > **Windows-slóðir og regex — mikilvægt.** Innihald stillinganna er JSON og JSON hefur enga raw-strengja-málskipan. Ein bakskáslína sleppir næsta staf (`\U`, `\d`, `\n` eru sérstakir), þannig að Windows-slóð skrifuð sem `"C:\Users\marek\doc.pdf"` veldur villu við JSON-túlkun. Tvær réttar leiðir til að skrifa hana:
 >
@@ -181,13 +185,13 @@ jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
 ```
 
-Þetta er raðleiðsla með sameiginlegri hnattrænni stöðu. **Ekki endurraða hólfum og ekki keyra þau úr röð.** Minnisbókin skrifar `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` og `тезисы.txt`.
+Þetta er raðleiðsla með sameiginlegri hnattrænni stöðu. **Ekki endurraða hólfum og ekki keyra þau úr röð.** Minnisbókin skrifar `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` og `theses.txt`.
 
 ### 2. HTML-skýrsla (mælt með)
 
 ```bash
 python generate_report.py
-# → export_results/<project>/raport_analizy.html
+# → export_results/<project>/analysis_report.html
 ```
 
 `generate_report.py` les úttak hólfa beint úr `.ipynb`-skránni, þannig að HTML-skýrslan verður að vera mynduð úr **nýkeyrðri** minnisbók. `requirements.txt` listar `nbstripout` — ef hann hefur verið virkjaður í staðbundinni git-stillingu eru úttök minnisbókarinnar fjarlægð við commit. Myndaðu skýrsluna _áður_ en þú commitar, eða slökktu á nbstripout fyrir vinnuflæði þitt.
@@ -196,7 +200,7 @@ python generate_report.py
 
 ```bash
 python generate_md.py
-# → export_results/<project>/raport_dla_notebooklm.md
+# → export_results/<project>/notebooklm_report.md
 ```
 
 Þetta breytir HTML-skýrslunni í Markdown-skrá þar sem aðgengis-spans hafa verið afpökkuð (NotebookLM notar ekki `<span lang="…">`). Keyrðu þetta aðeins ef þú vilt mata skýrsluna inn í NotebookLM.
@@ -246,15 +250,15 @@ Hver undirmappa inniheldur:
 |---------------------------------|-------------------|---------------------------------------------------|
 | `sentences.csv`                 | minnisbók         | hver setning með vísitölu og málsgreinatengingu   |
 | `paragraphs.csv`                | minnisbók         | málsgreinar (3–6 setningar hver)                  |
-| `theses.csv`, `тезисы.txt`      | minnisbók         | ein meginsetning per málsgrein (hæsta-TF-IDF setning) |
+| `theses.csv`, `theses.txt`      | minnisbók         | ein meginsetning per málsgrein (hæsta-TF-IDF setning); `.txt`-skráarnafnið fer eftir tungumáli safnsins (t.d. `tezy.txt` fyrir pólsku, `тезисы.txt` fyrir rússnesku) |
 | `keywords_tfidf.csv`            | minnisbók         | lykilorð (uni/bi/trigröm) með TF-IDF-vægi         |
 | `paragraphs_with_topics.csv`    | minnisbók         | málsgreinar með úthlutuðu KMeans-þema             |
 | `topic_keywords.json`           | minnisbók         | lykilorð per þema                                 |
 | `entities.csv`                  | minnisbók         | öll nefnd entítet og merkimiðar þeirra            |
 | `accessible_text.html`          | minnisbók         | `lang`-eiginleikar á málsgreinar- og setningarstigi — skjálesarar skipta um rödd sjálfkrafa per brot |
 | `accessible_text.docx`          | minnisbók         | sama innihald með `<w:lang>` stilltu per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word og SAPI nota það án nets, án nettengs greinis |
-| `raport_analizy.html`           | `generate_report.py` | heildar aðgengileg HTML-skýrsla                |
-| `raport_dla_notebooklm.md`      | `generate_md.py`     | NotebookLM-tilbúið Markdown                    |
+| `analysis_report.html`           | `generate_report.py` | heildar aðgengileg HTML-skýrsla                |
+| `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-tilbúið Markdown                    |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | helgisiða- / frásagnartextagripi |
 
 ## Aðgengi
@@ -292,11 +296,11 @@ accessible_text_analyst/
         ├── sentences.csv
         ├── paragraphs.csv
         ├── theses.csv
-        ├── тезисы.txt
+        ├── theses.txt              # nafn fer eftir tungumáli safnsins
         ├── accessible_text.html
         ├── accessible_text.docx
-        ├── raport_analizy.html
-        ├── raport_dla_notebooklm.md
+        ├── analysis_report.html
+        ├── notebooklm_report.md
         └── audio_scripts/…
 ```
 

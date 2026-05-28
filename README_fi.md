@@ -9,8 +9,8 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 ## Projektin sisältö
 
 - `accessible_text_analyst.ipynb` — Jupyter-notebook, joka sisältää koko analyysiputken (40 solua: 20 koodia + 20 markdown; sisäinen kerronta on venäjäksi). Kirjoittaa kaksi saavutettavuusartefaktia (`accessible_text.html`, `accessible_text.docx`), joissa jokainen kappale ja jokainen vieraskielinen lause sisältää oman `lang`-attribuuttinsa — ruudunlukijat ja TTS-moottorit vaihtavat ääntä automaattisesti, jopa offline-tilassa.
-- `generate_report.py` — jälkikäsittelyskripti, joka muuntaa suoritetun notebookin yhdeksi saavutettavaksi HTML-tiedostoksi (`raport_analizy.html`). Se kääräisee vieraskieliset katkelmat tagiin `<span lang="target_lang">` ja — korpuksen kielestä riippumatta — pakottaa `<span lang="en">` teknisen englannin sisältöön (POS-tagit, NER-tunnisteet, spaCyn/Hugging Facen mallien tunnisteet, ASCII-polut). Kerronnan inline-koodi ja koodilohkot saavat poikkeuksetta `lang="en"`.
-- `generate_md.py` — muuntaa `raport_analizy.html`-tiedoston Markdown-muotoon (`raport_dla_notebooklm.md`) NotebookLM:ää varten. Saavutettavuus-spanit puretaan, koska NotebookLM ei käytä niitä.
+- `generate_report.py` — jälkikäsittelyskripti, joka muuntaa suoritetun notebookin yhdeksi saavutettavaksi HTML-tiedostoksi (`analysis_report.html`). Se kääräisee vieraskieliset katkelmat tagiin `<span lang="target_lang">` ja — korpuksen kielestä riippumatta — pakottaa `<span lang="en">` teknisen englannin sisältöön (POS-tagit, NER-tunnisteet, spaCyn/Hugging Facen mallien tunnisteet, ASCII-polut). Kerronnan inline-koodi ja koodilohkot saavat poikkeuksetta `lang="en"`.
+- `generate_md.py` — muuntaa `analysis_report.html`-tiedoston Markdown-muotoon (`notebooklm_report.md`) NotebookLM:ää varten. Saavutettavuus-spanit puretaan, koska NotebookLM ei käytä niitä.
 - `shamanic_pipeline.py` *(valinnainen)* — ei-LLM-jälkikäsittelijä, joka muuntaa notebookin CSV/JSON-viennit neljäksi rituaaliseksi tekstiartefaktiksi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`) ja on täysin lokalisoitu kaikille kuudelle tuetulle kielelle.
 - `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu OpenAI:ta neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Vaatii `OPENAI_API_KEY`:n tiedostossa `golden_key.env`.
 - `shamanic_locale.py` — molempien shamanististen skriptien lokalisointipaketti (mallit, otsikot ja Lumin fallback-merkkijonot kaikilla kuudella kielellä).
@@ -24,7 +24,7 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 5. Vektoriedustukset: Bag of Words, TF-IDF + auto-kyselyhaku kosinilajittelulla.
 6. Rakenne: lauseet → kappaleet (3–6 lausetta kukin) → teesit (paras lause per kappale). Jokainen kappale ja lause merkitään tunnistetulla ISO 639-1 -koodilla.
 7. Aiheen mallinnus KMeansilla spaCyn kappalevektoreiden päällä.
-8. CSV/JSON-vienti + tekstimuotoinen yhteenvetoraportti + saavutettava HTML- ja DOCX-vienti + globaali HTML-raportti (`raport_analizy.html`).
+8. CSV/JSON-vienti + tekstimuotoinen yhteenvetoraportti + saavutettava HTML- ja DOCX-vienti + globaali HTML-raportti (`analysis_report.html`).
 
 ## Tuetut kielet
 
@@ -152,16 +152,20 @@ Sisältö:
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"]
+  "ocr_languages": ["en"],
+  "lumi_katla_lines": null,
+  "lumi_vieno_lines": null
 }
 ```
 
-| Avain             | Tyyppi   | Tarkoitus |
-|-------------------|----------|-----------|
-| `source_file`     | string   | Polku tiedostoon (`.pdf`, `.txt`, `.docx`, `.html` tai kuva) **tai** URL (`http://`, `https://`). Tyhjä merkkijono tai puuttuva tiedosto → sisäänrakennettu esimerkkikorpus. |
-| `custom_patterns` | string[] | Valinnainen lista säännöllisistä lausekkeista, jotka poistetaan raakatekstistä (juoksevat otsikot, alatunnisteet, toistuvat kalvotekstit). Esimerkki: `["Editorial: .*", "Copyright \\d{4}"]`. |
-| `remove_noise`    | boolean  | Vaihtaa `generate_report.py`:n lukijaystävällisen tilan (`true`, piilottaa Hugging Face/torch -latauspalkit ja lemmatisointi/POS-taulukot) ja täyden diagnostisen tilan (`false`) välillä. |
-| `ocr_languages`   | string[] | `easyocr`:n kielet (käytetään vain skannatuissa PDF:issä tai kuvalähteissä). Yhdessä `easyocr.Reader`-instanssissa voi sekoittaa vain saman kirjaimiston kieliä — esim. `["ru", "en"]` kyrilliselle tai `["en", "pl", "it", "fi", "is"]` latinalaiselle. |
+| Avain              | Tyyppi          | Tarkoitus |
+|--------------------|-----------------|-----------|
+| `source_file`      | string          | Polku tiedostoon (`.pdf`, `.txt`, `.docx`, `.html` tai kuva) **tai** URL (`http://`, `https://`). Tyhjä merkkijono tai puuttuva tiedosto → sisäänrakennettu esimerkkikorpus. |
+| `custom_patterns`  | string[]        | Valinnainen lista säännöllisistä lausekkeista, jotka poistetaan raakatekstistä (juoksevat otsikot, alatunnisteet, toistuvat kalvotekstit). Esimerkki: `["Editorial: .*", "Copyright \\d{4}"]`. |
+| `remove_noise`     | boolean         | Vaihtaa `generate_report.py`:n lukijaystävällisen tilan (`true`, piilottaa Hugging Face/torch -latauspalkit ja lemmatisointi/POS-taulukot) ja täyden diagnostisen tilan (`false`) välillä. |
+| `ocr_languages`    | string[]        | `easyocr`:n kielet (käytetään vain skannatuissa PDF:issä tai kuvalähteissä). Yhdessä `easyocr.Reader`-instanssissa voi sekoittaa vain saman kirjaimiston kieliä — esim. `["ru", "en"]` kyrilliselle tai `["en", "pl", "it", "fi", "is"]` latinalaiselle. |
+| `lumi_katla_lines` | integer tai null | Valinnainen koristerajoitus `shamanic_ai.py`:n Lumin loppuraportille: kuinka monta ei-tyhjää riviä Katlan monologista Lumi näkee. `null` tai puuttuva avain = koko sisältö; integer N > 0 = ensimmäiset N riviä. |
+| `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
 
 > **Windows-polut ja regexit — tärkeää.** Asetussisältö on JSON, eikä JSONissa ole raw-string-syntaksia. Yksittäinen kenoviiva escapeaa seuraavan merkin (`\U`, `\d`, `\n` ovat erikoismerkkejä), joten Windows-polku kirjoitettuna `"C:\Users\marek\doc.pdf"` aiheuttaa JSON-jäsennysvirheen. Kaksi oikeaa tapaa kirjoittaa se:
 >
@@ -181,13 +185,13 @@ jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
 ```
 
-Tämä on peräkkäinen putki, jolla on jaettu globaali tila. **Älä järjestä soluja uudelleen äläkä aja niitä järjestyksen ulkopuolella.** Notebook kirjoittaa `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` ja `тезисы.txt`.
+Tämä on peräkkäinen putki, jolla on jaettu globaali tila. **Älä järjestä soluja uudelleen äläkä aja niitä järjestyksen ulkopuolella.** Notebook kirjoittaa `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` ja `theses.txt`.
 
 ### 2. HTML-raportti (suositeltu)
 
 ```bash
 python generate_report.py
-# → export_results/<project>/raport_analizy.html
+# → export_results/<project>/analysis_report.html
 ```
 
 `generate_report.py` lukee solujen ulostulot suoraan `.ipynb`-tiedostosta, joten HTML-raportti on luotava **juuri suoritetusta** notebookista. `requirements.txt` listaa `nbstripout`:n — jos se on aktivoitu paikallisessa git-konfiguraatiossa, notebookin ulostulot riisutaan commitilla. Luo raportti _ennen_ commitia tai poista nbstripout käytöstä työnkulustasi.
@@ -196,7 +200,7 @@ python generate_report.py
 
 ```bash
 python generate_md.py
-# → export_results/<project>/raport_dla_notebooklm.md
+# → export_results/<project>/notebooklm_report.md
 ```
 
 Tämä muuntaa HTML-raportin Markdown-tiedostoksi, jossa saavutettavuus-spanit on purettu (NotebookLM ei käytä `<span lang="…">`). Aja tämä vain, jos haluat syöttää raportin NotebookLM:ään.
@@ -246,15 +250,15 @@ Jokainen alihakemisto sisältää:
 |---------------------------------|-------------------|---------------------------------------------------|
 | `sentences.csv`                 | notebook          | jokainen lause indeksinsä ja kappaleeseen kuulumisensa kanssa |
 | `paragraphs.csv`                | notebook          | kappaleet (3–6 lausetta kukin)                    |
-| `theses.csv`, `тезисы.txt`      | notebook          | yksi teesi per kappale (korkein-TF-IDF-lause)     |
+| `theses.csv`, `theses.txt`      | notebook          | yksi teesi per kappale (korkein-TF-IDF-lause); `.txt`-tiedoston nimi mukautuu korpuksen kieleen (esim. `tezy.txt` puolaksi, `тезисы.txt` venäjäksi) |
 | `keywords_tfidf.csv`            | notebook          | avainsanat (uni/bi/trigrammit) TF-IDF-painoineen  |
 | `paragraphs_with_topics.csv`    | notebook          | kappaleet määrätyllä KMeans-aiheellaan            |
 | `topic_keywords.json`           | notebook          | avainsanat aiheittain                             |
 | `entities.csv`                  | notebook          | kaikki nimennetyt entiteetit ja niiden tunnisteet |
 | `accessible_text.html`          | notebook          | kappale- ja lausetason `lang`-attribuutit — ruudunlukijat vaihtavat ääntä automaattisesti per katkelma |
 | `accessible_text.docx`          | notebook          | sama sisältö `<w:lang>`:lla asetettuna per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word ja SAPI käyttävät sitä offline-tilassa ilman online-tunnistinta |
-| `raport_analizy.html`           | `generate_report.py` | globaali saavutettava HTML-raportti            |
-| `raport_dla_notebooklm.md`      | `generate_md.py`     | NotebookLM-valmis Markdown                     |
+| `analysis_report.html`           | `generate_report.py` | globaali saavutettava HTML-raportti            |
+| `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-valmis Markdown                     |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | rituaaliset / kerronnalliset tekstiartefaktit |
 
 ## Saavutettavuus
@@ -292,11 +296,11 @@ accessible_text_analyst/
         ├── sentences.csv
         ├── paragraphs.csv
         ├── theses.csv
-        ├── тезисы.txt
+        ├── theses.txt              # nimi mukautuu korpuksen kieleen
         ├── accessible_text.html
         ├── accessible_text.docx
-        ├── raport_analizy.html
-        ├── raport_dla_notebooklm.md
+        ├── analysis_report.html
+        ├── notebooklm_report.md
         └── audio_scripts/…
 ```
 
