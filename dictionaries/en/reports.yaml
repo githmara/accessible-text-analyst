@@ -1,4 +1,5 @@
 generate_report:
+  html_title: 'Report: Text Analysis'
   ok_report_generated: '[OK] Accessible HTML report generated successfully: {path}'
   info_target_lang: '[INFO] Detected target language for tagging: {language}'
   info_remove_noise_active: '[INFO] Technical-noise removal mode (lemmatization, POS, logs) is ACTIVE.'

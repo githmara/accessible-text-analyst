@@ -1,0 +1,246 @@
+intro: |
+  # Accessible Text Analysis (spaCy · TF-IDF · KMeans)
+
+  A complete text-analytics pipeline with support for **Polish, Russian, English, Italian, Finnish, and Icelandic**.
+  All results are emitted via `print()` — no color codes, no pseudographics.
+  Compatible with the **NVDA** and **JAWS** screen readers.
+
+  **The only thing required from the user:** set the path to a `.pdf`, `.txt`, or `.docx` file in the first code cell. If the file is not found, a built-in example is used.
+
+  ---
+
+  **Analysis stages:**
+
+  1. **Corpus loading** — PDF page by page (pdfplumber), TXT, DOCX (python-docx), local HTML, or a **URL** (page address directly); BeautifulSoup strips navigation, sidebars, and "related articles" blocks when loading from a URL or HTML; built-in example as a fallback.
+  2. **Language detection** — `lingua-language-detector` determines the dominant corpus language and at the same time serves as the per-paragraph and per-sentence detector (used at export time).
+  3. **spaCy language model** — the **Large (lg)** variant is selected automatically: `pl_core_news_lg`, `ru_core_news_lg`, `en_core_web_lg`, `it_core_news_lg`, `fi_core_news_lg`; for Icelandic (`is`) — `spacy.blank("is")` + Hugging Face (IceBERT, MIM-GOLD-22). Models are loaded on demand via `get_nlp(lang)`, guarded by `functools.lru_cache(maxsize=2)`: at most two models live in RAM simultaneously, the rest are evicted LRU.
+  4. **Text correction** — removal of exact word duplicates (all languages); abbreviation normalization with spaces for Polish (`m. in.`→`m.in.`), Russian (`т. е.`→`т.е.`), and English (`e. g.`→`e.g.`).
+  5. **Basic NLP** — tokenization into words and sentences, stop-word filtering, lemmatization, POS tagging (NOUN/VERB/ADJ/…).
+  6. **Named entities (NER)** — people, organizations, places, dates, and other mentioned objects (with a frequency summary across the whole corpus).
+  7. **Bag of words (CountVectorizer)** — frequency matrix with language-specific stop-words; top-10 words and top-5 bigrams.
+  8. **TF-IDF and auto-search** — the query is built automatically from the corpus top-terms; cosine similarity is guaranteed > 0.
+  9. **Text structure** — the whole corpus is merged into a single stream, split into sentences by spaCy, and grouped into paragraphs of 3–6 sentences; for each paragraph and sentence, lingua records the ISO language code that later ends up in HTML/DOCX.
+  10. **Keywords** — a ranked table of terms and phrases (1–3 words) by paragraph-level average-weighted TF-IDF.
+  11. **Theses** — the best TF-IDF-sum sentence of each paragraph; saved to a corpus-language-localized `.txt` file in the `- sentence` format.
+  12. **Topic modeling (KMeans)** — paragraph clustering by spaCy vectors; for each topic — keywords and a sample fragment *(requires a `*_md` or `*_lg` model with vectors)*.
+  13. **Result export** — CSV (UTF-8 BOM, Excel-compatible), JSON (topic keywords), TXT (theses), and an **accessibility-tagged HTML/DOCX** with a `lang` attribute on every paragraph/sentence — screen readers switch voice to the right language automatically.
+  14. **Summary report** — all key metrics in a single text block.
+
+langdet: |
+  ## 1) Language detection (lingua)
+
+  Uses the [`lingua-language-detector`](https://github.com/pemistahl/lingua-py) library — a statistical detector based on n-grams and dictionaries. On short fragments and in the presence of frequent language switches it is noticeably more accurate than `langdetect`, which is critical for per-paragraph and per-sentence tagging.
+
+  **Architecture:**
+
+  - At this step, the detector determines the **dominant language** of the entire corpus and stores it in the global variable `LANG`. This code selects the spaCy model for the main NLP pipeline.
+  - The global object `LANG_DETECTOR` and the function `detect_lang(text)` remain available in subsequent cells. At the "Text structure" step, they are applied to every paragraph and every sentence, producing the `para_langs` and `sent_langs` lists.
+  - These lists are consumed by the export cell: every `<p lang="...">` in HTML and every `Run` in DOCX gets the correct ISO code, and the screen reader (NVDA, JAWS, Narrator, VoiceOver) automatically switches voice/pronunciation to the right language.
+
+  Supported languages: **Polish** (`pl`), **Russian** (`ru`), **English** (`en`), **Italian** (`it`), **Finnish** (`fi`), **Icelandic** (`is`).
+
+  > If the corpus contains mixed languages, the dominant language gets the spaCy model, the rest are marked in HTML/DOCX via the `lang` attribute.
+
+model: |
+  ## 2) Loading the spaCy language model (LRU cache)
+
+  spaCy uses pre-trained models for tokenization, lemmatization, POS tagging, and NER.
+  The model for the dominant language is selected **automatically** from the result of the previous cell.
+
+  **Dynamic model loading:**
+
+  - Loading is encapsulated in the function `get_nlp(lang)`, wrapped in `functools.lru_cache(maxsize=2)`.
+  - At most **two** spaCy models are kept in RAM simultaneously. When a third language is requested, the least-recently-used model is evicted and freed by the garbage collector — this prevents memory accumulation on multilingual corpora.
+  - The old name `load_nlp_model` is kept as a backwards-compatibility alias.
+
+  > **Important:** The notebook uses **Large (lg)** models, which contain full word vectors. This significantly improves the quality of topic modeling (KMeans) and named-entity recognition (NER) compared to `sm` variants.
+
+  | Language | Code | Model |
+  |----------|------|-------|
+  | English | `en` | `en_core_web_lg` |
+  | Polish | `pl` | `pl_core_news_lg` |
+  | Russian | `ru` | `ru_core_news_lg` |
+  | Italian | `it` | `it_core_news_lg` |
+  | Finnish | `fi` | `fi_core_news_lg` |
+  | Icelandic | `is` | `spacy.blank("is")` + IceBERT (vectors) + MIM-GOLD-22 (NER) |
+
+  If a model is not installed, the notebook uses the basic tokenizer (`spacy.blank`) and reports the install command.
+
+pl_corrector: |
+  ## Text correction and abbreviation normalization
+
+  Automatically fixes typical formatting issues across all supported languages.
+
+  **For all languages:**
+  - Removal of exact word duplicates (`the the`, `jest jest`, `что что`, etc.)
+  - Collapsing of multiple spaces
+
+  **Abbreviation normalization (Polish `pl`):**
+  - `m.in`, `m. in`, `m.in,` → `m.in.`; `np.,` → `np.`; `tzw.,` → `tzw.`; `tzn.` — the full set
+  - `tj.`, `itd.`, `itp.` — gluing broken abbreviations back together
+
+  **Abbreviation normalization (Russian `ru`):**
+  - `т. е.` → `т.е.`; `т. д.` → `т.д.`; `и т.д.` → unified form; and others
+
+  **Abbreviation normalization (English `en`):**
+  - `e. g.` → `e.g.`; `e.g,` → `e.g.,`; `i. e.` → `i.e.`; `etc .` → `etc.`
+
+  > Goal of normalization: prevent false sentence boundaries by the spaCy tokenizer on abbreviations.
+
+tok: |
+  ## 3) Tokenization
+
+  **Tokenization** is the splitting of text into elementary units: words and punctuation marks.
+  spaCy does this with language awareness: it correctly handles apostrophes, hyphens, and abbreviations.
+
+  ### 3.1 Word tokenization
+  Each document is turned into a list of tokens. Whitespace is excluded.
+
+  ### 3.2 Sentence tokenization
+  spaCy also segments the text into sentences — useful for structure analysis, extractive summarization (theses), and per-sentence language detection before HTML/DOCX export.
+
+stop: |
+  ## 4) Stop-words
+
+  **Stop-words** are functional words (articles, prepositions, pronouns) that carry little semantic content.
+  The list is taken directly from the loaded spaCy model — it is already optimized for the corpus language.
+  After filtering, only semantically rich words remain.
+
+lemma: |
+  ## 5) Lemmatization
+
+  **Lemma** is the base (dictionary) form of a word. Lemmatization reduces all forms to a single form:
+  «runs», «ran», «running» → «run»; «documents», «document» → «document».
+
+  Unlike stemming, lemmatization uses a dictionary and grammatical rules — the result is always a readable word.
+  In spaCy, the lemma is available via `token.lemma_`.
+
+pos: |
+  ## 6) Parts of speech (POS tagging)
+
+  **POS tagging** assigns each token a grammatical role: noun, verb, adjective, etc.
+  spaCy returns two levels:
+  - `pos_` — the universal tag (NOUN, VERB, ADJ, ADV, PROPN …)
+  - `tag_` — the detailed, language-specific tag
+
+  The POS distribution reveals the text's style: scientific texts contain many nouns; literary texts — many verbs and adjectives.
+
+ner: |
+  ## 7) Named entities (NER)
+
+  **NER** (Named Entity Recognition) finds names, organizations, places, dates, monetary amounts, and other mentioned objects.
+  spaCy returns a `doc.ents` list, where each entity has a text and a label.
+
+  Typical labels: PERSON, ORG, GPE (city/country), DATE, MONEY, PRODUCT.
+
+bow: |
+  ## 8) Bag of words (CountVectorizer)
+
+  **CountVectorizer** turns texts into numerical vectors by counting how many times each word appears in a document.
+  The result is a "document × word" matrix where each row is one document and each column is one word.
+
+  ### 8.1 Unigrams (single words)
+  The base representation: each word is a separate feature.
+
+  ### 8.2 Bigrams (word pairs)
+  Adds stable expressions: «machine learning», «natural language», «named entity».
+
+tfidf: |
+  ## 9) TF-IDF and automatic search
+
+  **TF-IDF** (Term Frequency — Inverse Document Frequency) weights words: those frequent in one document but rare in the rest get a high weight.
+  This makes search smarter than a simple word count.
+
+  **Cosine similarity** measures the angle between two text vectors:
+  - 1.0 = perfect match
+  - 0.0 = no shared words
+
+  **Automatic query:** the notebook builds the query from the words with the highest mean TF-IDF weight across the corpus.
+  This query is guaranteed to give a cosine similarity > 0 (never −1).
+
+para: |
+  ## Text structure: paragraphs and sentences
+
+  We merge the entire corpus into a single stream, split it into sentences by the spaCy sentencizer, and group them by 3–6 into "paragraphs". This structure feeds the next steps (theses, keywords, topic modeling).
+
+  Additionally, for every paragraph and every sentence `lingua` records an ISO language code:
+
+  - `para_langs[i]` — the language of the `i`-th paragraph as a whole,
+  - `sent_langs[i]` — the language of the `i`-th sentence,
+  - `para_sentences[i]` — the list of sentences belonging to the `i`-th paragraph (needed by the export cell).
+
+  This per-fragment language is written into `accessible_text.html` (`<p lang="...">`, with `<span lang="...">` if needed) and into `accessible_text.docx` (`<w:lang>` at the `Run` level), so that screen readers and TTS engines switch voice automatically.
+
+foreign_resegment: |
+  ## Foreign-block re-segmentation
+
+  In the previous cell the entire corpus was split into sentences by the **dominant** spaCy model. If the corpus contains continuous foreign-language blocks (e.g., a long Finnish quote inside a Polish text), the LANG model does not know foreign abbreviations (`ad es.`, `e.g.`, `esim.`) and may mistakenly treat the period after them as a sentence boundary — the foreign fragment is split in half, and context is lost between the two halves.
+
+  This cell looks for sequences of **two or more consecutive sentences in the same foreign language** (according to `sent_langs` from cell_para) and re-processes each such block with its own model:
+
+  1. `ABBREV_BY_LANG[lang]` is applied — the language-specific abbreviation normalization from cell_pl_corrector;
+  2. `get_nlp(lang)(block)` — correct sentence segmentation.
+
+  Then `all_sents`, `sent_langs`, `paragraphs`, `para_sentences`, `para_langs`, `df_sent`, `df_para`, and (defensively) `para_lemmas` are rebuilt. The next cell, the two-stage analysis, already runs on the corrected boundaries.
+
+  If there are no foreign sentences in the corpus — or there are but they do not form blocks of ≥2 — the cell finishes instantly with an informative message, without loading any additional models.
+
+multilang_pass: |
+  ## Two-stage multilingual analysis (NER + lemmatization)
+
+  If the corpus contains fragments in multiple languages, the dominant spaCy model lemmatizes words incorrectly and misclassifies named entities in foreign-language sentences. This cell fixes that: every sentence whose language (as detected by lingua in the previous cell) differs from the main one is re-processed through `get_nlp(sent_lang)`.
+
+  The LRU cache in `cell_model` limits RAM usage to two models at once — a third evicts the least-recently-used one. This makes it possible to run the corpus sequentially through several models without accumulating all of them in memory.
+
+  After the cell finishes, `all_ents` and `para_lemmas` are rebuilt with the language of each sentence taken into account, so the keyword/theses/topic/entity exports rely on correct morphology.
+
+  If the necessary spaCy model is missing (or `transformers`/`torch` for Icelandic), the cell, during execution, prints an explicit warning about the unreliability of the analysis for the affected sentences and suggests an install command.
+
+keywords: |
+  ## Keywords (TF-IDF)
+
+  Paragraph-level TF-IDF reveals terms characteristic of specific fragments but rare across the corpus. Here we get a ranked list of key terms and phrases (1 to 3 words), sorted by average-weighted TF-IDF.
+
+theses: |
+  ## Theses (extractive summary)
+
+  For each paragraph, the **most informative sentence** (with the highest TF-IDF sum) is selected. The result is a compact list of theses, saved to a corpus-language-localized `.txt` file in a screen-reader-friendly format.
+
+  The `N_THESES` parameter sets the maximum number of theses in the file.
+
+topics: |
+  ## Topic modeling (KMeans)
+
+  Each paragraph is represented by a spaCy vector and then clustered by the KMeans algorithm. For each topic, keywords and a sample fragment are printed.
+
+  **Requirement:** the spaCy model must support word vectors (e.g. `*_lg`). With models that have no vectors, topic modeling is skipped with a corresponding message.
+
+export: |
+  ## Result export
+
+  We save all tables into the project folder inside `export_results/`:
+
+  - **CSV** (UTF-8 BOM, opens in Excel) — sentences, paragraphs, theses, TF-IDF keywords, entities, topics.
+  - **JSON** — topic keywords.
+  - **TXT** — the localized theses file (saved at the previous step).
+
+  **Accessibility-tagged text** — two formats for offline reading by screen readers and TTS:
+
+  - `accessible_text.html` — built via `BeautifulSoup`. The root `<html>` has the dominant-language `lang` attribute; every `<p>` gets its own `lang` (from `para_langs`), and inside mixed paragraphs every sentence is wrapped in `<span lang="...">` (from `sent_langs`). NVDA and JAWS read these tags natively and switch voice on the fly.
+  - `accessible_text.docx` — built via `python-docx`. For every `Run`, the `<w:lang>` property is set explicitly (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`). Word, the built-in Windows synthesizer (SAPI), and third-party readers rely on this attribute offline, without contacting online detectors.
+
+  These files replace the former flat `clean_text_for_audio.txt`: instead of one language profile for the entire text stream, the reader now receives the correct language on every fragment.
+
+summary: |
+  ## Summary report
+
+  The cell below gathers all the key analysis results into a single text report.
+  The format is optimized for reading by screen readers (NVDA, JAWS): plain text only, no colors, no pseudographics.
+
+qa_rag: |
+  ## Interactive question-and-answer system (RAG)
+
+  A simple "question — answer" loop based on TF-IDF and cosine similarity.
+  Enter a question — the system finds the 3 most relevant text fragments from the corpus.
+
+  To exit, type: **wyjście**, **выход**, or **exit**.

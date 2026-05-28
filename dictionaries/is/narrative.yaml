@@ -1,0 +1,246 @@
+intro: |
+  # Aðgengileg textagreining (spaCy · TF-IDF · KMeans)
+
+  Heildarleiðsla fyrir textagreiningu með stuðningi fyrir **pólsku, rússnesku, ensku, ítölsku, finnsku og íslensku**.
+  Allar niðurstöður eru sendar út með `print()` — engir litakóðar, engin gerviteikning.
+  Samhæfð við **NVDA**- og **JAWS**-skjáulesara.
+
+  **Það eina sem þarf frá notandanum:** stilla slóð á `.pdf`-, `.txt`- eða `.docx`-skrá í fyrsta kóðahólfi. Ef skráin finnst ekki, er innbyggt dæmi notað.
+
+  ---
+
+  **Greiningarstig:**
+
+  1. **Hleðsla safns** — PDF síðu fyrir síðu (pdfplumber), TXT, DOCX (python-docx), staðbundið HTML eða **URL** (bein síðuslóð); BeautifulSoup fjarlægir leiðsögn, hliðarstikur og „tengdar greinar"-blokkir við hleðslu frá URL eða HTML; innbyggt dæmi sem varaleið.
+  2. **Tungumálsgreining** — `lingua-language-detector` ákvarðar ráðandi tungumál safnsins og þjónar á sama tíma sem greinandi á málsgreina- og setningarstigi (notað á útflutningsstigi).
+  3. **spaCy-tungumálsmódel** — **Large (lg)**-afbrigðið er valið sjálfvirkt: `pl_core_news_lg`, `ru_core_news_lg`, `en_core_web_lg`, `it_core_news_lg`, `fi_core_news_lg`; fyrir íslensku (`is`) — `spacy.blank("is")` + Hugging Face (IceBERT, MIM-GOLD-22). Módel eru hlaðin eftir þörfum með `get_nlp(lang)`, varið með `functools.lru_cache(maxsize=2)`: að hámarki tvö módel eru í minni samtímis, restin er rýmd með LRU-aðferð.
+  4. **Textaleiðrétting** — fjarlæging á nákvæmum endurtekningum orða (öll tungumál); samræming skammstafana með bilum fyrir pólsku (`m. in.`→`m.in.`), rússnesku (`т. е.`→`т.е.`) og ensku (`e. g.`→`e.g.`).
+  5. **Grunn-NLP** — táknun í orð og setningar, síun stoppyrða, lemmun, POS-merking (NOUN/VERB/ADJ/…).
+  6. **Nafngreindar verur (NER)** — fólk, samtök, staðir, dagsetningar og aðrir nefndir hlutir (með tíðnisamantekt fyrir allt safnið).
+  7. **Orðapoki (CountVectorizer)** — tíðnifylki með tungumálasérstökum stoppyrðum; topp-10 orð og topp-5 tvígrömm.
+  8. **TF-IDF og sjálfvirk leit** — fyrirspurnin er smíðuð sjálfvirkt úr topp-liðum safnsins; kósínus-líking er tryggð > 0.
+  9. **Textauppbygging** — allt safnið er sameinað í einn straum, skipt í setningar með spaCy og flokkað í málsgreinar með 3–6 setningum; fyrir hverja málsgrein og setningu skráir `lingua` ISO-tungumálskóða sem síðar fer inn í HTML/DOCX.
+  10. **Lykilorð** — flokkuð tafla yfir liði og setningar (1–3 orð) eftir vegnu meðaltal TF-IDF á málsgreinastigi.
+  11. **Kjarnasetningar** — besta TF-IDF-summan á hverri málsgrein; vistuð í staðfærðri `.txt`-skrá á sniði `- setning`.
+  12. **Efnislíkanlæring (KMeans)** — klösun málsgreina eftir spaCy-vigrum; fyrir hvert efni — lykilorð og dæmisbrot *(krefst `*_md`- eða `*_lg`-líkans með vigrum)*.
+  13. **Útflutningur niðurstaðna** — CSV (UTF-8 BOM, Excel-samhæft), JSON (lykilorð efna), TXT (kjarnasetningar) og **aðgengismerkt HTML/DOCX** með `lang`-eigind á hverri málsgrein/setningu — skjáulesarar skipta um rödd sjálfvirkt yfir á rétt tungumál.
+  14. **Samantektarskýrsla** — allir lykilmælikvarðar í einum textareit.
+
+langdet: |
+  ## 1) Tungumálsgreining (lingua)
+
+  Bókasafnið [`lingua-language-detector`](https://github.com/pemistahl/lingua-py) er notað — tölfræðilegur greinandi byggður á n-grömmum og orðasöfnum. Á stuttum brotum og við tíð tungumálaskipti er hann verulega nákvæmari en `langdetect`, sem er gagnrýnt fyrir merkingu á málsgreina- og setningarstigi.
+
+  **Byggingarlag:**
+
+  - Á þessu þrepi ákvarðar greinandinn **ráðandi tungumál** alls safnsins og vistar það í altæku breytunni `LANG`. Þessi kóði velur spaCy-líkanið fyrir aðal-NLP-leiðsluna.
+  - Altæki hluturinn `LANG_DETECTOR` og fallið `detect_lang(text)` halda áfram að vera tiltækir í síðari hólfum. Á þrepinu „Textauppbygging" eru þeir beittir á hverja málsgrein og setningu, og mynda listana `para_langs` og `sent_langs`.
+  - Þessa lista notar útflutningshólfið: hver `<p lang="...">` í HTML og hver `Run` í DOCX fær réttan ISO-kóða, og skjáulesarinn (NVDA, JAWS, Narrator, VoiceOver) skiptir sjálfvirkt um rödd/framburð yfir á rétt tungumál.
+
+  Studd tungumál: **pólska** (`pl`), **rússneska** (`ru`), **enska** (`en`), **ítalska** (`it`), **finnska** (`fi`), **íslenska** (`is`).
+
+  > Ef safnið inniheldur blönduð tungumál, fær ráðandi tungumálið spaCy-líkanið, hin eru merkt í HTML/DOCX með `lang`-eigind.
+
+model: |
+  ## 2) Hleðsla spaCy-tungumálsmódels (LRU-skyndiminni)
+
+  spaCy notar fyrirfram þjálfuð líkön fyrir táknun, lemmun, POS-merkingu og NER.
+  Líkan ráðandi tungumáls er valið **sjálfvirkt** út frá niðurstöðu fyrra hólfs.
+
+  **Kvik hleðsla líkana:**
+
+  - Hleðsla er innilokuð í fallinu `get_nlp(lang)`, vafið í `functools.lru_cache(maxsize=2)`.
+  - Að hámarki **tvö** spaCy-líkön eru í minni samtímis. Þegar þriðja tungumál er beðið um, er minnst notaða líkanið rýmt og frelsað af ruslagagnasöfnun — þetta kemur í veg fyrir minnissöfnun á fjöltyngdum söfnum.
+  - Gamla nafnið `load_nlp_model` er haldið sem samhæfnisheiti.
+
+  > **Mikilvægt:** Minnisbókin notar **Large (lg)**-líkön sem innihalda full orðabókarvigur. Þetta bætir verulega gæði efnislíkanlæringar (KMeans) og þekkingar á nafngreindum verum (NER) miðað við `sm`-afbrigði.
+
+  | Tungumál | Kóði | Líkan |
+  |----------|------|-------|
+  | English | `en` | `en_core_web_lg` |
+  | Polish | `pl` | `pl_core_news_lg` |
+  | Russian | `ru` | `ru_core_news_lg` |
+  | Italian | `it` | `it_core_news_lg` |
+  | Finnish | `fi` | `fi_core_news_lg` |
+  | Icelandic | `is` | `spacy.blank("is")` + IceBERT (vigur) + MIM-GOLD-22 (NER) |
+
+  Ef líkan er ekki uppsett, notar minnisbókin grunntáknarann (`spacy.blank`) og sýnir uppsetningarskipun.
+
+pl_corrector: |
+  ## Textaleiðrétting og samræming skammstafana
+
+  Lagfærir sjálfvirkt dæmigerðar sniðvillur í öllum studdum tungumálum.
+
+  **Fyrir öll tungumál:**
+  - Fjarlæging nákvæmra endurtekninga orða (`the the`, `jest jest`, `что что` o.s.frv.)
+  - Samansláttur margra bila
+
+  **Samræming skammstafana (pólska `pl`):**
+  - `m.in`, `m. in`, `m.in,` → `m.in.`; `np.,` → `np.`; `tzw.,` → `tzw.`; `tzn.` — heildarsett
+  - `tj.`, `itd.`, `itp.` — endurtenging brotinna skammstafana
+
+  **Samræming skammstafana (rússneska `ru`):**
+  - `т. е.` → `т.е.`; `т. д.` → `т.д.`; `и т.д.` → samræmd mynd; og fleiri
+
+  **Samræming skammstafana (enska `en`):**
+  - `e. g.` → `e.g.`; `e.g,` → `e.g.,`; `i. e.` → `i.e.`; `etc .` → `etc.`
+
+  > Markmið samræmingar: koma í veg fyrir að spaCy-táknarinn brjóti setningar ranglega á skammstöfunum.
+
+tok: |
+  ## 3) Táknun
+
+  **Táknun** er það að brjóta texta niður í frumefnishluta: orð og greinarmerki.
+  spaCy gerir þetta með tungumálsvitund: það meðhöndlar úrfellingarmerki, bandstrik og skammstafanir rétt.
+
+  ### 3.1 Orðtáknun
+  Hvert skjal er breytt í lista af táknum. Bilum er sleppt.
+
+  ### 3.2 Setningatáknun
+  spaCy skiptir einnig texta í setningar — gagnlegt fyrir uppbyggingargreiningu, útdráttarsamantekt (kjarnasetningar) og tungumálsgreiningu á setningarstigi fyrir HTML/DOCX-útflutning.
+
+stop: |
+  ## 4) Stoppyrði
+
+  **Stoppyrði** eru hjálparorð (greinir, forsetningar, fornöfn) sem bera lítið merkingargildi.
+  Listinn er tekinn beint úr hlaðna spaCy-líkaninu — það er þegar bestað fyrir tungumál safnsins.
+  Eftir síun eru aðeins merkingarríkar orð eftir.
+
+lemma: |
+  ## 5) Lemmun
+
+  **Lemma** er grunnmynd (orðabókarmynd) orðs. Lemmun færir öll form í eina mynd:
+  »hleypur«, »hlupu«, »hlaupandi« → »hlaupa«; »documents«, »document« → »document«.
+
+  Ólíkt stofngreiningu notar lemmun orðabók og málfræðireglur — niðurstaðan er alltaf læsilegt orð.
+  Í spaCy er lemmunin tiltæk gegnum `token.lemma_`.
+
+pos: |
+  ## 6) Orðflokkar (POS-merking)
+
+  **POS-merking** úthlutar hverri tákn málfræðilegu hlutverki: nafnorð, sögn, lýsingarorð o.s.frv.
+  spaCy skilar tveimur stigum:
+  - `pos_` — alheimstag (NOUN, VERB, ADJ, ADV, PROPN …)
+  - `tag_` — nákvæmt, tungumálasérstakt tag
+
+  POS-dreifing afhjúpar stíl textans: vísindatextar innihalda mörg nafnorð; bókmenntir — sagnir og lýsingarorð.
+
+ner: |
+  ## 7) Nafngreindar verur (NER)
+
+  **NER** (Named Entity Recognition) finnur nöfn, samtök, staði, dagsetningar, peningaupphæðir og aðra nefnda hluti.
+  spaCy skilar listanum `doc.ents`, þar sem hver vera hefur texta og merkingu.
+
+  Dæmigerð merki: PERSON, ORG, GPE (borg/land), DATE, MONEY, PRODUCT.
+
+bow: |
+  ## 8) Orðapoki (CountVectorizer)
+
+  **CountVectorizer** breytir textum í talnavigur með því að telja hve oft hvert orð kemur fyrir í skjali.
+  Niðurstaðan er „skjal × orð"-fylki þar sem hver röð er eitt skjal og hver dálkur eitt orð.
+
+  ### 8.1 Einstök orð (unigrömm)
+  Grunnframsetning: hvert orð er sérstakt einkenni.
+
+  ### 8.2 Orðapör (tvígrömm)
+  Bætir við stöðugum tjáningum: »machine learning«, »natural language«, »named entity«.
+
+tfidf: |
+  ## 9) TF-IDF og sjálfvirk leit
+
+  **TF-IDF** (Term Frequency — Inverse Document Frequency) vegir orð: orð sem eru algeng í einu skjali en sjaldgæf í hinum fá hátt vægi.
+  Þetta gerir leitina snjallari en einföld orðatalning.
+
+  **Kósínus-líking** mælir hornið milli tveggja textavigra:
+  - 1.0 = fullkomin samsvörun
+  - 0.0 = engin sameiginleg orð
+
+  **Sjálfvirk fyrirspurn:** minnisbókin smíðar fyrirspurnina úr orðum með hæsta meðaltal TF-IDF-vægis um allt safnið.
+  Slík fyrirspurn tryggir kósínus-líkingu > 0 (skilar aldrei −1).
+
+para: |
+  ## Textauppbygging: málsgreinar og setningar
+
+  Við sameinum allt safnið í einn straum, skiptum því í setningar með spaCy-setningarsegmentatara og flokkum þær í 3–6 setninga „málsgreinar". Þessa uppbyggingu nota næstu þrep (kjarnasetningar, lykilorð, efnislíkanlæring).
+
+  Að auki fyrir hverja málsgrein og hverja setningu skráir `lingua` ISO-tungumálskóða:
+
+  - `para_langs[i]` — tungumál `i`-tu málsgreinarinnar í heild,
+  - `sent_langs[i]` — tungumál `i`-tu setningarinnar,
+  - `para_sentences[i]` — listi yfir setningar sem tilheyra `i`-tu málsgreininni (útflutningshólfið þarf þetta).
+
+  Þetta per-brot tungumál er skrifað í `accessible_text.html` (`<p lang="...">`, ef þörf krefur `<span lang="...">`) og í `accessible_text.docx` (`<w:lang>` á `Run`-stigi), þannig að skjáulesarar og TTS-vélar skipta sjálfvirkt um rödd.
+
+foreign_resegment: |
+  ## Endurskipting erlendra blokka
+
+  Í fyrra hólfi var allt safnið brotið í setningar af **ráðandi** spaCy-líkani. Ef safnið inniheldur samfelldar erlendar blokkir (t.d. langa finnska tilvitnun innan pólsks texta), þekkir LANG-líkanið ekki erlendar skammstafanir (`ad es.`, `e.g.`, `esim.`) og getur ranglega túlkað punktinn eftir þeim sem lok setningar — erlenda brotið er rifið í tvennt og samhengið glatast milli helminganna.
+
+  Þetta hólf leitar að runum af **tveimur eða fleiri samliggjandi setningum á sama erlenda tungumálinu** (samkvæmt `sent_langs` úr cell_para) og endurvinnur hverja slíka blokk með eigin líkani:
+
+  1. Beitt er `ABBREV_BY_LANG[lang]` — tungumálasérstök samræming skammstafana úr cell_pl_corrector;
+  2. `get_nlp(lang)(blokk)` — rétt skipting í setningar.
+
+  Síðan eru `all_sents`, `sent_langs`, `paragraphs`, `para_sentences`, `para_langs`, `df_sent`, `df_para` og (varúðar) `para_lemmas` endurbyggð. Næsta hólf, tveggja þrepa greining, vinnur þegar á leiðréttum mörkum.
+
+  Ef engar erlendar setningar eru í safninu — eða þær eru til en mynda ekki blokkir ≥2 — lýkur hólfinu samstundis með upplýsingaskilaboðum, án þess að hlaða nein viðbótarlíkön.
+
+multilang_pass: |
+  ## Tveggja þrepa fjöltyngd greining (NER + lemmun)
+
+  Ef safnið inniheldur brot á nokkrum tungumálum, lemmar ráðandi spaCy-líkanið orð rangt og flokkar nafngreindar verur rangt í erlendum setningum. Þetta hólf leysir vandann: hver setning, sem hefur tungumál (greint af lingua í fyrra hólfi) sem er frábrugðið aðaltungumáli, er endurunnin í gegnum `get_nlp(sent_lang)`.
+
+  LRU-skyndiminnið í `cell_model` takmarkar RAM-notkun við tvö líkön samtímis — þriðja rýmir minnst notaða. Þetta gerir kleift að keyra safnið röðum saman gegnum nokkur líkön án þess að þau safnist öll í minni.
+
+  Eftir keyrslu hólfsins eru `all_ents` og `para_lemmas` endurbyggð að teknu tilliti til tungumáls hverrar setningar, þannig að útflutningur lykilorða, kjarnasetninga, efna og veranna styðst við rétta beygingafræði.
+
+  Ef nauðsynlegt spaCy-líkan vantar (eða `transformers`/`torch` fyrir íslensku), prentar hólfið skýra viðvörun um óáreiðanleika greiningar fyrir viðkomandi setningar meðan það keyrir og leggur til uppsetningarskipun.
+
+keywords: |
+  ## Lykilorð (TF-IDF)
+
+  TF-IDF á málsgreinastigi afhjúpar liði sem eru einkennandi fyrir ákveðin brot en sjaldgæf í heild textans. Hér fáum við flokkaðan lista yfir lykilliði og setningar (1–3 orð), raðað eftir vegnu meðaltal TF-IDF.
+
+theses: |
+  ## Kjarnasetningar (útdráttarsamantekt)
+
+  Fyrir hverja málsgrein er valin ein **upplýsingaríkasta setningin** (með hæstu TF-IDF-summu vægis). Niðurstaðan er þéttur listi yfir kjarnasetningar, vistaður í staðfærðri `.txt`-skrá á sniði sem hentar skjáulesurum.
+
+  Færibreytan `N_THESES` ákvarðar hámarksfjölda kjarnasetninga í skránni.
+
+topics: |
+  ## Efnislíkanlæring (KMeans)
+
+  Hver málsgrein er sýnd sem spaCy-vigur og síðan klösuð með KMeans-algrími. Fyrir hvert efni eru prentuð lykilorð og dæmisbrot.
+
+  **Krafa:** spaCy-líkanið verður að styðja orðavigur (t.d. `*_lg`). Með líkönum án vigra er efnislíkanlæringu sleppt með viðeigandi skilaboðum.
+
+export: |
+  ## Útflutningur niðurstaðna
+
+  Við vistum allar töflur í verkefnamöppuna innan `export_results/`:
+
+  - **CSV** (UTF-8 BOM, opnast í Excel) — setningar, málsgreinar, kjarnasetningar, TF-IDF-lykilorð, verur, efni.
+  - **JSON** — lykilorð efna.
+  - **TXT** — staðfærða kjarnasetningarskráin (vistuð í fyrra skrefi).
+
+  **Aðgengismerktur texti** — tvö snið fyrir lestur án nettengingar með skjáulesurum og TTS:
+
+  - `accessible_text.html` — smíðað með `BeautifulSoup`. Rótar-`<html>` hefur `lang`-eigind ráðandi tungumáls; hver `<p>` fær sína eigin `lang` (úr `para_langs`), og innan blandaðra málsgreina er hver setning vafið í `<span lang="...">` (úr `sent_langs`). NVDA og JAWS lesa þessi tög innfædd og skipta um rödd á flugu.
+  - `accessible_text.docx` — sett saman með `python-docx`. Fyrir hverja `Run`-einingu er eiginleikinn `<w:lang>` skrifaður skýrt (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`). Word, innbyggði Windows-syntan (SAPI) og þriðju aðila lesarar treysta á þessa eigind án nettengingar, án þess að hafa samband við netgreinendur.
+
+  Þessar skrár koma í staðinn fyrir áður flata `hreinn_texti_fyrir_hljod.txt`: í stað eins tungumálasniðs fyrir allan textastraum, fær lesarinn nú rétt tungumál á hverju broti.
+
+summary: |
+  ## Samantektarskýrsla
+
+  Hólfið hér að neðan safnar öllum lykilniðurstöðum greiningarinnar í eina textaskýrslu.
+  Sniðið er bestað fyrir lestur með skjáulesurum (NVDA, JAWS): aðeins texti, engir litir, engin gerviteikning.
+
+qa_rag: |
+  ## Gagnvirkt spurninga- og svarakerfi (RAG)
+
+  Einföld lykkja „spurning — svar" byggð á TF-IDF og kósínus-líkingu.
+  Sláðu inn spurningu — kerfið finnur 3 viðeigandustu textabrotin úr safninu.
+
+  Til að hætta sláðu inn: **wyjście**, **выход** eða **exit**.

@@ -1,0 +1,246 @@
+intro: |
+  # Dostępna analiza tekstu (spaCy · TF-IDF · KMeans)
+
+  Pełny potok analityki tekstu ze wsparciem dla **polskiego, rosyjskiego, angielskiego, włoskiego, fińskiego i islandzkiego**.
+  Wszystkie wyniki są wypisywane przez `print()` — bez kodów kolorów i pseudografiki.
+  Kompatybilny z czytnikami ekranu **NVDA** i **JAWS**.
+
+  **Jedyne, czego wymaga od użytkownika:** ustawienie ścieżki do pliku `.pdf`, `.txt` lub `.docx` w pierwszej komórce kodu. Jeśli plik nie zostanie znaleziony, używany jest wbudowany przykład.
+
+  ---
+
+  **Etapy analizy:**
+
+  1. **Wczytanie korpusu** — PDF strona po stronie (pdfplumber), TXT, DOCX (python-docx), lokalny HTML lub **URL** (bezpośredni adres strony); BeautifulSoup usuwa nawigację, panele boczne i bloki „powiązane artykuły" przy wczytywaniu z URL lub HTML; wbudowany przykład jako fallback.
+  2. **Detekcja języka** — `lingua-language-detector` określa dominujący język korpusu i jednocześnie służy jako detektor per akapit i per zdanie (używany przy eksporcie).
+  3. **Model językowy spaCy** — wariant **Large (lg)** wybierany jest automatycznie: `pl_core_news_lg`, `ru_core_news_lg`, `en_core_web_lg`, `it_core_news_lg`, `fi_core_news_lg`; dla islandzkiego (`is`) — `spacy.blank("is")` + Hugging Face (IceBERT, MIM-GOLD-22). Modele ładowane są na żądanie przez `get_nlp(lang)`, opakowane w `functools.lru_cache(maxsize=2)`: w RAM-ie żyją maksymalnie dwa modele jednocześnie, pozostałe są wyrzucane wg LRU.
+  4. **Korekta tekstu** — usuwanie dokładnych powtórzeń słów (wszystkie języki); normalizacja skrótów ze spacjami dla polskiego (`m. in.`→`m.in.`), rosyjskiego (`т. е.`→`т.е.`) i angielskiego (`e. g.`→`e.g.`).
+  5. **Bazowe NLP** — tokenizacja na słowa i zdania, filtrowanie stop-słów, lematyzacja, tagowanie POS (NOUN/VERB/ADJ/…).
+  6. **Nazwane jednostki (NER)** — osoby, organizacje, miejsca, daty i inne wzmiankowane obiekty (z częstotliwościowym podsumowaniem dla całego korpusu).
+  7. **Worek słów (CountVectorizer)** — macierz częstości z stop-słowami specyficznymi dla języka; top-10 słów i top-5 bigramów.
+  8. **TF-IDF i auto-wyszukiwanie** — zapytanie budowane jest automatycznie z top-terminów korpusu; podobieństwo kosinusowe jest gwarantowane > 0.
+  9. **Struktura tekstu** — cały korpus łączony jest w jeden strumień, dzielony na zdania przez spaCy i grupowany w akapity po 3–6 zdań; dla każdego akapitu i zdania `lingua` zapisuje kod ISO języka, który później trafia do HTML/DOCX.
+  10. **Słowa kluczowe** — rankingowa tabela terminów i fraz (1–3 słowa) wg średnioważonego TF-IDF na poziomie akapitów.
+  11. **Tezy** — najlepsze zdanie każdego akapitu (z najwyższą sumą TF-IDF); zapisywane do zlokalizowanego pliku `.txt` w formacie `- zdanie`.
+  12. **Modelowanie tematów (KMeans)** — klastrowanie akapitów po wektorach spaCy; dla każdego tematu — słowa kluczowe i przykładowy fragment *(wymaga modelu `*_md` lub `*_lg` z wektorami)*.
+  13. **Eksport wyników** — CSV (UTF-8 BOM, kompatybilne z Excelem), JSON (słowa kluczowe tematów), TXT (tezy) oraz **dostępny HTML/DOCX** z atrybutem `lang` na każdym akapicie/zdaniu — czytniki ekranu automatycznie zmieniają głos na odpowiedni język.
+  14. **Raport sumaryczny** — wszystkie kluczowe metryki w jednym bloku tekstowym.
+
+langdet: |
+  ## 1) Detekcja języka (lingua)
+
+  Używana jest biblioteka [`lingua-language-detector`](https://github.com/pemistahl/lingua-py) — statystyczny detektor oparty na n-gramach i słownikach. Na krótkich fragmentach i przy częstych przełączeniach języka jest zauważalnie dokładniejsza niż `langdetect`, co ma krytyczne znaczenie dla tagowania per akapit i per zdanie.
+
+  **Architektura:**
+
+  - Na tym kroku detektor ustala **dominujący język** całego korpusu i zapisuje go w globalnej zmiennej `LANG`. Ten kod wybiera model spaCy dla głównego potoku NLP.
+  - Globalny obiekt `LANG_DETECTOR` i funkcja `detect_lang(text)` pozostają dostępne w kolejnych komórkach. Na kroku „Struktura tekstu" stosowane są do każdego akapitu i zdania, tworząc listy `para_langs` i `sent_langs`.
+  - Te listy konsumuje komórka eksportu: każdy `<p lang="...">` w HTML i każdy `Run` w DOCX otrzymuje poprawny kod ISO, a czytnik ekranu (NVDA, JAWS, Narrator, VoiceOver) automatycznie przełącza głos/wymowę na odpowiedni język.
+
+  Obsługiwane języki: **polski** (`pl`), **rosyjski** (`ru`), **angielski** (`en`), **włoski** (`it`), **fiński** (`fi`), **islandzki** (`is`).
+
+  > Jeśli korpus zawiera języki mieszane, dominujący język dostaje model spaCy, pozostałe — są oznaczane w HTML/DOCX przez atrybut `lang`.
+
+model: |
+  ## 2) Ładowanie modelu językowego spaCy (cache LRU)
+
+  spaCy używa modeli wytrenowanych wstępnie do tokenizacji, lematyzacji, tagowania POS i NER.
+  Model dominującego języka wybierany jest **automatycznie** na podstawie wyniku poprzedniej komórki.
+
+  **Dynamiczne ładowanie modeli:**
+
+  - Ładowanie enkapsulowane jest w funkcji `get_nlp(lang)`, opakowanej w `functools.lru_cache(maxsize=2)`.
+  - W pamięci RAM jednocześnie trzymane są maksymalnie **dwa** modele spaCy. Przy żądaniu trzeciego języka najmniej ostatnio używany model jest wyrzucany i zwalniany przez garbage collector — zapobiega to akumulacji pamięci na korpusach wielojęzycznych.
+  - Stara nazwa `load_nlp_model` zachowana jest jako alias dla wstecznej kompatybilności.
+
+  > **Ważne:** Notatnik używa modeli wersji **Large (lg)**, które zawierają pełne wektory słownikowe. To znacząco poprawia jakość modelowania tematów (KMeans) i rozpoznawania nazwanych jednostek (NER) w porównaniu z wariantami `sm`.
+
+  | Język | Kod | Model |
+  |-------|-----|-------|
+  | English | `en` | `en_core_web_lg` |
+  | Polish | `pl` | `pl_core_news_lg` |
+  | Russian | `ru` | `ru_core_news_lg` |
+  | Italian | `it` | `it_core_news_lg` |
+  | Finnish | `fi` | `fi_core_news_lg` |
+  | Icelandic | `is` | `spacy.blank("is")` + IceBERT (wektory) + MIM-GOLD-22 (NER) |
+
+  Jeśli model nie jest zainstalowany, notatnik używa podstawowego tokenizera (`spacy.blank`) i podaje komendę instalacyjną.
+
+pl_corrector: |
+  ## Korekta tekstu i normalizacja skrótów
+
+  Automatycznie naprawia typowe błędy formatowania we wszystkich obsługiwanych językach.
+
+  **Dla wszystkich języków:**
+  - Usuwanie dokładnych powtórzeń słów (`the the`, `jest jest`, `что что` itp.)
+  - Zwijanie wielu spacji
+
+  **Normalizacja skrótów (polski `pl`):**
+  - `m.in`, `m. in`, `m.in,` → `m.in.`; `np.,` → `np.`; `tzw.,` → `tzw.`; `tzn.` — pełen zestaw
+  - `tj.`, `itd.`, `itp.` — sklejanie rozbitych skrótów
+
+  **Normalizacja skrótów (rosyjski `ru`):**
+  - `т. е.` → `т.е.`; `т. д.` → `т.д.`; `и т.д.` → ujednolicona forma; i inne
+
+  **Normalizacja skrótów (angielski `en`):**
+  - `e. g.` → `e.g.`; `e.g,` → `e.g.,`; `i. e.` → `i.e.`; `etc .` → `etc.`
+
+  > Cel normalizacji: zapobiegnięcie fałszywemu dzieleniu zdań przez tokenizer spaCy na skrótach.
+
+tok: |
+  ## 3) Tokenizacja
+
+  **Tokenizacja** to dzielenie tekstu na jednostki elementarne: słowa i znaki interpunkcyjne.
+  spaCy robi to z uwzględnieniem języka: poprawnie obsługuje apostrofy, łączniki i skróty.
+
+  ### 3.1 Tokenizacja na słowa
+  Każdy dokument zamieniany jest w listę tokenów. Białe znaki są pomijane.
+
+  ### 3.2 Tokenizacja na zdania
+  spaCy segmentuje też tekst na zdania — przydatne dla analizy struktury, ekstrakcyjnego streszczenia (tezy) i detekcji języka per zdanie przed eksportem HTML/DOCX.
+
+stop: |
+  ## 4) Stop-słowa
+
+  **Stop-słowa** to wyrazy funkcjonalne (rodzajniki, przyimki, zaimki), które niosą niewiele znaczenia.
+  Lista pobierana jest bezpośrednio z załadowanego modelu spaCy — jest już zoptymalizowana pod język korpusu.
+  Po filtracji pozostają tylko słowa semantycznie bogate.
+
+lemma: |
+  ## 5) Lematyzacja
+
+  **Lemat** to forma bazowa (słownikowa) słowa. Lematyzacja sprowadza wszystkie formy do jednej:
+  „biegnie", „biegli", „biegną" → „biec"; „documents", „document" → „document".
+
+  W przeciwieństwie do stemmingu, lematyzacja używa słownika i reguł gramatycznych — wynik jest zawsze czytelnym słowem.
+  W spaCy lemat dostępny jest przez `token.lemma_`.
+
+pos: |
+  ## 6) Części mowy (tagowanie POS)
+
+  **Tagowanie POS** przypisuje każdemu tokenowi rolę gramatyczną: rzeczownik, czasownik, przymiotnik itd.
+  spaCy zwraca dwa poziomy:
+  - `pos_` — tag uniwersalny (NOUN, VERB, ADJ, ADV, PROPN …)
+  - `tag_` — tag szczegółowy, specyficzny dla języka
+
+  Rozkład POS pozwala zrozumieć styl tekstu: w tekstach naukowych dominują rzeczowniki, w literackich — czasowniki i przymiotniki.
+
+ner: |
+  ## 7) Nazwane jednostki (NER)
+
+  **NER** (Named Entity Recognition) znajduje nazwiska, organizacje, miejsca, daty, kwoty pieniężne i inne wzmiankowane obiekty.
+  spaCy zwraca listę `doc.ents`, gdzie każda jednostka ma tekst i etykietę.
+
+  Typowe etykiety: PERSON, ORG, GPE (miasto/kraj), DATE, MONEY, PRODUCT.
+
+bow: |
+  ## 8) Worek słów (CountVectorizer)
+
+  **CountVectorizer** zamienia teksty w wektory liczbowe, licząc ile razy każde słowo pojawia się w dokumencie.
+  Wynik to macierz „dokument × słowo", gdzie każdy wiersz to jeden dokument, a każda kolumna — jedno słowo.
+
+  ### 8.1 Unigramy (pojedyncze słowa)
+  Reprezentacja bazowa: każde słowo to osobna cecha.
+
+  ### 8.2 Bigramy (pary słów)
+  Dodają wyrażenia stałe: „machine learning", „natural language", „named entity".
+
+tfidf: |
+  ## 9) TF-IDF i automatyczne wyszukiwanie
+
+  **TF-IDF** (Term Frequency — Inverse Document Frequency) waży słowa: te częste w jednym dokumencie, ale rzadkie w pozostałych, otrzymują wysoką wagę.
+  Czyni to wyszukiwanie mądrzejszym niż proste zliczanie słów.
+
+  **Podobieństwo kosinusowe** mierzy kąt między wektorami dwóch tekstów:
+  - 1.0 = pełna zgodność
+  - 0.0 = brak wspólnych słów
+
+  **Automatyczne zapytanie:** notatnik buduje zapytanie ze słów o najwyższej średniej wadze TF-IDF w korpusie.
+  Takie zapytanie gwarantuje podobieństwo kosinusowe > 0 (nigdy nie zwraca −1).
+
+para: |
+  ## Struktura tekstu: akapity i zdania
+
+  Łączymy cały korpus w jeden strumień, dzielimy spaCy-sentencyzerem na zdania i grupujemy po 3–6 w „akapity". Tę strukturę konsumują kolejne kroki (tezy, słowa kluczowe, modelowanie tematów).
+
+  Dodatkowo dla każdego akapitu i każdego zdania `lingua` zapisuje kod ISO języka:
+
+  - `para_langs[i]` — język `i`-tego akapitu w całości,
+  - `sent_langs[i]` — język `i`-tego zdania,
+  - `para_sentences[i]` — lista zdań wchodzących w skład `i`-tego akapitu (potrzebna komórce eksportu).
+
+  Ten per-fragmentowy język zapisywany jest w `accessible_text.html` (`<p lang="...">`, w razie potrzeby `<span lang="...">`) oraz w `accessible_text.docx` (`<w:lang>` na poziomie `Run`), dzięki czemu czytniki ekranu i silniki TTS przełączają głos automatycznie.
+
+foreign_resegment: |
+  ## Resegmentacja bloków obcojęzycznych
+
+  W poprzedniej komórce cały korpus został podzielony na zdania przez **dominujący** model spaCy. Jeśli w korpusie występują ciągłe bloki obcojęzyczne (np. długi cytat po fińsku w polskim tekście), model LANG nie zna obcych skrótów (`ad es.`, `e.g.`, `esim.`) i może błędnie potraktować kropkę po nich jako koniec zdania — obcojęzyczny fragment rozrywany jest na pół, a wewnątrz dwóch „połówek" tracony jest kontekst.
+
+  Ta komórka szuka sekwencji **dwóch lub więcej kolejnych zdań w tym samym obcym języku** (wg `sent_langs` z cell_para) i ponownie przetwarza każdy taki blok własnym modelem:
+
+  1. Stosowane jest `ABBREV_BY_LANG[lang]` — językowo-specyficzna normalizacja skrótów z cell_pl_corrector;
+  2. `get_nlp(lang)(blok)` — poprawna segmentacja na zdania.
+
+  Następnie przebudowywane są `all_sents`, `sent_langs`, `paragraphs`, `para_sentences`, `para_langs`, `df_sent`, `df_para` i (asekuracyjnie) `para_lemmas`. Kolejna komórka dwustadiowej analizy działa już na poprawionych granicach.
+
+  Jeśli w korpusie nie ma obcojęzycznych zdań — albo są, ale nie tworzą bloków ≥2 — komórka kończy się natychmiast z informacyjnym komunikatem, nie ładując żadnych dodatkowych modeli.
+
+multilang_pass: |
+  ## Dwuetapowa analiza wielojęzyczna (NER + lematyzacja)
+
+  Jeśli korpus zawiera fragmenty w kilku językach, dominujący model spaCy lematyzuje słowa niepoprawnie i błędnie klasyfikuje nazwane jednostki w obcojęzycznych zdaniach. Ta komórka rozwiązuje ten problem: każde zdanie, którego język (wykryty przez lingua w poprzedniej komórce) różni się od głównego, jest ponownie przetwarzane przez `get_nlp(sent_lang)`.
+
+  Cache LRU w `cell_model` ogranicza zużycie RAM do dwóch modeli jednocześnie — trzeci wyrzuca najmniej ostatnio używany. To pozwala kolejno przepuścić korpus przez kilka modeli bez akumulowania ich wszystkich w pamięci.
+
+  Po wykonaniu komórki `all_ents` i `para_lemmas` są przebudowywane z uwzględnieniem języka każdego zdania, więc eksport słów kluczowych, tez, tematów i jednostek opiera się na poprawnej morfologii.
+
+  Przy braku potrzebnego modelu spaCy (lub `transformers`/`torch` dla islandzkiego) komórka w trakcie wykonania wypisuje jawne ostrzeżenie o niewiarygodności analizy dla dotkniętych zdań i podpowiada komendę instalacji.
+
+keywords: |
+  ## Słowa kluczowe (TF-IDF)
+
+  TF-IDF na poziomie akapitów wykrywa terminy charakterystyczne dla konkretnych fragmentów, ale rzadkie w całym tekście. Dostajemy tu rankingową listę kluczowych terminów i fraz (od 1 do 3 słów), posortowaną wg średnioważonej wagi TF-IDF.
+
+theses: |
+  ## Tezy (ekstrakcyjne streszczenie)
+
+  Dla każdego akapitu wybierane jest jedno **najbardziej informatywne zdanie** (z maksymalną sumą wag TF-IDF). Wynik to kompaktowa lista tez, zapisywana do zlokalizowanego pliku `.txt` w formacie wygodnym dla czytników ekranu.
+
+  Parametr `N_THESES` ustala maksymalną liczbę tez w pliku.
+
+topics: |
+  ## Modelowanie tematów (KMeans)
+
+  Każdy akapit reprezentowany jest jako wektor spaCy, następnie klastrowany algorytmem KMeans. Dla każdego tematu wypisywane są słowa kluczowe i przykładowy fragment.
+
+  **Wymaganie:** model spaCy musi wspierać wektory słów (np. `*_lg`). Przy modelach bez wektorów modelowanie tematów jest pomijane z odpowiednim komunikatem.
+
+export: |
+  ## Eksport wyników
+
+  Wszystkie tabele zapisujemy do folderu projektu wewnątrz `export_results/`:
+
+  - **CSV** (UTF-8 BOM, otwiera się w Excelu) — zdania, akapity, tezy, słowa kluczowe TF-IDF, jednostki, tematy.
+  - **JSON** — słowa kluczowe tematów.
+  - **TXT** — zlokalizowany plik z tezami (zapisany na poprzednim kroku).
+
+  **Dostępny tekst z metkami językowymi** — dwa formaty do offline'owego czytania przez czytniki ekranu i TTS:
+
+  - `accessible_text.html` — budowany przez `BeautifulSoup`. Główny `<html>` ma atrybut `lang` dominującego języka; każdy `<p>` otrzymuje własny `lang` (z `para_langs`), a wewnątrz mieszanych akapitów każde zdanie owijane jest w `<span lang="...">` (z `sent_langs`). NVDA i JAWS czytają te tagi natywnie i przełączają głos w locie.
+  - `accessible_text.docx` — składany przez `python-docx`. Dla każdego `Run` właściwość `<w:lang>` zapisywana jest jawnie (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`). Word, wbudowany syntezator Windowsa (SAPI) i czytniki firm trzecich opierają się na tym atrybucie offline, bez sięgania do detektorów online.
+
+  Te pliki zastępują dawny płaski `czysty_tekst_dla_audio.txt`: zamiast jednego profilu językowego dla całego strumienia tekstu, czytnik otrzymuje teraz poprawny język na każdym fragmencie.
+
+summary: |
+  ## Raport końcowy
+
+  Komórka poniżej zbiera wszystkie kluczowe wyniki analizy w jeden raport tekstowy.
+  Format zoptymalizowany pod czytanie przez czytniki ekranu (NVDA, JAWS): tylko tekst, bez kolorów, bez pseudografiki.
+
+qa_rag: |
+  ## Interaktywny system pytań i odpowiedzi (RAG)
+
+  Prosta pętla „pytanie — odpowiedź" oparta na TF-IDF i podobieństwie kosinusowym.
+  Wpisz pytanie — system znajdzie 3 najbardziej trafne fragmenty tekstu z korpusu.
+
+  Aby wyjść, wpisz: **wyjście**, **выход** lub **exit**.

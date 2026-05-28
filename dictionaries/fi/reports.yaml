@@ -1,4 +1,5 @@
 generate_report:
+  html_title: 'Raportti: tekstianalyysi'
   ok_report_generated: '[OK] Saavutettava HTML-raportti luotu onnistuneesti: {path}'
   info_target_lang: '[INFO] Tunnistettu kohdekieli tageja varten: {language}'
   info_remove_noise_active: '[INFO] Teknisen melun poistotila (lemmatisointi, POS, lokit) on AKTIIVINEN.'

@@ -6,10 +6,43 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
+import yaml
+
 from shamanic_locale import get_ui_lang, t
 
 # Język UI (printy w konsoli) — odczytywany z config.json/ini, fallback 'en'.
+# Steruje też atrybutem <html lang="..."> w generowanym raporcie i podmianą
+# markdownowej narracji notatnika na tłumaczenia z dictionaries/{lang}/narrative.yaml.
 UI_LANG = get_ui_lang()
+
+# Sekwencyjne mapowanie markdownowych komórek notatnika na klucze
+# w narrative.yaml. Cell qa_rag jest pomijany w generowanym raporcie
+# (cell_qa_rag jest interaktywny, bez sensownego statycznego wyjścia),
+# ale klucz qa_rag jest tu dla kompletności / na wypadek przyszłej zmiany.
+NARRATIVE_KEYS = (
+    'intro', 'langdet', 'model', 'pl_corrector', 'tok', 'stop', 'lemma', 'pos',
+    'ner', 'bow', 'tfidf', 'para', 'foreign_resegment', 'multilang_pass',
+    'keywords', 'theses', 'topics', 'export', 'summary', 'qa_rag',
+)
+
+
+@lru_cache(maxsize=8)
+def _load_narrative(ui_lang):
+    """Załaduj przetłumaczoną narrację markdownową dla `ui_lang`.
+    Dla 'ru' zwracamy pusty dict — generate_report używa wtedy source
+    z notatnika 1:1 (notatnik jest po rosyjsku). Dla pozostałych
+    obsługiwanych języków czytamy dictionaries/{lang}/narrative.yaml.
+    Brak pliku / niepoprawny YAML → pusty dict (fallback do source notatnika)."""
+    if ui_lang == 'ru':
+        return {}
+    path = Path(__file__).resolve().parent / 'dictionaries' / ui_lang / 'narrative.yaml'
+    if not path.is_file():
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
 
 NOTEBOOK_PATH = "accessible_text_analyst.ipynb"
 # Akceptujemy config.json i config.ini (treść zawsze JSON — .ini to tylko
@@ -646,10 +679,10 @@ def build_accessible_html():
         # Wykonujemy najpierw, bo wzorce są zakotwiczone do nieprzetagowanych
         # prefiksów typu "[orgName] " czy "Абзац N:". Po EN-hardkodzie
         # te prefiksy zawierałyby już <span> i regex by nie zadziałał.
-        # Dla korpusów rosyjskich i angielskich pomijamy — w ru reszta
-        # i tak jest po rosyjsku (lang dziedziczone z <html lang="ru">),
-        # a w en EN-hardkod sam zatagowuje treść i tak.
-        if lang not in ("ru", "en"):
+        # Dla fragmentów w UI_LANG i w angielskim pomijamy — w UI_LANG
+        # lang dziedziczone z <html lang="..."> dokumentu, a w en
+        # EN-hardkod sam zatagowuje treść.
+        if lang not in (UI_LANG, "en"):
             patterns = [
                 # Zdania bazowe: [1] Obcy tekst...
                 (r'^(\s*\[\d+\]\s+)(.+)$', r'\1<span lang="{}">\2</span>'),
@@ -713,10 +746,10 @@ def build_accessible_html():
         # === Krok 3: lingua per-segment fallback ===
         # Dla pozostałych nieotagowanych "słów" >= 5 znaków (typowo: ścieżki
         # plików, nazwy własne korpusu, fragmenty obcojęzyczne w narracji),
-        # jeśli lingua wykryje język inny niż domyślny dokumentu (ru), otocz
-        # spanem. Dzięki temu np. "Joanna_Kos-Krauzen_särkyneet_kulissit"
+        # jeśli lingua wykryje język inny niż domyślny dokumentu (UI_LANG),
+        # otocz spanem. Dzięki temu np. "Joanna_Kos-Krauzen_särkyneet_kulissit"
         # w ścieżce dostanie lang="fi", a "Whisper" — lang="en".
-        text = _lingua_word_fallback(text, document_lang="ru")
+        text = _lingua_word_fallback(text, document_lang=UI_LANG)
 
         # === Krok 4: scalanie sąsiadujących spanów same-lang ===
         # "TF тире IDF" → "TF-IDF" (jedno wymówienie en zamiast dwóch).
@@ -753,10 +786,10 @@ def build_accessible_html():
     # 4. Budowanie struktury HTML
     html_content = [
         "<!DOCTYPE html>",
-        '<html lang="ru">', 
+        f'<html lang="{UI_LANG}">',
         "<head>",
         '  <meta charset="utf-8">',
-        "  <title>Отчёт: Анализ текста</title>",
+        f"  <title>{_html.escape(t(UI_LANG, 'generate_report.html_title'))}</title>",
         "  <style>",
         "    body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #333; }",
         "    h1, h2, h3 { color: #2c3e50; margin-top: 2rem; }",
@@ -769,26 +802,42 @@ def build_accessible_html():
     ]
 
     # 5. Przetwarzanie komórek
+    # Markdownowa narracja: dla UI_LANG != 'ru' bierzemy tłumaczenie z
+    # dictionaries/{UI_LANG}/narrative.yaml (klucze mapowane sekwencyjnie
+    # po NARRATIVE_KEYS). Brak klucza w yaml → fallback do source notatnika.
+    narrative = _load_narrative(UI_LANG)
+    md_seq_idx = 0
+
     for cell in nb.get("cells", []):
         cell_id = cell.get("id", "")
-        
+        is_md = cell["cell_type"] == "markdown"
+
         if cell_id in ["md_qa_rag", "cell_qa_rag"]:
+            # cell_qa_rag pomijamy w raporcie, ale jeśli to markdownowa
+            # komórka, zliczamy ją w sekwencji żeby zachować zgodność
+            # NARRATIVE_KEYS z faktyczną kolejnością markdownów w notatniku.
+            if is_md:
+                md_seq_idx += 1
             continue
 
-        if cell["cell_type"] == "markdown":
-            source = "".join(cell.get("source", []))
+        if is_md:
+            nkey = NARRATIVE_KEYS[md_seq_idx] if md_seq_idx < len(NARRATIVE_KEYS) else None
+            md_seq_idx += 1
+            translated = narrative.get(nkey) if nkey else None
+            source = translated if translated else "".join(cell.get("source", []))
             md_html = markdown.markdown(source)
             # 1. Per-<code> lingua: dla każdego elementu <code>/<pre><code>
             #    wykrywamy język (en/pl/ru/it/fi/is) z fallbackiem en.
             md_html = _tag_code_blocks(md_html)
-            # 2. EN-hardkod dla narracji rosyjskiej: nazwy bibliotek, akronimy
+            # 2. EN-hardkod dla narracji: nazwy bibliotek, akronimy
             #    (PDF, HTML, NER, BoW, ...), czytniki ekranu (NVDA, JAWS),
             #    POS-tagi w tekście. Skipuje wnętrza <span lang="..."> i <code>.
             md_html = _apply_outside_spans(md_html, EN_HARDCODE_PATTERNS)
             # 3. Lingua-fallback dla pozostałych nazw własnych w narracji
             #    (np. polsko/fińskie segmenty w opisach), z heurystykami
-            #    Python-identifier i CamelCase → en.
-            md_html = _lingua_word_fallback(md_html, document_lang="ru")
+            #    Python-identifier i CamelCase → en. document_lang = UI_LANG,
+            #    żeby segmenty już w języku dokumentu nie były owijane.
+            md_html = _lingua_word_fallback(md_html, document_lang=UI_LANG)
             # 4. Scal sąsiadujące same-lang spany (TF-IDF, UTF-8 itp.).
             md_html = _coalesce_same_lang_spans(md_html)
             html_content.append(f'<div class="markdown-cell">\n{md_html}\n</div>')

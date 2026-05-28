@@ -1,0 +1,246 @@
+intro: |
+  # Saavutettava tekstianalyysi (spaCy · TF-IDF · KMeans)
+
+  Täydellinen tekstianalytiikan putki, joka tukee **puolaa, venäjää, englantia, italiaa, suomea ja islantia**.
+  Kaikki tulokset tulostetaan `print()`-funktiolla — ei värikoodeja, ei pseudografiikkaa.
+  Yhteensopiva **NVDA**- ja **JAWS**-ruudunlukijoiden kanssa.
+
+  **Ainoa, mitä käyttäjältä vaaditaan:** asettaa polku `.pdf`-, `.txt`- tai `.docx`-tiedostoon ensimmäisessä kooditsolussa. Jos tiedostoa ei löydy, käytetään sisäänrakennettua esimerkkiä.
+
+  ---
+
+  **Analyysin vaiheet:**
+
+  1. **Korpuksen lataus** — PDF sivu kerrallaan (pdfplumber), TXT, DOCX (python-docx), paikallinen HTML tai **URL** (suora sivun osoite); BeautifulSoup poistaa navigaation, sivupalkit ja "liittyvät artikkelit" -lohkot URL- tai HTML-latauksessa; sisäänrakennettu esimerkki varavaihtoehtona.
+  2. **Kielen tunnistus** — `lingua-language-detector` määrittää korpuksen pääkielen ja toimii samalla kappale- ja lausekohtaisena tunnistimena (käytetään vientivaiheessa).
+  3. **spaCy-kielimalli** — **Large (lg)** -variantti valitaan automaattisesti: `pl_core_news_lg`, `ru_core_news_lg`, `en_core_web_lg`, `it_core_news_lg`, `fi_core_news_lg`; islannille (`is`) — `spacy.blank("is")` + Hugging Face (IceBERT, MIM-GOLD-22). Mallit ladataan tarpeen mukaan funktiolla `get_nlp(lang)`, jota suojaa `functools.lru_cache(maxsize=2)`: RAM-muistissa elää enintään kaksi mallia samanaikaisesti, loput poistetaan LRU-periaatteella.
+  4. **Tekstikorjaus** — sanojen tarkkojen toistojen poisto (kaikki kielet); välilyönnillisten lyhenteiden normalisointi puolalle (`m. in.`→`m.in.`), venäjälle (`т. е.`→`т.е.`) ja englannille (`e. g.`→`e.g.`).
+  5. **Perus-NLP** — tokenisointi sanoiksi ja lauseiksi, pysäytyssanojen suodatus, lemmatisointi, POS-merkintä (NOUN/VERB/ADJ/…).
+  6. **Nimetyt entiteetit (NER)** — henkilöt, organisaatiot, paikat, päivämäärät ja muut mainitut kohteet (koko korpuksen taajuusyhteenvedolla).
+  7. **Sanapussi (CountVectorizer)** — taajuusmatriisi kielikohtaisilla pysäytyssanoilla; top-10 sanaa ja top-5 bigrammia.
+  8. **TF-IDF ja automaattinen haku** — kysely rakentuu automaattisesti korpuksen huipputermeistä; kosinisamankaltaisuus on taatusti > 0.
+  9. **Tekstirakenne** — koko korpus yhdistetään yhdeksi virraksi, jaetaan lauseiksi spaCyllä ja ryhmitellään 3–6 lauseen kappaleisiin; jokaiselle kappaleelle ja lauseelle `lingua` tallentaa ISO-kielikoodin, joka päätyy myöhemmin HTML/DOCX-tiedostoihin.
+  10. **Avainsanat** — luokiteltu taulukko termeistä ja fraaseista (1–3 sanaa) kappaletason painotetun TF-IDF:n keskiarvon mukaan.
+  11. **Teesit** — jokaisen kappaleen paras TF-IDF-summan lause; tallennetaan korpuksen kieleen lokalisoituun `.txt`-tiedostoon muodossa `- lause`.
+  12. **Aiheiden mallinnus (KMeans)** — kappaleiden klusterointi spaCy-vektoreilla; jokaiselle aiheelle — avainsanat ja näytefragmentti *(vaatii `*_md`- tai `*_lg`-mallin vektoreilla)*.
+  13. **Tulosten vienti** — CSV (UTF-8 BOM, Excel-yhteensopiva), JSON (aiheiden avainsanat), TXT (teesit) ja **saavutettavuusmerkein varustettu HTML/DOCX** `lang`-attribuutilla jokaisessa kappaleessa/lauseessa — ruudunlukijat vaihtavat äänen automaattisesti oikealle kielelle.
+  14. **Yhteenvetoraportti** — kaikki keskeiset metriikat yhdessä tekstilohkossa.
+
+langdet: |
+  ## 1) Kielen tunnistus (lingua)
+
+  Käytetään [`lingua-language-detector`](https://github.com/pemistahl/lingua-py) -kirjastoa — tilastollinen tunnistin, joka perustuu n-grammeihin ja sanastoihin. Lyhyillä fragmenteilla ja toistuvilla kielen vaihdoksilla se on huomattavasti tarkempi kuin `langdetect`, mikä on kriittistä kappale- ja lausekohtaiselle merkitsemiselle.
+
+  **Arkkitehtuuri:**
+
+  - Tässä vaiheessa tunnistin määrittää koko korpuksen **pääkielen** ja tallentaa sen globaaliin muuttujaan `LANG`. Tämä koodi valitsee spaCy-mallin pääasialliselle NLP-putkelle.
+  - Globaali objekti `LANG_DETECTOR` ja funktio `detect_lang(text)` jäävät käytettäväksi seuraavissa soluissa. "Tekstirakenne"-vaiheessa niitä sovelletaan jokaiseen kappaleeseen ja lauseeseen, mikä muodostaa listat `para_langs` ja `sent_langs`.
+  - Vientisolu käyttää näitä listoja: jokainen HTML:n `<p lang="...">` ja jokainen DOCX:n `Run` saa oikean ISO-koodin, ja ruudunlukija (NVDA, JAWS, Narrator, VoiceOver) vaihtaa äänen/ääntämyksen automaattisesti oikealle kielelle.
+
+  Tuetut kielet: **puola** (`pl`), **venäjä** (`ru`), **englanti** (`en`), **italia** (`it`), **suomi** (`fi`), **islanti** (`is`).
+
+  > Jos korpus sisältää sekoittuneita kieliä, pääkieli saa spaCy-mallin, loput merkitään HTML/DOCX:iin `lang`-attribuutilla.
+
+model: |
+  ## 2) spaCy-kielimallin lataus (LRU-välimuisti)
+
+  spaCy käyttää esikoulutettuja malleja tokenisointiin, lemmatisointiin, POS-merkintään ja NER:iin.
+  Pääkielen malli valitaan **automaattisesti** edellisen solun tuloksen perusteella.
+
+  **Dynaaminen mallien lataus:**
+
+  - Lataus kapseloitu funktioon `get_nlp(lang)`, jota ympäröi `functools.lru_cache(maxsize=2)`.
+  - RAM-muistissa pidetään samanaikaisesti enintään **kaksi** spaCy-mallia. Kolmannen kielen pyytäessä vähiten käytetty malli poistetaan ja roskienkeräys vapauttaa sen — tämä estää muistin kasaantumisen monikielisillä korpuksilla.
+  - Vanha nimi `load_nlp_model` säilytetään taaksepäin yhteensopivuuden vuoksi.
+
+  > **Tärkeää:** Notebook käyttää **Large (lg)** -malleja, jotka sisältävät täydet sanavektorit. Tämä parantaa merkittävästi aiheiden mallinnuksen (KMeans) ja nimettyjen entiteettien tunnistuksen (NER) laatua `sm`-variantteihin verrattuna.
+
+  | Kieli | Koodi | Malli |
+  |-------|-------|-------|
+  | English | `en` | `en_core_web_lg` |
+  | Polish | `pl` | `pl_core_news_lg` |
+  | Russian | `ru` | `ru_core_news_lg` |
+  | Italian | `it` | `it_core_news_lg` |
+  | Finnish | `fi` | `fi_core_news_lg` |
+  | Icelandic | `is` | `spacy.blank("is")` + IceBERT (vektorit) + MIM-GOLD-22 (NER) |
+
+  Jos mallia ei ole asennettu, notebook käyttää perustokenisoijaa (`spacy.blank`) ja ilmoittaa asennuskomennon.
+
+pl_corrector: |
+  ## Tekstin korjaus ja lyhenteiden normalisointi
+
+  Korjaa automaattisesti tyypilliset muotoiluvirheet kaikilla tuetuilla kielillä.
+
+  **Kaikille kielille:**
+  - Tarkkojen sanatoistojen poisto (`the the`, `jest jest`, `что что` jne.)
+  - Useiden välilyöntien kutistaminen
+
+  **Lyhenteiden normalisointi (puola `pl`):**
+  - `m.in`, `m. in`, `m.in,` → `m.in.`; `np.,` → `np.`; `tzw.,` → `tzw.`; `tzn.` — täysi setti
+  - `tj.`, `itd.`, `itp.` — rikkoutuneiden lyhenteiden uudelleenliimaaminen
+
+  **Lyhenteiden normalisointi (venäjä `ru`):**
+  - `т. е.` → `т.е.`; `т. д.` → `т.д.`; `и т.д.` → yhdenmukainen muoto; ja muita
+
+  **Lyhenteiden normalisointi (englanti `en`):**
+  - `e. g.` → `e.g.`; `e.g,` → `e.g.,`; `i. e.` → `i.e.`; `etc .` → `etc.`
+
+  > Normalisoinnin tavoite: estää spaCy-tokenisoijaa rikkomasta lauseita virheellisesti lyhenteiden kohdalla.
+
+tok: |
+  ## 3) Tokenisointi
+
+  **Tokenisointi** on tekstin jakamista alkeisyksiköihin: sanoihin ja välimerkkeihin.
+  spaCy tekee tämän kielitietoisesti: se käsittelee oikein heittomerkit, yhdysmerkit ja lyhenteet.
+
+  ### 3.1 Sanatokenisointi
+  Jokainen asiakirja muutetaan tokenilistaksi. Välilyönnit jätetään pois.
+
+  ### 3.2 Lausetokenisointi
+  spaCy segmentoi myös tekstin lauseiksi — hyödyllistä rakenteen analyysiin, ekstraktiiviseen tiivistämiseen (teesit) ja lausekohtaiseen kielen tunnistukseen ennen HTML/DOCX-vientiä.
+
+stop: |
+  ## 4) Pysäytyssanat
+
+  **Pysäytyssanat** ovat funktiosanoja (artikkeleita, prepositioita, pronomineja), jotka kantavat vähän merkitystä.
+  Lista otetaan suoraan ladatusta spaCy-mallista — se on jo optimoitu korpuksen kielelle.
+  Suodatuksen jälkeen jäljelle jäävät vain semanttisesti rikkaat sanat.
+
+lemma: |
+  ## 5) Lemmatisointi
+
+  **Lemma** on sanan perusmuoto (sanakirjamuoto). Lemmatisointi palauttaa kaikki muodot yhdenmukaiseen muotoon:
+  »juoksee«, »juoksivat«, »juokseva« → »juosta«; »documents«, »document« → »document«.
+
+  Toisin kuin stemmaus, lemmatisointi käyttää sanakirjaa ja kieliopin sääntöjä — tulos on aina luettava sana.
+  spaCy:ssä lemma on saatavilla `token.lemma_`-attribuutista.
+
+pos: |
+  ## 6) Sanaluokat (POS-merkintä)
+
+  **POS-merkintä** antaa jokaiselle tokenille kieliopillisen roolin: substantiivi, verbi, adjektiivi jne.
+  spaCy palauttaa kaksi tasoa:
+  - `pos_` — universaali tagi (NOUN, VERB, ADJ, ADV, PROPN …)
+  - `tag_` — yksityiskohtainen, kielikohtainen tagi
+
+  POS-jakauma paljastaa tekstin tyylin: tieteellisissä teksteissä on paljon substantiiveja, kaunokirjallisissa — verbejä ja adjektiiveja.
+
+ner: |
+  ## 7) Nimetyt entiteetit (NER)
+
+  **NER** (Named Entity Recognition) löytää nimet, organisaatiot, paikat, päivämäärät, rahamäärät ja muut mainitut kohteet.
+  spaCy palauttaa listan `doc.ents`, jossa jokaisella entiteetillä on teksti ja tunniste.
+
+  Tyypilliset tunnisteet: PERSON, ORG, GPE (kaupunki/maa), DATE, MONEY, PRODUCT.
+
+bow: |
+  ## 8) Sanapussi (CountVectorizer)
+
+  **CountVectorizer** muuttaa tekstit numeerisiksi vektoreiksi laskemalla, kuinka monta kertaa kukin sana esiintyy asiakirjassa.
+  Tulos on "asiakirja × sana" -matriisi, jossa jokainen rivi on yksi asiakirja ja jokainen sarake yksi sana.
+
+  ### 8.1 Unigrammit (yksittäiset sanat)
+  Perusedustus: jokainen sana on erillinen piirre.
+
+  ### 8.2 Bigrammit (sanapariikit)
+  Lisää vakaat ilmaisut: »machine learning«, »natural language«, »named entity«.
+
+tfidf: |
+  ## 9) TF-IDF ja automaattinen haku
+
+  **TF-IDF** (Term Frequency — Inverse Document Frequency) painottaa sanoja: sanat, jotka ovat yleisiä yhdessä asiakirjassa mutta harvinaisia muissa, saavat korkean painon.
+  Tämä tekee hausta älykkäämmän kuin yksinkertainen sananlasku.
+
+  **Kosinisamankaltaisuus** mittaa kahden tekstivektorin välistä kulmaa:
+  - 1.0 = täydellinen vastaavuus
+  - 0.0 = ei yhteisiä sanoja
+
+  **Automaattinen kysely:** notebook rakentaa kyselyn sanoista, joilla on korpuksen korkein keskimääräinen TF-IDF-paino.
+  Tällainen kysely takaa kosinisamankaltaisuuden > 0 (ei koskaan −1).
+
+para: |
+  ## Tekstin rakenne: kappaleet ja lauseet
+
+  Yhdistämme koko korpuksen yhdeksi virraksi, jaamme sen spaCy-lausesegmenttoijalla lauseiksi ja ryhmittelemme ne 3–6 lauseen "kappaleisiin". Tämän rakenteen kuluttavat seuraavat vaiheet (teesit, avainsanat, aiheiden mallinnus).
+
+  Lisäksi jokaiselle kappaleelle ja jokaiselle lauseelle `lingua` tallentaa ISO-kielikoodin:
+
+  - `para_langs[i]` — `i`:nnen kappaleen kieli kokonaisuudessaan,
+  - `sent_langs[i]` — `i`:nnen lauseen kieli,
+  - `para_sentences[i]` — `i`:nnen kappaleen sisältämien lauseiden lista (vientisolu tarvitsee tätä).
+
+  Tämä per-fragmenttinen kieli kirjoitetaan `accessible_text.html`-tiedostoon (`<p lang="...">`, tarvittaessa `<span lang="...">`) ja `accessible_text.docx`-tiedostoon (`<w:lang>` `Run`-tasolla), minkä ansiosta ruudunlukijat ja TTS-moottorit vaihtavat äänen automaattisesti.
+
+foreign_resegment: |
+  ## Vieraskielisten lohkojen uudelleensegmentointi
+
+  Edellisessä solussa koko korpus jaettiin lauseiksi **pääasiallisella** spaCy-mallilla. Jos korpuksessa on jatkuvia vieraskielisiä lohkoja (esim. pitkä suomenkielinen lainaus puolalaisen tekstin sisällä), LANG-malli ei tunne vieraskielisiä lyhenteitä (`ad es.`, `e.g.`, `esim.`) ja saattaa virheellisesti tulkita pisteen niiden jälkeen lauseen lopuksi — vieraskielinen fragmentti repeää kahtia ja kontekstu katoaa kahden "puoliskon" välillä.
+
+  Tämä solu etsii **vähintään kahden peräkkäisen samalla vieraskielellä olevan lauseen** sekvenssejä (`sent_langs` cell_para:sta) ja prosessoi jokaisen tällaisen lohkon uudelleen omalla mallillaan:
+
+  1. Sovelletaan `ABBREV_BY_LANG[lang]` — kielikohtainen lyhenteiden normalisointi cell_pl_correctorista;
+  2. `get_nlp(lang)(lohko)` — oikea segmentointi lauseiksi.
+
+  Sitten rakennetaan uudelleen `all_sents`, `sent_langs`, `paragraphs`, `para_sentences`, `para_langs`, `df_sent`, `df_para` ja (varotoimena) `para_lemmas`. Seuraava solu, kaksivaiheinen analyysi, toimii jo korjattujen rajojen päällä.
+
+  Jos korpuksessa ei ole vieraskielisiä lauseita — tai niitä on, mutta ne eivät muodosta ≥2-kokoisia lohkoja — solu päättyy välittömästi informatiivisella viestillä lataamatta lisämalleja.
+
+multilang_pass: |
+  ## Kaksivaiheinen monikielinen analyysi (NER + lemmatisointi)
+
+  Jos korpus sisältää fragmentteja useilla kielillä, pääasiallinen spaCy-malli lemmatisoi sanat virheellisesti ja luokittelee nimetyt entiteetit väärin vieraskielisissä lauseissa. Tämä solu korjaa tämän: jokainen lause, jonka kieli (edellisen solun lingua-tunnistus) eroaa pääkielestä, prosessoidaan uudelleen `get_nlp(sent_lang)`:n kautta.
+
+  `cell_model`:n LRU-välimuisti rajoittaa RAM-käytön kahteen malliin samanaikaisesti — kolmas poistaa vähiten käytetyn. Tämä mahdollistaa korpuksen peräkkäisen läpiviennin useiden mallien läpi ilman, että ne kaikki kasaantuvat muistiin.
+
+  Solun suorituksen jälkeen `all_ents` ja `para_lemmas` rakennetaan uudelleen ottaen huomioon jokaisen lauseen kieli, joten avainsanojen, teesien, aiheiden ja entiteettien vienti perustuu oikeaan morfologiaan.
+
+  Jos tarvittavaa spaCy-mallia ei ole (tai `transformers`/`torch` islannille), solu tulostaa suorituksensa aikana selkeän varoituksen analyysin epäluotettavuudesta vaikuttavien lauseiden osalta ja ehdottaa asennuskomentoa.
+
+keywords: |
+  ## Avainsanat (TF-IDF)
+
+  Kappaletason TF-IDF tunnistaa termit, jotka ovat ominaisia tietyille fragmenteille mutta harvinaisia koko tekstissä. Saamme luokitellun listan keskeisistä termeistä ja fraaseista (1–3 sanaa), lajiteltuna painotetun TF-IDF:n keskiarvon mukaan.
+
+theses: |
+  ## Teesit (ekstraktiivinen tiivistelmä)
+
+  Jokaiselle kappaleelle valitaan yksi **informatiivisin lause** (suurin TF-IDF-painosumma). Tulos on tiivis luettelo teeseistä, joka tallennetaan korpuksen kieleen lokalisoituun `.txt`-tiedostoon ruudunlukijoille sopivassa muodossa.
+
+  Parametri `N_THESES` asettaa tiedostossa olevien teesien enimmäismäärän.
+
+topics: |
+  ## Aiheiden mallinnus (KMeans)
+
+  Jokainen kappale esitetään spaCy-vektorina ja klusteroidaan sen jälkeen KMeans-algoritmilla. Jokaiselle aiheelle tulostetaan avainsanat ja näytefragmentti.
+
+  **Vaatimus:** spaCy-mallin on tuettava sanavektoreita (esim. `*_lg`). Ilman vektoreita olevilla malleilla aiheiden mallinnus ohitetaan vastaavalla viestillä.
+
+export: |
+  ## Tulosten vienti
+
+  Tallennamme kaikki taulukot projektin kansioon `export_results/`:in sisällä:
+
+  - **CSV** (UTF-8 BOM, avautuu Excelissä) — lauseet, kappaleet, teesit, TF-IDF-avainsanat, entiteetit, aiheet.
+  - **JSON** — aiheiden avainsanat.
+  - **TXT** — lokalisoitu teesitiedosto (tallennettu edellisessä vaiheessa).
+
+  **Saavutettavuusmerkein varustettu teksti** — kaksi muotoa offline-lukemiseen ruudunlukijoilla ja TTS:llä:
+
+  - `accessible_text.html` — rakennettu `BeautifulSoup`:lla. Juuri-`<html>` sisältää pääkielen `lang`-attribuutin; jokainen `<p>` saa oman `lang`-attribuuttinsa (`para_langs`:sta), ja sekoitetuissa kappaleissa jokainen lause kääritään `<span lang="...">`-tagiin (`sent_langs`:sta). NVDA ja JAWS lukevat näitä tageja natiivisti ja vaihtavat äänen lennossa.
+  - `accessible_text.docx` — koottu `python-docx`:llä. Jokaiselle `Run`-elementille `<w:lang>`-ominaisuus kirjoitetaan eksplisiittisesti (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`). Word, sisäänrakennettu Windowsin syntetisaattori (SAPI) ja kolmansien osapuolten lukijat luottavat tähän attribuuttiin offline-tilassa, ilman online-tunnistimien käyttöä.
+
+  Nämä tiedostot korvaavat aiemman litteän `puhdas_teksti_aanelle.txt`:n: yhden kieliprofiilin sijaan koko tekstivirralle lukija saa nyt oikean kielen jokaisessa fragmentissa.
+
+summary: |
+  ## Yhteenvetoraportti
+
+  Alla oleva solu kerää kaikki analyysin avaintulokset yhdeksi tekstiraportiksi.
+  Muoto on optimoitu ruudunlukijoiden (NVDA, JAWS) lukemiseen: vain tekstiä, ei värejä, ei pseudografiikkaa.
+
+qa_rag: |
+  ## Interaktiivinen kysymys-vastaus-järjestelmä (RAG)
+
+  Yksinkertainen "kysymys — vastaus" -silmukka, joka perustuu TF-IDF:hen ja kosinisamankaltaisuuteen.
+  Syötä kysymys — järjestelmä löytää 3 merkityksellisintä tekstifragmenttia korpuksesta.
+
+  Poistuaksesi kirjoita: **wyjście**, **выход** tai **exit**.

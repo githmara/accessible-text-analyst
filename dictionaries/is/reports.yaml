@@ -1,4 +1,5 @@
 generate_report:
+  html_title: 'Skýrsla: textagreining'
   ok_report_generated: '[OK] Aðgengileg HTML-skýrsla búin til með góðum árangri: {path}'
   info_target_lang: '[UPPLÝSINGAR] Greint markmiðsmál fyrir merkingar: {language}'
   info_remove_noise_active: '[UPPLÝSINGAR] Stilling fyrir að fjarlægja tæknilegan hávaða (lemmun, POS, annálar) er VIRK.'
