@@ -9,7 +9,8 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 ## Zawartość projektu
 
 - `accessible_text_analyst.ipynb` — notatnik Jupyter z kompletnym potokiem analizy (40 komórek: 20 kodu + 20 markdown; narracja w środku notatnika jest po rosyjsku). Zapisuje dwa artefakty dostępnościowe (`accessible_text.html`, `accessible_text.docx`), w których każdy akapit i każde zdanie obcojęzyczne ma własny atrybut `lang` — czytniki ekranu i syntezatory TTS przełączają głos automatycznie, nawet offline.
-- `generate_report.py` — skrypt post-procesujący, który zamienia wykonany notatnik w jeden dostępny plik HTML (`analysis_report.html`). Fragmenty obcojęzyczne owija w `<span lang="target_lang">`, a — niezależnie od języka korpusu — twardo oznacza `<span lang="en">` przy treściach technicznie angielskich (tagi POS, etykiety NER, identyfikatory modeli spaCy/Hugging Face, ścieżki ASCII). Kod inline i bloki kodu w narracji dostają hurtem `lang="en"`.
+- `generate_report.py` — skrypt post-procesujący, który zamienia wykonany notatnik w jeden dostępny plik HTML (`analysis_report.html`). Fragmenty obcojęzyczne owija w `<span lang="target_lang">`, a — niezależnie od języka korpusu — twardo oznacza `<span lang="en">` przy treściach technicznie angielskich (tagi POS, etykiety NER, identyfikatory modeli spaCy/Hugging Face, ścieżki ASCII). Kod inline i bloki kodu w narracji dostają hurtem `lang="en"`. W trybie czytelnika (`remove_noise: true`) skraca diagnostyczne pętle „per dokument" do pierwszych kilku dokumentów, zamiast wypisywać setki.
+- `generate_diagnostic.py` — niezależny generator pełnego raportu **diagnostycznego** (`diagnostic_report.html`) budowanego wprost z eksportów CSV/JSON notatnika (nie z wyjścia `generate_report.py`). Nawigowalna, dostępna dla czytników ekranu struktura: spis treści `<nav>` plus sekcje — każda z własnym nagłówkiem i listami — dla przeglądu, tematów z akapitami, tez, nazwanych encji wg typu i najważniejszych słów kluczowych. Etykiety strukturalne podążają za `ui_lang`; fragmenty korpusu dostają `<span lang="…">`, etykiety NER — `<span lang="en">`.
 - `generate_md.py` — konwertuje `analysis_report.html` na `notebooklm_report.md` do NotebookLM. Spany dostępnościowe są rozpakowywane, bo NotebookLM ich nie konsumuje.
 - `shamanic_pipeline.py` *(opcjonalny)* — post-procesor bez LLM, który zamienia eksportowane przez notatnik pliki CSV/JSON w cztery rytualne artefakty tekstowe (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), w pełni zlokalizowane we wszystkich sześciu wspieranych językach.
 - `shamanic_ai.py` *(opcjonalny, oparty na LLM)* — wywołuje OpenAI, by wygenerować cztery głosy narracyjne (`Katla`, `Vieno`, `Lumi`, `Sami`) na tych samych eksportach. Wymaga `OPENAI_API_KEY` w pliku `golden_key.env`.
@@ -191,7 +192,7 @@ jupyter notebook accessible_text_analyst.ipynb
 
 To jest sekwencyjny potok ze współdzielonym stanem globalnym. **Nie zmieniaj kolejności komórek i nie uruchamiaj ich poza kolejnością.** Notatnik zapisuje `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` i `theses.txt`.
 
-### 2. Raport HTML (zalecany)
+### 2. Raporty HTML (zalecane)
 
 ```bash
 python generate_report.py
@@ -199,6 +200,15 @@ python generate_report.py
 ```
 
 `generate_report.py` czyta wyjścia komórek bezpośrednio z pliku `.ipynb`, więc raport HTML musi być generowany ze **świeżo wykonanego** notatnika. `requirements.txt` listuje `nbstripout` — jeśli został aktywowany w lokalnej konfiguracji git, wyjścia notatnika są usuwane przy commicie. Generuj raport _przed_ commitem albo wyłącz nbstripout dla swojego workflow.
+
+Dla ustrukturyzowanego, pełnego widoku **diagnostycznego** budowanego wprost z eksportów CSV/JSON:
+
+```bash
+python generate_diagnostic.py
+# → export_results/<project>/diagnostic_report.html
+```
+
+`generate_diagnostic.py` czyta wyłącznie wyeksportowane CSV/JSON, więc — w odróżnieniu od `generate_report.py` — nie potrzebuje świeżo wykonanego notatnika, a jedynie eksportów, które notatnik zapisał. Wynik to nawigowalny dokument (spis treści, nagłówki, listy) obejmujący tematy, tezy, encje wg typu i najważniejsze słowa kluczowe.
 
 ### 3. Markdown dla NotebookLM (opcjonalnie)
 
@@ -262,6 +272,7 @@ Każdy podkatalog zawiera:
 | `accessible_text.html`          | notatnik          | atrybuty `lang` na poziomie akapitu i zdania — czytniki ekranu automatycznie przełączają głos per fragment |
 | `accessible_text.docx`          | notatnik          | ta sama treść z `<w:lang>` ustawionym per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word i SAPI używają tego offline, bez detektora online |
 | `analysis_report.html`           | `generate_report.py` | globalny dostępny raport HTML                  |
+| `diagnostic_report.html`         | `generate_diagnostic.py` | ustrukturyzowany raport diagnostyczny (tematy, tezy, encje wg typu, słowa kluczowe) z eksportów CSV/JSON |
 | `notebooklm_report.md`      | `generate_md.py`     | Markdown gotowy dla NotebookLM                 |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | rytualne / narracyjne artefakty tekstowe |
 
@@ -289,7 +300,8 @@ Narracja notatnika i wyjście `print()` większości komórek są w języku rosy
 ```
 accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # główny potok (40 komórek)
-├── generate_report.py              # generator raportu HTML
+├── generate_report.py              # generator raportu HTML (widok czytelnika)
+├── generate_diagnostic.py          # diagnostyczny raport HTML z eksportów CSV/JSON
 ├── generate_md.py                  # konwerter na Markdown dla NotebookLM
 ├── shamanic_pipeline.py            # opcjonalnie: rytualny post-procesor bez LLM
 ├── shamanic_ai.py                  # opcjonalnie: rytualni narratorzy LLM
@@ -312,6 +324,7 @@ accessible_text_analyst/
         ├── accessible_text.html
         ├── accessible_text.docx
         ├── analysis_report.html
+        ├── diagnostic_report.html
         ├── notebooklm_report.md
         └── audio_scripts/…
 ```

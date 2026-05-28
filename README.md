@@ -9,7 +9,8 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 ## Project contents
 
 - `accessible_text_analyst.ipynb` — a Jupyter notebook with the complete analysis pipeline (40 cells: 20 code + 20 markdown; the in-notebook narrative is in Russian). It writes two accessibility artefacts (`accessible_text.html`, `accessible_text.docx`) where every paragraph and every foreign-language sentence carries its own `lang` attribute so screen readers and TTS engines switch voice automatically — even offline.
-- `generate_report.py` — a post-processing script that turns the executed notebook into a single accessible HTML file (`analysis_report.html`). It wraps foreign-corpus fragments in `<span lang="target_lang">` and, regardless of corpus language, hardcodes `<span lang="en">` around technical English content (POS tags, NER labels, spaCy/Hugging Face model identifiers, ASCII filenames). Inline code and code blocks in the narrative are blanket-tagged `lang="en"`.
+- `generate_report.py` — a post-processing script that turns the executed notebook into a single accessible HTML file (`analysis_report.html`). It wraps foreign-corpus fragments in `<span lang="target_lang">` and, regardless of corpus language, hardcodes `<span lang="en">` around technical English content (POS tags, NER labels, spaCy/Hugging Face model identifiers, ASCII filenames). Inline code and code blocks in the narrative are blanket-tagged `lang="en"`. In reader mode (`remove_noise: true`) it truncates the notebook's per-document diagnostic loops to the first few documents instead of dumping hundreds of them.
+- `generate_diagnostic.py` — an independent generator of a full **diagnostic** report (`diagnostic_report.html`) built directly from the notebook's CSV/JSON exports (not from `generate_report.py`'s output). A navigable, screen-reader-first structure: a `<nav>` table of contents plus sections — each with its own heading and lists — for an overview, topics with their paragraphs, theses, named entities grouped by type, and top keywords. Structural labels follow `ui_lang`; corpus fragments get `<span lang="…">`, NER labels `<span lang="en">`.
 - `generate_md.py` — converts the generated `analysis_report.html` into `notebooklm_report.md` for NotebookLM ingestion. The accessibility spans are unwrapped since NotebookLM does not consume them.
 - `shamanic_pipeline.py` *(optional)* — a non-LLM post-processor that turns the notebook's CSV/JSON exports into four ritual text artefacts (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), all fully localized across the six supported languages.
 - `shamanic_ai.py` *(optional, LLM-driven)* — calls OpenAI to generate four narrative voices (`Katla`, `Vieno`, `Lumi`, `Sami`) on top of the same exports. Requires `OPENAI_API_KEY` in `golden_key.env`.
@@ -191,7 +192,7 @@ jupyter notebook accessible_text_analyst.ipynb
 
 This is a sequential pipeline with shared global state. **Do not reorder cells, and do not run them out of order.** The notebook writes `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx`, and `theses.txt`.
 
-### 2. HTML report (recommended)
+### 2. HTML reports (recommended)
 
 ```bash
 python generate_report.py
@@ -199,6 +200,15 @@ python generate_report.py
 ```
 
 `generate_report.py` reads cell outputs directly from the `.ipynb` file, so the HTML report must be generated from a **freshly executed** notebook. `requirements.txt` lists `nbstripout` — if it has been activated in the local git config, notebook outputs are stripped on commit. Generate the report _before_ committing, or disable nbstripout for your workflow.
+
+For a structured, full **diagnostic** view built straight from the CSV/JSON exports:
+
+```bash
+python generate_diagnostic.py
+# → export_results/<project>/diagnostic_report.html
+```
+
+`generate_diagnostic.py` reads only the exported CSV/JSON, so — unlike `generate_report.py` — it does not need a freshly-executed notebook in memory, only the exports the notebook wrote. The result is a navigable document (table of contents, headings, lists) covering topics, theses, entities grouped by type, and top keywords.
 
 ### 3. NotebookLM-friendly Markdown (optional)
 
@@ -262,6 +272,7 @@ Each subdirectory contains:
 | `accessible_text.html`          | notebook    | paragraph- and sentence-level `lang` attributes — screen readers switch voice automatically per fragment |
 | `accessible_text.docx`          | notebook    | the same content with `<w:lang>` set per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word and SAPI use it offline, no online detector required |
 | `analysis_report.html`           | `generate_report.py` | global accessible HTML report                  |
+| `diagnostic_report.html`         | `generate_diagnostic.py` | structured diagnostic report (topics, theses, entities by type, keywords) from the CSV/JSON exports |
 | `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-ready Markdown                      |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | ritual / narrative text artefacts |
 
@@ -289,7 +300,8 @@ The notebook narrative and the `print()` output of most cells are written in Rus
 ```
 accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # main pipeline (40 cells)
-├── generate_report.py              # HTML report generator
+├── generate_report.py              # HTML report generator (reader view)
+├── generate_diagnostic.py          # diagnostic HTML report from CSV/JSON exports
 ├── generate_md.py                  # NotebookLM Markdown converter
 ├── shamanic_pipeline.py            # optional: non-LLM ritual post-processor
 ├── shamanic_ai.py                  # optional: LLM-driven ritual narrators
@@ -312,6 +324,7 @@ accessible_text_analyst/
         ├── accessible_text.html
         ├── accessible_text.docx
         ├── analysis_report.html
+        ├── diagnostic_report.html
         ├── notebooklm_report.md
         └── audio_scripts/…
 ```

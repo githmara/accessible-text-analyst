@@ -40,6 +40,44 @@ jupyter notebook accessible_text_analyst.ipynb
 python generate_report.py
 ```
 
+### Editing notebook cells (jupytext)
+
+The notebook is **paired** with `accessible_text_analyst.py` (`py:percent` format) via
+jupytext — this replaces the old `.claude_patches/` one-shot OLD→NEW patch scripts.
+The pairing is recorded in the notebook's own metadata (`metadata.jupytext.formats =
+"ipynb,py:percent"`), so it survives clone and nbstripout. Both files are committed:
+the `.py` gives clean reviewable diffs, the `.ipynb` is the runnable artefact (outputs
+stripped by nbstripout on commit). Run `jupytext --sync` before committing so they
+don't drift.
+
+```bash
+# Regenerate the .py from the notebook (do this first if the .py is missing/stale,
+# e.g. after a fresh clone or after editing the notebook in Jupyter):
+jupytext --sync accessible_text_analyst.ipynb
+
+# Edit accessible_text_analyst.py directly — each cell is a navigable block marked
+#   # %% tags=["cell_para"] id="cell_para"      (code)
+#   # %% [markdown] tags=["md_intro"] id="md_intro"
+# then push the edits back into the .ipynb:
+jupytext --sync accessible_text_analyst.py
+```
+
+`jupytext --sync` takes the more-recently-modified file as source and updates the other.
+It **preserves outputs** of cells whose source is unchanged and keeps outputs of edited
+cells too (it does not re-execute) — so after editing, **re-run the notebook** before
+`generate_report.py`, which reads outputs from the `.ipynb`. Every cell carries a stable
+anchor in BOTH `metadata.id` and `metadata.tags` (logical names: `cell_corpus`,
+`cell_langdet`, …, `cell_qa_rag`; markdown: `md_intro`, …). nbstripout (v0.9.1, active via
+`.git/info/attributes`) preserves `metadata.jupytext`, `tags`, and `metadata.id` — it only
+strips outputs/execution_count. Do **not** put logical names in the top-level cell `id`
+field; it gets renumbered to integers by some clients.
+
+A **local** `.git/hooks/pre-commit` automates the sync: when either paired file is staged
+it runs `jupytext --sync` (via `.venv/Scripts/python.exe`) and re-stages both, so they
+can't drift. The hook is not committed (it lives in `.git/`); reinstall it after a fresh
+clone, or use a committed `.pre-commit-config.yaml` for portability. nbstripout still
+strips outputs from the `.ipynb` blob independently.
+
 `requirements.txt` lists `nbstripout` — if it has been activated in the local git config, notebook outputs are stripped on commit. `generate_report.py` reads outputs from the `.ipynb` file directly, so the report must be regenerated from a freshly-executed notebook (don't commit-then-report).
 
 ## Pipeline architecture (notebook)
@@ -85,18 +123,22 @@ When adding a new shamanic step that prints to a text artefact: add a localized 
 - **Target-language detection** — scans cell stdout for `Выбран язык: ... (xx)` and uses `xx` as `target_lang` (the *corpus* language, independent from `UI_LANG`). The `<html>` `lang` is `UI_LANG` (see above); foreign-corpus content gets per-fragment `<span lang="target_lang">`. When `target_lang == UI_LANG`, the per-fragment target-lang pass is skipped but the EN-hardcoding pass below still runs.
 - **`tag_target_language` (target-lang patterns)** — a list of regex patterns matches structured output formats (numbered `[1] ...` excerpts, ranked tables, POS tables, lemmatization tables, RAG result rows, etc.) and wraps just the foreign-corpus portion. When extending the pipeline, output formats must match one of these patterns or content will not be tagged. HTML-escaping happens before regex matching, so quotes appear as `&#x27;`/`&quot;` in the patterns.
 - **EN hardcoding (`EN_HARDCODE_PATTERNS`)** — runs on every report, regardless of `target_lang`. Wraps in `<span lang="en">` the things that are always English regardless of corpus language: spaCy POS tags (`NOUN`, `VERB`, `ADJ`, …), NER labels (`PER`, `ORG`, `[orgName]`, …), spaCy model identifiers (`pl_core_news_lg`, …), Hugging Face model names (`cardiffnlp/...`, `mideind/...`), spaCy pipeline component names (`tok2vec`, `tagger`, `lemmatizer`, …), ASCII filenames with technical extensions (`.csv`, `.json`, `.html`, `.docx`, `.txt`, `.py`, `.md`), the literal `export_results`, and ISO 639-1 codes inside dict-like outputs. Without this pass NVDA reads `VERB`, `cardiffnlp` etc. with the document-default Russian voice. The pass is order-aware: target-lang wrapping runs first, EN hardcoding runs second using `_apply_outside_spans()` so it never wraps content already inside a span. Markdown narrative gets the same treatment for inline `<code>` and `<pre><code>` blocks (`lang="en"` is added blanket-style to every code element, since narrative code is always English).
-- **`REMOVE_NOISE`** (top of file, default `False`) — when `True`, drops Hugging Face/torch loading bars and skips the verbose lemmatization + POS tables entirely. Toggle when producing a reader-facing report vs. a full diagnostic one.
+- **`REMOVE_NOISE`** (read from `config.json`/`config.ini` key `remove_noise`, default `True`) — the accessibility/reader-mode filter. When `True`: (1) drops Hugging Face/torch loading bars and unauthenticated-request warnings; (2) **truncates** the notebook's per-document diagnostic loops (`cell_tok`/`cell_stop`/`cell_lemma`/`cell_pos`/`cell_ner`) to the first `KEEP_DOCS` (=5) `Документ N` blocks **per section**, replacing the rest with the notebook's own formula `... и ещё N документ(ов) (показаны первые 5)`; (3) truncates long TF-IDF/RAG ranking tables to the first `KEEP_RANK_ROWS` (=10) rows. Truncation, not deletion: lemmatization/POS now appear (shortened) instead of being cut entirely, because a screen-reader user benefits from a few representative examples plus a count. Section boundaries are detected by `_is_section_header` (a non-indented, non-`Документ` line) so a cell with several per-document loops (e.g. `cell_tok`'s `Словесные токены:` + `Предложения:`) is trimmed in each section independently and trailing diagnostic sections (`Несогласованные метки NER:` etc.) are preserved. The injected formula is hardcoded Russian on purpose — output-box content is raw Russian notebook stdout, so a `t()`-localized line would read as a foreign sentence mid-block. Set `remove_noise: false` in config for a full diagnostic report.
 - **Cell exclusion** — `cell_id in ["md_qa_rag", "cell_qa_rag"]` is skipped because the interactive RAG cell has no meaningful static output.
 
 When you add a new pipeline step that prints technical English (a new POS tag set, a new HF model id, a new file extension), extend `EN_HARDCODE_PATTERNS`. When you add a new structured output format that wraps corpus content, extend the `patterns` list inside `tag_target_language`.
+
+## Diagnostic report generator
+
+`generate_diagnostic.py` is a **third, independent** report (separate from `generate_report.py`'s reader view and the shamanic TTS artefacts). It reads ONLY the CSV/JSON exports in `export_results/<project_dir>/` (same `_slugify`/`_resolve_project_dir` as the others) and emits `diagnostic_report.html` — a navigable, screen-reader-first structured report: a `<nav>` table of contents plus sections (each its own `<h2>`/`<h3>` + lists) for Overview (counts), Topics (keywords + member paragraph ids, from `topic_keywords.json` + `paragraphs_with_topics.csv`), Theses (`theses.csv`, ranked by score), Named entities grouped by type (`entities.csv`, deduped with frequency counts), and Top keywords (`keywords_tfidf.csv`). Per-section caps (`KEEP_TOPIC_PARAS`/`KEEP_THESES`/`KEEP_ENTITIES_PER_LABEL`/`KEEP_KEYWORDS`) use the localized `diagnostic.more_items` formula. **Why this shape:** the notebook does not export a per-paragraph linguistic breakdown (tokens/POS/NER linked to a paragraph) — `sentences.csv` and `entities.csv` carry no `para_id` — so the report is organised around what the exports actually contain. Localization: structural labels via `t(UI_LANG, "diagnostic.*")` (new `dictionaries/{lang}/diagnostic.yaml`, all six langs); `<html lang="UI_LANG">`; corpus fragments wrapped in `<span lang="CORPUS_LANG">` only when `CORPUS_LANG != UI_LANG` (`detect_corpus_lang()` reads `accessible_text.html`); NER labels always `<span lang="en">`. Run it after the notebook has produced the exports: `python generate_diagnostic.py`.
 
 ## Conventions
 
 - All in-notebook narration and prints are Russian; Python comments mix Polish and Russian. Preserve the existing language of any cell you edit.
 - Never introduce ANSI colors, emoji, progress bars, or box-drawing characters into stdout — the entire project's value is screen-reader cleanliness. The Hugging Face/tqdm/transformers mute pattern lives in `cell_model._silence_hf_progress()` (used when loading IceBERT/MIM-GOLD-22 for Icelandic); replicate it for any new model loads.
 - The `_lg` spaCy models are a hard requirement for `cell_topics` to do anything; the cell self-skips on missing vectors, so partial pipelines are valid but lose topic modeling.
-- Notebook patches are applied via one-shot Python scripts under `.claude_patches/` (gitignored). Edit cell sources by writing a new `.py`/`.md` patch file and re-running `apply_patches.py` rather than hand-editing the notebook JSON. New patch scripts should be idempotent (detect the new state, no-op on re-run) — see `patch_corpus_config_ini.py` for the pattern.
-- `export_results/` and `.claude_patches/` are gitignored — generated artefacts and local tooling only. All generated HTML/Markdown reports live inside `export_results/<project_dir>/`, so no `*.html` or `notebooklm_report.md` rule is needed at the repo root.
+- Notebook cells are edited through the **jupytext pairing** (`accessible_text_analyst.py`, `py:percent`) — see "Editing notebook cells (jupytext)" above. Edit the `.py`, `jupytext --sync`, re-execute. Do not hand-edit the notebook JSON, and do not resurrect the old `.claude_patches/` OLD→NEW patch scripts (now archived under `.claude_patches/_archive_pre_jupytext/`; the folder is gitignored).
+- `export_results/` and `.claude_patches/` are gitignored — generated artefacts and local tooling only. The paired `accessible_text_analyst.py` **is committed** (clean reviewable diffs; the `.ipynb` is committed in parallel with outputs stripped by nbstripout). Before committing, run `jupytext --sync` so the `.py` and `.ipynb` don't drift. All generated HTML/Markdown reports live inside `export_results/<project_dir>/`, so no `*.html` or `notebooklm_report.md` rule is needed at the repo root.
 - **Config loading convention.** Every loader in the codebase (notebook `cell_corpus`, `generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) probes `config.json` first, then `config.ini`. Both filenames are gitignored. The content is always JSON — `.ini` is purely a Windows usability concession. When adding a new top-level script that needs the config, replicate the same probe order rather than hard-coding `config.json`.
 - **JSON path syntax.** Windows paths in `source_file` and regexes in `custom_patterns` must use forward slashes or doubled backslashes (`"C:/Users/foo/doc.pdf"` or `"C:\\Users\\foo\\doc.pdf"`; `"\\d{4}"`, not `"\d{4}"`). JSON has no raw-string syntax. The user-facing README repeats this — keep the warning in sync if the example files change.
 - **i18n release scope.** README is internationalized across `en/pl/ru/fi/is/it`. The notebook narrative, all console output, and this CLAUDE.md are intentionally not translated yet (scoped for v1.1 — see `release_notes.md`). When editing prints in `cell_*` or in the shamanic modules, preserve the existing language to avoid mixing dialects mid-cell.

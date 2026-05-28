@@ -9,7 +9,8 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 ## Projektin sisältö
 
 - `accessible_text_analyst.ipynb` — Jupyter-notebook, joka sisältää koko analyysiputken (40 solua: 20 koodia + 20 markdown; sisäinen kerronta on venäjäksi). Kirjoittaa kaksi saavutettavuusartefaktia (`accessible_text.html`, `accessible_text.docx`), joissa jokainen kappale ja jokainen vieraskielinen lause sisältää oman `lang`-attribuuttinsa — ruudunlukijat ja TTS-moottorit vaihtavat ääntä automaattisesti, jopa offline-tilassa.
-- `generate_report.py` — jälkikäsittelyskripti, joka muuntaa suoritetun notebookin yhdeksi saavutettavaksi HTML-tiedostoksi (`analysis_report.html`). Se kääräisee vieraskieliset katkelmat tagiin `<span lang="target_lang">` ja — korpuksen kielestä riippumatta — pakottaa `<span lang="en">` teknisen englannin sisältöön (POS-tagit, NER-tunnisteet, spaCyn/Hugging Facen mallien tunnisteet, ASCII-polut). Kerronnan inline-koodi ja koodilohkot saavat poikkeuksetta `lang="en"`.
+- `generate_report.py` — jälkikäsittelyskripti, joka muuntaa suoritetun notebookin yhdeksi saavutettavaksi HTML-tiedostoksi (`analysis_report.html`). Se kääräisee vieraskieliset katkelmat tagiin `<span lang="target_lang">` ja — korpuksen kielestä riippumatta — pakottaa `<span lang="en">` teknisen englannin sisältöön (POS-tagit, NER-tunnisteet, spaCyn/Hugging Facen mallien tunnisteet, ASCII-polut). Kerronnan inline-koodi ja koodilohkot saavat poikkeuksetta `lang="en"`. Lukutilassa (`remove_noise: true`) se lyhentää notebookin dokumenttikohtaiset diagnostiikkasilmukat ensimmäisiin muutamaan dokumenttiin satojen tulostamisen sijaan.
+- `generate_diagnostic.py` — riippumaton täyden **diagnostiikkaraportin** (`diagnostic_report.html`) luoja, joka rakennetaan suoraan notebookin CSV/JSON-vienneistä (ei `generate_report.py`:n ulostulosta). Navigoitava, ruudunlukijoille suunniteltu rakenne: sisällysluettelo `<nav>` ja osiot — kullakin oma otsikko ja listat — yleiskatsaukselle, aiheille kappaleineen, teeseille, nimetyille entiteeteille tyypeittäin ja tärkeimmille avainsanoille. Rakenteelliset tekstit seuraavat `ui_lang`-asetusta; korpuksen katkelmat saavat `<span lang="…">`, NER-tunnisteet `<span lang="en">`.
 - `generate_md.py` — muuntaa `analysis_report.html`-tiedoston Markdown-muotoon (`notebooklm_report.md`) NotebookLM:ää varten. Saavutettavuus-spanit puretaan, koska NotebookLM ei käytä niitä.
 - `shamanic_pipeline.py` *(valinnainen)* — ei-LLM-jälkikäsittelijä, joka muuntaa notebookin CSV/JSON-viennit neljäksi rituaaliseksi tekstiartefaktiksi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`) ja on täysin lokalisoitu kaikille kuudelle tuetulle kielelle.
 - `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu OpenAI:ta neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Vaatii `OPENAI_API_KEY`:n tiedostossa `golden_key.env`.
@@ -191,7 +192,7 @@ jupyter notebook accessible_text_analyst.ipynb
 
 Tämä on peräkkäinen putki, jolla on jaettu globaali tila. **Älä järjestä soluja uudelleen äläkä aja niitä järjestyksen ulkopuolella.** Notebook kirjoittaa `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` ja `theses.txt`.
 
-### 2. HTML-raportti (suositeltu)
+### 2. HTML-raportit (suositeltu)
 
 ```bash
 python generate_report.py
@@ -199,6 +200,15 @@ python generate_report.py
 ```
 
 `generate_report.py` lukee solujen ulostulot suoraan `.ipynb`-tiedostosta, joten HTML-raportti on luotava **juuri suoritetusta** notebookista. `requirements.txt` listaa `nbstripout`:n — jos se on aktivoitu paikallisessa git-konfiguraatiossa, notebookin ulostulot riisutaan commitilla. Luo raportti _ennen_ commitia tai poista nbstripout käytöstä työnkulustasi.
+
+Jäsenneltyä, täyttä **diagnostista** näkymää varten, joka rakennetaan suoraan CSV/JSON-vienneistä:
+
+```bash
+python generate_diagnostic.py
+# → export_results/<project>/diagnostic_report.html
+```
+
+`generate_diagnostic.py` lukee vain viedyt CSV/JSON-tiedostot, joten — toisin kuin `generate_report.py` — se ei tarvitse juuri suoritettua notebookia, vaan ainoastaan notebookin kirjoittamat viennit. Tuloksena on navigoitava asiakirja (sisällysluettelo, otsikot, listat), joka kattaa aiheet, teesit, entiteetit tyypeittäin ja tärkeimmät avainsanat.
 
 ### 3. NotebookLM-ystävällinen Markdown (valinnainen)
 
@@ -262,6 +272,7 @@ Jokainen alihakemisto sisältää:
 | `accessible_text.html`          | notebook          | kappale- ja lausetason `lang`-attribuutit — ruudunlukijat vaihtavat ääntä automaattisesti per katkelma |
 | `accessible_text.docx`          | notebook          | sama sisältö `<w:lang>`:lla asetettuna per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word ja SAPI käyttävät sitä offline-tilassa ilman online-tunnistinta |
 | `analysis_report.html`           | `generate_report.py` | globaali saavutettava HTML-raportti            |
+| `diagnostic_report.html`         | `generate_diagnostic.py` | jäsennelty diagnostiikkaraportti (aiheet, teesit, entiteetit tyypeittäin, avainsanat) CSV/JSON-vienneistä |
 | `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-valmis Markdown                     |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | rituaaliset / kerronnalliset tekstiartefaktit |
 
@@ -289,7 +300,8 @@ Notebookin selostus ja useimpien solujen `print()`-tuloste on kirjoitettu venäj
 ```
 accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # pääputki (40 solua)
-├── generate_report.py              # HTML-raportin generaattori
+├── generate_report.py              # HTML-raportin generaattori (lukijanäkymä)
+├── generate_diagnostic.py          # diagnostiikka-HTML-raportti CSV/JSON-vienneistä
 ├── generate_md.py                  # NotebookLM-Markdown-muunnin
 ├── shamanic_pipeline.py            # valinnainen: ei-LLM rituaalinen jälkikäsittelijä
 ├── shamanic_ai.py                  # valinnainen: LLM-vetoiset rituaaliset kertojat
@@ -312,6 +324,7 @@ accessible_text_analyst/
         ├── accessible_text.html
         ├── accessible_text.docx
         ├── analysis_report.html
+        ├── diagnostic_report.html
         ├── notebooklm_report.md
         └── audio_scripts/…
 ```

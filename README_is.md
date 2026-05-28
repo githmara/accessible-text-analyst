@@ -9,7 +9,8 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 ## Innihald verkefnisins
 
 - `accessible_text_analyst.ipynb` — Jupyter-minnisbók með heilli greiningarleiðslu (40 hólf: 20 kóða + 20 markdown; frásögnin innan minnisbókarinnar er á rússnesku). Hún skrifar tvö aðgengisgripi (`accessible_text.html`, `accessible_text.docx`), þar sem hver málsgrein og hver erlend setning ber sitt eigið `lang`-eiginleika — skjálesarar og TTS-vélar skipta um rödd sjálfkrafa, jafnvel án nets.
-- `generate_report.py` — eftirvinnsluforrit sem breytir framkvæmdri minnisbók í eina aðgengilega HTML-skrá (`analysis_report.html`). Það vefur erlend brot inn í `<span lang="target_lang">` og — óháð tungumáli safnsins — þvingar `<span lang="en">` utan um tæknilegt enskt innihald (POS-merki, NER-merki, auðkenni spaCy/Hugging Face líkana, ASCII-skráarnöfn). Inline-kóði og kóðablokkir í frásögn fá öll `lang="en"` í einu lagi.
+- `generate_report.py` — eftirvinnsluforrit sem breytir framkvæmdri minnisbók í eina aðgengilega HTML-skrá (`analysis_report.html`). Það vefur erlend brot inn í `<span lang="target_lang">` og — óháð tungumáli safnsins — þvingar `<span lang="en">` utan um tæknilegt enskt innihald (POS-merki, NER-merki, auðkenni spaCy/Hugging Face líkana, ASCII-skráarnöfn). Inline-kóði og kóðablokkir í frásögn fá öll `lang="en"` í einu lagi. Í lesendaham (`remove_noise: true`) styttir það skjalkvíslar greiningarlykkjur minnisbókarinnar niður í fyrstu fáu skjölin í stað þess að prenta hundruð.
+- `generate_diagnostic.py` — sjálfstæður smiður á heildstæðri **greiningarskýrslu** (`diagnostic_report.html`) sem byggð er beint á CSV/JSON-útflutningi minnisbókarinnar (ekki á úttaki `generate_report.py`). Aðgengileg uppbygging fyrir skjálesara: efnisyfirlit `<nav>` ásamt köflum — hver með eigin fyrirsögn og listum — fyrir yfirlit, þemu með málsgreinum, tesur, nafngreinda nafnliði eftir tegund og helstu lykilorð. Byggingartextar fylgja `ui_lang`; brot úr safninu fá `<span lang="…">`, NER-merki `<span lang="en">`.
 - `generate_md.py` — breytir `analysis_report.html` í `notebooklm_report.md` fyrir NotebookLM. Aðgengis-spans eru afpökkuð því NotebookLM notar þau ekki.
 - `shamanic_pipeline.py` *(valfrjálst)* — eftirvinnsluforrit án LLM sem breytir CSV/JSON-útflutningi minnisbókarinnar í fjóra helgisiðatextagripi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), öll að fullu staðfærð fyrir sex studdu tungumálin.
 - `shamanic_ai.py` *(valfrjálst, byggt á LLM)* — kallar í OpenAI til að búa til fjórar frásagnarraddir (`Katla`, `Vieno`, `Lumi`, `Sami`) ofan á sömu útflutninga. Krefst `OPENAI_API_KEY` í `golden_key.env`.
@@ -191,7 +192,7 @@ jupyter notebook accessible_text_analyst.ipynb
 
 Þetta er raðleiðsla með sameiginlegri hnattrænni stöðu. **Ekki endurraða hólfum og ekki keyra þau úr röð.** Minnisbókin skrifar `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` og `theses.txt`.
 
-### 2. HTML-skýrsla (mælt með)
+### 2. HTML-skýrslur (mælt með)
 
 ```bash
 python generate_report.py
@@ -199,6 +200,15 @@ python generate_report.py
 ```
 
 `generate_report.py` les úttak hólfa beint úr `.ipynb`-skránni, þannig að HTML-skýrslan verður að vera mynduð úr **nýkeyrðri** minnisbók. `requirements.txt` listar `nbstripout` — ef hann hefur verið virkjaður í staðbundinni git-stillingu eru úttök minnisbókarinnar fjarlægð við commit. Myndaðu skýrsluna _áður_ en þú commitar, eða slökktu á nbstripout fyrir vinnuflæði þitt.
+
+Fyrir uppbyggða, heildstæða **greiningarsýn** sem byggð er beint á CSV/JSON-útflutningnum:
+
+```bash
+python generate_diagnostic.py
+# → export_results/<project>/diagnostic_report.html
+```
+
+`generate_diagnostic.py` les aðeins útfluttu CSV/JSON-skrárnar, þannig að — ólíkt `generate_report.py` — þarf það ekki nýkeyrða minnisbók, aðeins útflutninginn sem minnisbókin skrifaði. Niðurstaðan er aðgengilegt skjal (efnisyfirlit, fyrirsagnir, listar) sem nær yfir þemu, tesur, nafnliði eftir tegund og helstu lykilorð.
 
 ### 3. NotebookLM-vænt Markdown (valfrjálst)
 
@@ -262,6 +272,7 @@ Hver undirmappa inniheldur:
 | `accessible_text.html`          | minnisbók         | `lang`-eiginleikar á málsgreinar- og setningarstigi — skjálesarar skipta um rödd sjálfkrafa per brot |
 | `accessible_text.docx`          | minnisbók         | sama innihald með `<w:lang>` stilltu per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word og SAPI nota það án nets, án nettengs greinis |
 | `analysis_report.html`           | `generate_report.py` | heildar aðgengileg HTML-skýrsla                |
+| `diagnostic_report.html`         | `generate_diagnostic.py` | uppbyggð greiningarskýrsla (þemu, tesur, nafnliðir eftir tegund, lykilorð) úr CSV/JSON-útflutningi |
 | `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-tilbúið Markdown                    |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | helgisiða- / frásagnartextagripi |
 
@@ -289,7 +300,8 @@ Frásögn vinnubókarinnar og `print()`-úttak flestra hólfa er skrifað á rú
 ```
 accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # aðalleiðsla (40 hólf)
-├── generate_report.py              # HTML-skýrslu-myndari
+├── generate_report.py              # HTML-skýrslu-myndari (lesendasýn)
+├── generate_diagnostic.py          # greiningar-HTML-skýrsla úr CSV/JSON-útflutningi
 ├── generate_md.py                  # NotebookLM-Markdown-breytari
 ├── shamanic_pipeline.py            # valfrjálst: helgisiða-eftirvinnsluforrit án LLM
 ├── shamanic_ai.py                  # valfrjálst: LLM-drifnir helgisiðafrásagnamenn
@@ -312,6 +324,7 @@ accessible_text_analyst/
         ├── accessible_text.html
         ├── accessible_text.docx
         ├── analysis_report.html
+        ├── diagnostic_report.html
         ├── notebooklm_report.md
         └── audio_scripts/…
 ```

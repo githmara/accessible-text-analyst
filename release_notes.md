@@ -4,6 +4,38 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.2.0 — jupytext editing workflow, reader-mode report truncation, and a structured diagnostic report
+
+**Theme.** Three independent improvements plus one real bug fix. The developer workflow for editing the notebook moves from fragile one-shot patch scripts to a jupytext pairing; the reader-facing HTML report stops dumping hundreds of kilobytes of per-document diagnostics; and a new standalone script produces a navigable, screen-reader-first diagnostic report from the CSV/JSON exports. Backward-compatible — no config or output-name changes — so this is a minor bump, not a hotfix.
+
+### Bug fix: `cell_para` crashed on large corpora (`E088`)
+
+`cell_para` fed the entire corpus into `nlp()` in one call. spaCy caps a single document at `nlp.max_length` (default 1,000,000 characters; the parser/NER need ~1 GB of temporary memory per 100k chars), so any book-length corpus raised `ValueError [E088]`. The cell now splits the text into chunks below the limit **at word boundaries** and runs `nlp()` per chunk, collecting sentences — keeping peak memory bounded instead of raising the limit (which would have tried to allocate many gigabytes). Short corpora pass through in a single chunk, unchanged.
+
+### Notebook editing moved to a jupytext pairing
+
+The `.claude_patches/` OLD→NEW string-replacement patch scripts are retired. They were not reusable, broke whenever a cell's source changed, and keyed cells by descriptive IDs the notebook had silently lost. The notebook is now **paired with `accessible_text_analyst.py`** (`py:percent`) via jupytext; the pairing lives in the notebook's own metadata (`metadata.jupytext.formats`) so it survives clone and nbstripout. Every cell carries a stable anchor in both `metadata.id` and `metadata.tags` (`cell_corpus` … `cell_qa_rag`, `md_intro` …), both preserved by nbstripout. The `.py` is **committed** for clean reviewable diffs alongside the output-stripped `.ipynb`; a local `pre-commit` hook runs `jupytext --sync` so the two never drift. `jupytext` is now a tooling dependency in `requirements.txt`.
+
+### Reader-mode report truncation (`generate_report.py`)
+
+In reader mode (`remove_noise: true`) the report previously **deleted** the lemmatization and POS sections wholesale while still dumping the full tokenization, stop-word, and NER per-document loops — hundreds of kilobytes of monotone text with no landmarks for a screen reader. It now **truncates instead of deletes**: each per-document loop (`cell_tok` / `cell_stop` / `cell_lemma` / `cell_pos` / `cell_ner`) is cut to the first 5 `Документ N` blocks **per section**, with the rest summarised by the notebook's own formula `... и ещё N документ(ов) (показаны первые 5)`; long TF-IDF/RAG ranking tables are cut to the top 10 rows; and the pseudographic POS histogram bars (`####…`) are stripped (the count already carries the information). On a ~1.2 MB book corpus the report dropped from ~800 KB to ~70 KB, lemmatization/POS are back (shortened, with diagnostic value), and the truncation formulas double as orientation landmarks.
+
+### New: `generate_diagnostic.py` — structured diagnostic report
+
+A third report generator, independent of `generate_report.py` and the shamanic layer. It reads **only** the CSV/JSON exports and emits `diagnostic_report.html`: a `<nav>` table of contents plus sections (each with its own heading and lists) for an overview, topics with their member paragraphs, theses ranked by score, named entities grouped by type with frequency counts, and top keywords. Because the notebook does not export a per-paragraph linguistic breakdown (`sentences.csv` / `entities.csv` carry no `para_id`), the report is organised around what the exports actually contain. Structural labels are localized via the new `dictionaries/{lang}/diagnostic.yaml` (all six languages; `fi`/`is`/`it` drafted-but-unreviewed per the standing note); `<html lang="ui_lang">`; corpus fragments get `<span lang="corpus_lang">` (only when it differs from `ui_lang`), NER labels always `<span lang="en">`.
+
+### Documentation
+
+All six READMEs document `generate_diagnostic.py` (project contents, the "Running" step, the output table, and the repository-layout tree). `CLAUDE.md` gains the jupytext editing workflow, the updated `REMOVE_NOISE` behaviour, and a diagnostic-report section.
+
+**Upgrade.** Pull the new tag. For the `cell_para` fix, re-execute the notebook (mandatory for large corpora that previously crashed) and re-run `generate_report.py`. `pip install -r requirements.txt` to pick up `jupytext`. Run the new `python generate_diagnostic.py` against an export directory whenever you want the structured view. No config change required.
+
+### Distribution
+
+Source-only minor release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.1.5 — critical fix: shamanic loaders skipped slugification of the project directory
 
 **Severity.** Whenever the source filename's stem ends in `.` or `_` (e.g. `…__przyklad_.docx`), the entire shamanic post-processing layer silently produced zero artefacts while still printing `[ZAKOŃCZONO] Wszystkie artefakty audio są gotowe`. Upgrade is recommended if you run `shamanic_pipeline.py` or `shamanic_ai.py` on a corpus whose filename stem has trailing `.`/`_`. Pure-Python shamanic pipeline only — the notebook, the HTML report, and the NotebookLM Markdown are unaffected.

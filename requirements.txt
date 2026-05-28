@@ -1,6 +1,7 @@
 # Środowisko i narzędzia
 ipykernel
 nbstripout
+jupytext
 pyyaml
 
 # Parsowanie plików i ekstrakcja tekstu

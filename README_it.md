@@ -9,7 +9,8 @@ Pipeline NLP multilingue progettata per **l'accessibilità con i lettori di sche
 ## Contenuto del progetto
 
 - `accessible_text_analyst.ipynb` — un notebook Jupyter con la pipeline completa di analisi (40 celle: 20 codice + 20 markdown; la narrazione interna al notebook è in russo). Produce due artefatti di accessibilità (`accessible_text.html`, `accessible_text.docx`) in cui ogni paragrafo e ogni frase in lingua straniera porta il proprio attributo `lang` — lettori di schermo e motori TTS cambiano voce automaticamente, anche offline.
-- `generate_report.py` — uno script di post-processing che trasforma il notebook eseguito in un singolo file HTML accessibile (`analysis_report.html`). Avvolge i frammenti in lingua straniera in `<span lang="target_lang">` e, indipendentemente dalla lingua del corpus, marca con `<span lang="en">` i contenuti tecnici inglesi (tag POS, etichette NER, identificativi dei modelli spaCy/Hugging Face, percorsi ASCII). Il codice inline e i blocchi di codice nella narrazione ricevono in massa `lang="en"`.
+- `generate_report.py` — uno script di post-processing che trasforma il notebook eseguito in un singolo file HTML accessibile (`analysis_report.html`). Avvolge i frammenti in lingua straniera in `<span lang="target_lang">` e, indipendentemente dalla lingua del corpus, marca con `<span lang="en">` i contenuti tecnici inglesi (tag POS, etichette NER, identificativi dei modelli spaCy/Hugging Face, percorsi ASCII). Il codice inline e i blocchi di codice nella narrazione ricevono in massa `lang="en"`. In modalità lettore (`remove_noise: true`) tronca i cicli diagnostici per-documento del notebook ai primi pochi documenti invece di stamparne centinaia.
+- `generate_diagnostic.py` — un generatore indipendente di un report **diagnostico** completo (`diagnostic_report.html`) costruito direttamente dalle esportazioni CSV/JSON del notebook (non dall'output di `generate_report.py`). Una struttura navigabile e pensata per gli screen reader: un indice `<nav>` più sezioni — ciascuna con il proprio titolo ed elenchi — per una panoramica, i temi con i relativi paragrafi, le tesi, le entità nominate per tipo e le parole chiave principali. Le etichette strutturali seguono `ui_lang`; i frammenti del corpus ricevono `<span lang="…">`, le etichette NER `<span lang="en">`.
 - `generate_md.py` — converte `analysis_report.html` in `notebooklm_report.md` per NotebookLM. Gli span di accessibilità vengono rimossi perché NotebookLM non li consuma.
 - `shamanic_pipeline.py` *(opzionale)* — un post-processore senza LLM che trasforma gli export CSV/JSON del notebook in quattro artefatti testuali rituali (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), completamente localizzati nelle sei lingue supportate.
 - `shamanic_ai.py` *(opzionale, basato su LLM)* — chiama OpenAI per generare quattro voci narrative (`Katla`, `Vieno`, `Lumi`, `Sami`) sopra gli stessi export. Richiede `OPENAI_API_KEY` in `golden_key.env`.
@@ -200,6 +201,15 @@ python generate_report.py
 
 `generate_report.py` legge gli output delle celle direttamente dal file `.ipynb`, quindi il report HTML deve essere generato da un notebook **appena eseguito**. `requirements.txt` elenca `nbstripout` — se è stato attivato nella configurazione git locale, gli output del notebook vengono rimossi al commit. Genera il report _prima_ del commit o disabilita nbstripout per il tuo workflow.
 
+Per una vista **diagnostica** strutturata e completa costruita direttamente dalle esportazioni CSV/JSON:
+
+```bash
+python generate_diagnostic.py
+# → export_results/<project>/diagnostic_report.html
+```
+
+`generate_diagnostic.py` legge solo i CSV/JSON esportati, quindi — a differenza di `generate_report.py` — non richiede un notebook appena eseguito, ma solo le esportazioni che il notebook ha scritto. Il risultato è un documento navigabile (indice, intestazioni, elenchi) che copre temi, tesi, entità per tipo e parole chiave principali.
+
 ### 3. Markdown adatto a NotebookLM (opzionale)
 
 ```bash
@@ -262,6 +272,7 @@ Ogni sottodirectory contiene:
 | `accessible_text.html`          | notebook          | attributi `lang` a livello di paragrafo e frase — i lettori di schermo cambiano voce automaticamente per frammento |
 | `accessible_text.docx`          | notebook          | lo stesso contenuto con `<w:lang>` impostato per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word e SAPI lo usano offline, senza rilevatore online |
 | `analysis_report.html`           | `generate_report.py` | report HTML globale accessibile                |
+| `diagnostic_report.html`         | `generate_diagnostic.py` | report diagnostico strutturato (temi, tesi, entità per tipo, parole chiave) dalle esportazioni CSV/JSON |
 | `notebooklm_report.md`      | `generate_md.py`     | Markdown pronto per NotebookLM                 |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | artefatti testuali rituali / narrativi |
 
@@ -289,7 +300,8 @@ La narrazione del notebook e l'output `print()` della maggior parte delle celle 
 ```
 accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # pipeline principale (40 celle)
-├── generate_report.py              # generatore di report HTML
+├── generate_report.py              # generatore di report HTML (vista lettore)
+├── generate_diagnostic.py          # report HTML diagnostico dalle esportazioni CSV/JSON
 ├── generate_md.py                  # convertitore Markdown per NotebookLM
 ├── shamanic_pipeline.py            # opzionale: post-processore rituale senza LLM
 ├── shamanic_ai.py                  # opzionale: narratori rituali LLM
@@ -312,6 +324,7 @@ accessible_text_analyst/
         ├── accessible_text.html
         ├── accessible_text.docx
         ├── analysis_report.html
+        ├── diagnostic_report.html
         ├── notebooklm_report.md
         └── audio_scripts/…
 ```

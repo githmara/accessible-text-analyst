@@ -9,7 +9,8 @@
 ## Состав проекта
 
 - `accessible_text_analyst.ipynb` — Jupyter-блокнот с полным аналитическим конвейером (40 ячеек: 20 кода + 20 markdown; повествование внутри блокнота — на русском). Записывает два артефакта доступности (`accessible_text.html`, `accessible_text.docx`), в которых каждый абзац и каждое иноязычное предложение несёт собственный атрибут `lang` — программы экранного доступа и движки TTS переключают голос автоматически, даже офлайн.
-- `generate_report.py` — постпроцессор, превращающий выполненный блокнот в один доступный HTML-файл (`analysis_report.html`). Иноязычные фрагменты оборачивает в `<span lang="target_lang">`, а — независимо от языка корпуса — жёстко помечает `<span lang="en">` всё технически английское (POS-теги, NER-метки, идентификаторы моделей spaCy/Hugging Face, ASCII-пути). Inline-код и блоки кода в повествовании оптом получают `lang="en"`.
+- `generate_report.py` — постпроцессор, превращающий выполненный блокнот в один доступный HTML-файл (`analysis_report.html`). Иноязычные фрагменты оборачивает в `<span lang="target_lang">`, а — независимо от языка корпуса — жёстко помечает `<span lang="en">` всё технически английское (POS-теги, NER-метки, идентификаторы моделей spaCy/Hugging Face, ASCII-пути). Inline-код и блоки кода в повествовании оптом получают `lang="en"`. В читательском режиме (`remove_noise: true`) сокращает диагностические циклы «по документам» до первых нескольких документов вместо вывода сотен.
+- `generate_diagnostic.py` — независимый генератор полного **диагностического** отчёта (`diagnostic_report.html`), строящегося напрямую из CSV/JSON-экспортов блокнота (а не из вывода `generate_report.py`). Навигируемая, ориентированная на скринридеры структура: оглавление `<nav>` плюс разделы — каждый со своим заголовком и списками — для обзора, тем с их абзацами, тезисов, именованных сущностей по типам и главных ключевых слов. Структурные подписи следуют за `ui_lang`; фрагменты корпуса получают `<span lang="…">`, NER-метки — `<span lang="en">`.
 - `generate_md.py` — конвертирует `analysis_report.html` в `notebooklm_report.md` для NotebookLM. Spans доступности распаковываются, так как NotebookLM их не использует.
 - `shamanic_pipeline.py` *(опциональный)* — постпроцессор без LLM, превращающий CSV/JSON-экспорт блокнота в четыре ритуальных текстовых артефакта (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), полностью локализованных на все шесть поддерживаемых языков.
 - `shamanic_ai.py` *(опциональный, с LLM)* — обращается к OpenAI, чтобы сгенерировать четыре повествовательных голоса (`Katla`, `Vieno`, `Lumi`, `Sami`) поверх тех же экспортов. Требует `OPENAI_API_KEY` в файле `golden_key.env`.
@@ -191,7 +192,7 @@ jupyter notebook accessible_text_analyst.ipynb
 
 Это последовательный конвейер с общим глобальным состоянием. **Не меняйте порядок ячеек и не выполняйте их вне порядка.** Блокнот пишет `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` и `theses.txt`.
 
-### 2. HTML-отчёт (рекомендуется)
+### 2. HTML-отчёты (рекомендуется)
 
 ```bash
 python generate_report.py
@@ -199,6 +200,15 @@ python generate_report.py
 ```
 
 `generate_report.py` читает вывод ячеек прямо из файла `.ipynb`, поэтому HTML-отчёт должен генерироваться из **свежевыполненного** блокнота. В `requirements.txt` указан `nbstripout` — если он активирован в локальной git-конфигурации, выводы блокнота стираются при коммите. Генерируйте отчёт _до_ коммита либо отключите nbstripout для своего workflow.
+
+Для структурированного, полного **диагностического** вида, строящегося прямо из CSV/JSON-экспортов:
+
+```bash
+python generate_diagnostic.py
+# → export_results/<project>/diagnostic_report.html
+```
+
+`generate_diagnostic.py` читает только экспортированные CSV/JSON, поэтому — в отличие от `generate_report.py` — не требует свежевыполненного блокнота, а лишь экспортов, которые блокнот записал. Результат — навигируемый документ (оглавление, заголовки, списки), охватывающий темы, тезисы, сущности по типам и главные ключевые слова.
 
 ### 3. Markdown для NotebookLM (опционально)
 
@@ -262,6 +272,7 @@ OPENAI_API_KEY=sk-...
 | `accessible_text.html`          | блокнот           | атрибуты `lang` на уровне абзаца и предложения — программы экранного доступа автоматически переключают голос по фрагменту |
 | `accessible_text.docx`          | блокнот           | то же содержимое с `<w:lang>` на каждом `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word и SAPI используют это офлайн, без онлайн-детектора |
 | `analysis_report.html`           | `generate_report.py` | глобальный доступный HTML-отчёт                |
+| `diagnostic_report.html`         | `generate_diagnostic.py` | структурированный диагностический отчёт (темы, тезисы, сущности по типам, ключевые слова) из CSV/JSON-экспортов |
 | `notebooklm_report.md`      | `generate_md.py`     | Markdown, готовый для NotebookLM               |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | ритуальные / повествовательные текстовые артефакты |
 
@@ -289,7 +300,8 @@ OPENAI_API_KEY=sk-...
 ```
 accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # основной конвейер (40 ячеек)
-├── generate_report.py              # генератор HTML-отчёта
+├── generate_report.py              # генератор HTML-отчёта (читательский вид)
+├── generate_diagnostic.py          # диагностический HTML-отчёт из CSV/JSON-экспортов
 ├── generate_md.py                  # конвертер Markdown для NotebookLM
 ├── shamanic_pipeline.py            # опционально: ритуальный постпроцессор без LLM
 ├── shamanic_ai.py                  # опционально: ритуальные нарраторы LLM
@@ -312,6 +324,7 @@ accessible_text_analyst/
         ├── accessible_text.html
         ├── accessible_text.docx
         ├── analysis_report.html
+        ├── diagnostic_report.html
         ├── notebooklm_report.md
         └── audio_scripts/…
 ```

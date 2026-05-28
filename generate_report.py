@@ -595,6 +595,99 @@ def _tag_code_blocks(html_str):
 
     return _CODE_BLOCK_RE.sub(repl, html_str)
 
+# ============================================================
+# Post-procesor skracający „nudne" megi-outputy (tryb czytelnika,
+# REMOVE_NOISE). Pętle diagnostyczne notebooka iterują po wszystkich
+# „документах" (chunkach korpusu) — przy książce to setki bloków i
+# setki kilobajtów monotonnego tekstu, który dla czytnika ekranu jest
+# ścianą bez punktów orientacyjnych. Zamiast kasować całe sekcje (jak
+# robił to stary clean_noise dla лемматизации/POS), pokazujemy pierwsze
+# KEEP_DOCS dokumentów i podsumowujemy resztę formułą identyczną z tą,
+# której notebook używa w cell_corpus: „... и ещё N документ(ов)
+# (показаны первые 5)". Formuła jest po rosyjsku celowo — treść całego
+# output-boxa to surowy rosyjski stdout notebooka (CLAUDE.md: per-step
+# printy są hardkodowane po rosyjsku), więc t()-lokalizacja wstawiłaby
+# obcojęzyczne zdanie w środek rosyjskiego bloku.
+# ============================================================
+KEEP_DOCS = 5
+KEEP_RANK_ROWS = 10
+
+# Początek bloku „per dokument": "  Документ 12: ..." / "Документ 3 — ...".
+_DOC_BLOCK_RE = re.compile(r'^\s*Документ\s+\d+\b')
+# Pseudograficzny pasek histogramu POS z cell_pos: "  NOUN : 67  ########".
+# Sama liczba (67) niesie informację; ciąg „####" to czysty szum dla czytnika
+# ekranu (NVDA czyta go jako „czterdzieści krzyżyków"). Próg {2,} chroni przed
+# usunięciem pojedynczego „#" w treści. Por. zasada repo: zero pseudografiki.
+_HIST_BAR_RE = re.compile(r'\s+#{2,}\s*$')
+# Wiersz tabeli rankingowej TF-IDF/RAG: "  1      Документ 589   0.2121   фрагмент".
+_RANK_ROW_RE = re.compile(r'^\s*\d+\s+Документ\s+\d+\s+\d\.\d{4}\b')
+
+
+def _is_section_header(line):
+    """Linia-nagłówek sekcji: niepusta, w kolumnie 0 i niebędąca „Документ N".
+
+    Bloki „per dokument" mają wcięte ciała (kolumna > 0), więc każda niewcięta
+    linia spoza „Документ" rozpoczyna nową sekcję. Dzięki temu komórka z kilkoma
+    pętlami per-dokument (cell_tok: „Словесные токены:" + „Предложения:") jest
+    cięta w każdej sekcji z osobna, a sekcje diagnostyczne po pętli (np.
+    „Несогласованные метки NER:") są zachowywane w całości.
+    """
+    return bool(line.strip()) and not line[:1].isspace() \
+        and not _DOC_BLOCK_RE.match(line)
+
+
+def _truncate_doc_blocks(lines, keep=KEEP_DOCS):
+    """Skraca KAŻDĄ sekcję „per dokument" do pierwszych `keep` bloków Документ N.
+
+    Sekcje rozdzielają linie-nagłówki (patrz `_is_section_header`). W obrębie
+    sekcji zostawiamy dokumenty 1..keep, a w miejscu (keep+1)-szego wstawiamy raz
+    formułę „... и ещё N документ(ов) (показаны первые keep)" i pomijamy resztę
+    dokumentów tej sekcji. Nagłówki i sekcje bez nadmiaru zostają nietknięte.
+    """
+    # Przejście 1: numer sekcji dla każdej linii + liczba dokumentów w sekcji.
+    sec_of, docs_in_sec, sec = [], {}, 0
+    for line in lines:
+        if _is_section_header(line):
+            sec += 1
+        sec_of.append(sec)
+        if _DOC_BLOCK_RE.match(line):
+            docs_in_sec[sec] = docs_in_sec.get(sec, 0) + 1
+
+    # Przejście 2: przepisz, zwijając dokumenty > keep w każdej sekcji.
+    out, cur_sec, doc_count, skipping = [], None, 0, False
+    for i, line in enumerate(lines):
+        s = sec_of[i]
+        if s != cur_sec:
+            cur_sec, doc_count, skipping = s, 0, False
+        if _DOC_BLOCK_RE.match(line):
+            doc_count += 1
+            if doc_count == keep + 1:
+                out.append(f"  ... и ещё {docs_in_sec[s] - keep} документ(ов) "
+                           f"(показаны первые {keep})")
+                skipping = True
+            if skipping:
+                continue
+        if skipping:
+            continue
+        out.append(line)
+    return out
+
+
+def _truncate_rank_rows(lines, keep=KEEP_RANK_ROWS):
+    """Skraca tabelę rankingową TF-IDF/RAG do pierwszych `keep` wierszy.
+
+    Długi ogon wyników o схожести 0.0000 to czysty szum dla czytnika ekranu;
+    pokazujemy top `keep` i podsumowujemy resztę formułą.
+    """
+    rows = [i for i, l in enumerate(lines) if _RANK_ROW_RE.match(l)]
+    if len(rows) <= keep:
+        return lines
+    cut = rows[keep]
+    formula = (f"  ... и ещё {len(rows) - keep} результатов "
+               f"(показаны первые {keep})")
+    return lines[:cut] + [formula]
+
+
 def build_accessible_html():
     with open(NOTEBOOK_PATH, 'r', encoding='utf-8') as f:
         nb = json.load(f)
@@ -728,27 +821,24 @@ def build_accessible_html():
     def clean_noise(text_lines):
         if not REMOVE_NOISE:
             return text_lines
-        
-        clean_lines = []
-        skip_mode = False
-        
+
+        # 3a. Wyciszanie pasków ładowania, ostrzeżeń HF i pasków histogramu POS.
+        kept = []
         for line in text_lines:
-            # Wyciszanie pasków ładowania i brzydkich komunikatów
             if "Loading weights" in line or "Materializing param" in line:
                 continue
             if "Warning: You are sending unauthenticated requests" in line:
                 continue
-            
-            # Wycinanie gigantycznych tabel lematyzacji i POS
-            if "--- Лемматизация ---" in line or "--- Разметка частей речи (POS) ---" in line:
-                skip_mode = True
-            elif skip_mode and line.startswith("--- "): # Kolejna sensowna sekcja
-                skip_mode = False
-                
-            if not skip_mode:
-                clean_lines.append(line)
-                
-        return clean_lines
+            kept.append(_HIST_BAR_RE.sub('', line))
+
+        # 3b. Skracanie mega-outputów zamiast kasowania całych sekcji:
+        #     pętle „per dokument" (tok/stop/lemma/POS/NER) → pierwsze
+        #     KEEP_DOCS, długie tabele rankingowe (TF-IDF/RAG) → top
+        #     KEEP_RANK_ROWS. Lematyzacja i POS NIE są już usuwane w całości —
+        #     pojawiają się skrócone, bo mają wartość diagnostyczną.
+        kept = _truncate_doc_blocks(kept)
+        kept = _truncate_rank_rows(kept)
+        return kept
 
     # 4. Budowanie struktury HTML
     html_content = [
