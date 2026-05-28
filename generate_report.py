@@ -795,6 +795,13 @@ def build_accessible_html():
 
         if cell["cell_type"] == "markdown":
             source = "".join(cell.get("source", []))
+            # Narracja markdownowa hardcoduje rosyjską nazwę pliku
+            # `тезисы.txt`, ale notebook od v1.1 stage 2 zapisuje
+            # tezę pod nazwą zlokalizowaną wg języka korpusu
+            # (`tezy.txt` / `theses.txt` / `teesit.txt` / `tilgátur.txt` /
+            # `tesi.txt`). Podmieniamy w treści markdown, żeby reader nie
+            # widział nazwy, której fizycznie w katalogu eksportu nie ma.
+            source = source.replace("тезисы.txt", t(target_lang, "theses.filename"))
             md_html = markdown.markdown(source)
             # 1. Per-<code> lingua: dla każdego elementu <code>/<pre><code>
             #    wykrywamy język (en/pl/ru/it/fi/is) z fallbackiem en.

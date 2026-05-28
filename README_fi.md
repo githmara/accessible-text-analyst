@@ -276,6 +276,14 @@ Tämä on projektin keskeinen arvo. Kaikki alla oleva on tarkoituksellista ja on
 - **Vieraskielisen korpuksen pir-katkelmamerkintä HTML:ssä.** Kun korpus ei ole venäläinen, jäsennellyt ulostulot (lauseotteet, avainsanaluettelot, aihesanat, RAG-järjestysrivit, lemmatisointitaulukot) käärätään tagiin `<span lang="target_lang">`.
 - **Lineaarinen HTML-rakenne** (`<main>`, oikea otsikkohierarkia).
 
+### Tulosten lukeminen ei-venäjänkielisenä käyttäjänä
+
+Notebookin selostus ja useimpien solujen `print()`-tuloste on kirjoitettu venäjäksi. Kaksi Jupyterin käyttöliittymän ominaisuutta tekevät siitä vihamielisen ei-venäjänkielisille ruudunlukijakäyttäjille, ja putki toimittaa kullekin oman kiertotien:
+
+- **Selaimessa toimiva Jupyter koodaa kovakoodatusti `lang="en"` dokumenttiin**, eikä "Käännä tämä sivu?" -kehote koskaan ilmesty `localhost`-sivuilla. Venäjäksi selostettu notebook luetaan siten englanninkielisellä TTS-äänellä — täydellistä kaaosta. Pragmaattinen ratkaisu on **VS Code:n Jupyter-laajennus**: sen lista-näkymä lausuu vain `code cell` / `markdown cell` -etiketit ilman ISO-merkintöjä, voit painaa Enter koodisolujen läpi ja ↓ ohittaa markdown-solut kuuntelematta niiden sisältöä, ja kovakoodatun englannin ongelma rajoittuu tuloste-näkymään (`Ctrl+Shift+↓`), johon voi yksinkertaisesti olla menemättä.
+- **`generate_report.py` on käytännössä pakollinen ei-venäjänkielisille lukijoille.** Se tuottaa `analysis_report.html`-tiedoston, jossa on `<html lang="ru">` ja täysi joukko `<span lang="…">`-tageja jokaiselle katkelmalle. Tavallisessa selaimessa avattuna (ei Jupyterin sisältä) se laukaisee selaimen "Käännä tämä sivu?" -kehotteen venäjänkieliselle selostukselle, säilyttäen samalla TTS-äänen vaihdon korpuksen katkelmilla ja englanninkielisillä teknisillä termeillä (POS, NER, mallien nimet).
+- **Interaktiivinen Q&A kirjoittaa `qa_results.html`-tiedoston ja avaa sen puolestasi.** `cell_qa_rag` tulostaa edelleen kysymyksen ja kolme parasta osumaa stdoutiin — mutta lisäksi se kirjoittaa saman sisällön tiedostoon `export_results/<project>/qa_results.html` ja kutsuu `webbrowser.open()`, jolloin sivu päätyy järjestelmäselaimeen, jossa sekä käännös että per-katkelmainen TTS-äänen vaihto toimivat. Jupyterin tuloste-näkymä, jossa kovakoodattu `lang="en"` tekee venäjänkieliset kääreet ruudunlukijalle lukukelvottomiksi, ei siis enää ole ainoa polku tulokseen. Jokainen uusi kysely ylikirjoittaa tiedoston.
+
 ## Repositorion rakenne
 
 ```

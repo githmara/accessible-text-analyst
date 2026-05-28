@@ -4,6 +4,47 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.1.4 — housekeeping + RAG accessibility + non-Russian-reader documentation
+
+**Theme.** Three loose ends from the v1.1.3 surgical revert: dead-code cleanup, a localized-filename display mismatch in the markdown narrative, and the realisation that v1.1.3 left the interactive Q&A inaccessible for any reader who does not speak Russian. Plus the missing README documentation explaining *why* the report and the new Q&A HTML are not optional but essentially mandatory for non-Russian users.
+
+### Dead-code cleanup
+
+Eleven orphan YAML files removed: `dictionaries/{en,fi,is,it,pl,ru}/notebook.yaml` and `dictionaries/{en,fi,is,it,pl}/narrative.yaml`. These were written in v1.1 stage 3b/3c for the notebook-narrative localization layer that v1.1.3 reverted. Nothing in the codebase has read them since the revert; `git grep` after the revert returned zero references. `artifacts.yaml`, `reports.yaml`, and `shamanic.yaml` remain — they are still actively read by the shamanic modules, the standalone Python scripts, and the corpus-language-localized theses filename.
+
+### Theses filename display fix in the markdown narrative
+
+The notebook's Russian markdown narrative hardcodes the file name `тезисы.txt` in two places — the intro cell's pipeline overview and the export cell's artefact list. Since v1.1 stage 2 the code actually writes the file under a corpus-language-localized name (`tezy.txt` for Polish, `theses.txt` for English, `teesit.txt` for Finnish, `tilgátur.txt` for Icelandic, `tesi.txt` for Italian — only Russian corpora still get `тезисы.txt`). A Polish reader would therefore see the narrative claim a file exists that is not actually in the export directory.
+
+`generate_report.py` now does a single, targeted substitution before rendering each markdown cell: `source.replace("тезисы.txt", t(target_lang, "theses.filename"))`. Notebook source is unchanged (keeps the v1.0-spirit cleanness); the substitution is scoped to report rendering only. `target_lang` is already detected upstream from the `cell_langdet` stdout, so no new state is introduced.
+
+### RAG accessibility: `cell_qa_rag` now writes `qa_results.html`
+
+Two facts discovered after the v1.1.3 revert shipped:
+
+- Jupyter in a browser hardcodes `lang="en"` on the document and runs on `localhost`. Browsers do not surface the "Translate this page?" prompt for `localhost` pages, and the hardcoded `lang="en"` makes screen readers announce the notebook's Russian narration with an English TTS voice. The VS Code Jupyter extension sidesteps most of this because its list-view does not expose ISO tagging — until you enter the output view (`Ctrl+Shift+↓`), where the same hardcoded-English wall appears.
+- Reading the interactive Q&A *requires* entering the output view, because that is where the results are printed. So after v1.1.3 the entire RAG functionality was effectively reserved for Russian-speaking readers: anyone else had to copy-paste each result fragment into a translator just to learn whether their query had even hit anything.
+
+`cell_qa_rag` now keeps its existing stdout (no change for Russian readers) and *additionally* writes the query + top-3 fragments to `export_results/<project>/qa_results.html` and opens that file in the system browser via `webbrowser.open()`. The HTML uses `<html lang="ru">` with minimal hardcoded Russian wrappers (`Вопрос`, `Найденные фрагменты`, `Фрагмент N (сходство: …)`), and wraps the query and every fragment in `<p lang="LANG">` where `LANG` is the corpus language. Outside Jupyter the browser does surface its translate prompt; inside the page the screen reader switches TTS voice per fragment as usual. Each new query overwrites the file. No new YAML dictionary was introduced (the cleanup ethos of this release is no dead YAMLs, not adding more) — the four wrapper strings are inline.
+
+### README documentation: non-Russian-reader workflow
+
+A new subsection `### Reading the output as a non-Russian user` (equivalent translations in `README_pl.md`, `README_ru.md`, `README_fi.md`, `README_is.md`, `README_it.md`) inside the existing `## Accessibility` section. It documents:
+
+- The Jupyter-browser `lang="en"` + localhost problem and the VS Code Jupyter extension as the recommended IDE for accessibility.
+- `generate_report.py` as effectively mandatory for non-Russian readers, with explanation of how the report's per-fragment `<span lang="…">` tagging plus a real browser's translate prompt cooperate.
+- The new `qa_results.html` auto-open path for RAG.
+
+`fi` / `is` / `it` translations remain drafted-but-unreviewed per the v1.1 known-limitation note.
+
+**Upgrade.** Pull the new tag, re-execute the notebook, re-run `generate_report.py`. No config or dependency change required.
+
+### Distribution
+
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.1.3 — surgical revert: notebook narrative + HTML report back to v1.0 behaviour
 
 **Why.** v1.1's per-fragment language-tagging strategy turned out not to deliver in practice. Modern browsers (Chrome, Edge, Firefox) do not switch TTS voice on inline `<span lang="...">` boundaries with the consistency the design assumed, and they only offer the "translate this page?" prompt based on the document-level `<html lang>` — which under v1.1 was `UI_LANG`, so a Polish reader who actually got Russian fallback text in the narrative was never offered a translation. v1.1.2's explicit per-div `lang` attribute did not fix the underlying browser behaviour either. Different readers prefer different browsers and asking everyone to switch browsers just for one report is a non-starter.

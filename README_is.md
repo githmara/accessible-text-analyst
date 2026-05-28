@@ -276,6 +276,14 @@ Hver undirmappa inniheldur:
 - **Per-brot merking erlends safns í HTML.** Þegar safnið er ekki rússneskt eru uppbyggð úttök (setningarútdrættir, lykilorðalistar, þemorðsorð, RAG-röðunarraðir, uppsláttartöflur) vafin í `<span lang="target_lang">`.
 - **Línuleg HTML-bygging** (`<main>`, rétt fyrirsagnastigveldi).
 
+### Lestur niðurstaðna sem ekki-rússneskumælandi notandi
+
+Frásögn vinnubókarinnar og `print()`-úttak flestra hólfa er skrifað á rússnesku. Tveir eiginleikar Jupyter-viðmótsins gera þetta erfitt fyrir ekki-rússneskumælandi skjáleskara notendur, og pípan leggur til sértæka lausn fyrir hvora:
+
+- **Jupyter í vafranum harðkóðar `lang="en"` á skjalið**, og „Þýða þessa síðu?" tilkynning birtist hvort sem er aldrei fyrir síður á `localhost`. Vinnubók með rússneskri frásögn er því lesin með enskri TTS-rödd — algjör ringulreið. Hagsýn lausn er **Jupyter-viðbótin fyrir VS Code**: listasýn hennar les aðeins `code cell` / `markdown cell` merki án ISO-merkinga, þú getur ýtt á Enter í kóðahólfum og ↓ farið framhjá markdown-hólfum án þess að hlusta á innihald þeirra, og harðkóðaða ensku-vandamálið takmarkast við úttakssýn (`Ctrl+Shift+↓`), sem þú getur einfaldlega ekki opnað.
+- **`generate_report.py` er nánast skylda fyrir ekki-rússneskumælandi lesendur.** Það býr til `analysis_report.html` með `<html lang="ru">` og fullu setti af `<span lang="…">` merkjum fyrir hvert brot. Opnað í venjulegum vafra (ekki innan Jupyter), kveikir það á „Þýða þessa síðu?" tilkynningu vafrans fyrir rússnesku frásögnina, en heldur jafnframt TTS-raddaskiptum á brotum safnsins og á enskum tæknilegum hugtökum (POS, NER, líkana-nöfn).
+- **Gagnvirk Q&A skrifar `qa_results.html` og opnar það fyrir þig.** `cell_qa_rag` prentar enn spurninguna og þrjár efstu niðurstöður í stdout — en það skrifar einnig sama efni í `export_results/<project>/qa_results.html` og kallar á `webbrowser.open()`, þannig að síðan lendir í kerfisvafranum, þar sem bæði þýðing og per-brot raddaskipti TTS virka. Úttakssýnin í Jupyter, þar sem harðkóðað `lang="en"` gerir rússnesku umbúðirnar ólesanlegar fyrir skjáleskara, er þannig ekki lengur eina leiðin að niðurstöðunni. Hver ný fyrirspurn skrifar yfir skrána.
+
 ## Bygging hugbúnaðarsafns
 
 ```

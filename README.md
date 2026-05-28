@@ -276,6 +276,14 @@ This is the project's central value. Everything below is intentional and must be
 - **Per-fragment foreign-corpus tagging in HTML.** When the corpus is non-Russian, structured outputs (sentence excerpts, keyword lists, topic words, RAG ranking rows, lemmatization tables) are wrapped in `<span lang="target_lang">`.
 - **Linear HTML structure** (`<main>`, proper heading hierarchy).
 
+### Reading the output as a non-Russian user
+
+The notebook narrative and the `print()` output of most cells are written in Russian. Two characteristics of the Jupyter UI make that hostile to non-Russian screen-reader users, and the pipeline ships specific workarounds for each:
+
+- **Jupyter in a browser hardcodes `lang="en"` on the document**, and the "Translate this page?" prompt never fires on `localhost` pages anyway. A Russian-narrated notebook is therefore announced in an English TTS voice — total chaos. The pragmatic mitigation is the **VS Code Jupyter extension**: its list-view announces only `code cell` / `markdown cell` labels with no ISO tagging, you can press Enter through code cells and ↓ past markdown cells without listening to their bodies, and the hardcoded-English problem is confined to the output view (`Ctrl+Shift+↓`) — which you can choose not to enter.
+- **`generate_report.py` is effectively mandatory for non-Russian readers.** It produces `analysis_report.html` with `<html lang="ru">` and the full set of per-fragment `<span lang="…">` tags. Opened in a real browser (not from inside Jupyter), it triggers the browser's "Translate this page?" prompt for the Russian narration while still switching TTS voice per fragment for corpus content and for technical English terms (POS, NER, model names).
+- **Interactive Q&A writes `qa_results.html` and opens it for you.** `cell_qa_rag` still prints the query and top-3 matches to stdout — but it also writes the same content to `export_results/<project>/qa_results.html` and calls `webbrowser.open()` so the page lands in the system browser, where translation and per-fragment voice switching both work. The output view in Jupyter, where the hardcoded `lang="en"` makes the Russian wrappers unreadable to a screen reader, is therefore no longer the only path to the result. Each new query overwrites the file.
+
 ## Repository layout
 
 ```

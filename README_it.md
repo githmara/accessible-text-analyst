@@ -276,6 +276,14 @@ Questo è il valore centrale del progetto. Tutto ciò che segue è intenzionale 
 - **Marcatura per frammento del corpus straniero in HTML.** Quando il corpus non è russo, gli output strutturati (estratti di frasi, elenchi di parole chiave, parole di argomenti, righe di ranking RAG, tabelle di lemmatizzazione) vengono avvolti in `<span lang="target_lang">`.
 - **Struttura HTML lineare** (`<main>`, gerarchia di intestazioni corretta).
 
+### Leggere l'output come utente non russofono
+
+La narrazione del notebook e l'output `print()` della maggior parte delle celle sono scritti in russo. Due caratteristiche dell'interfaccia Jupyter lo rendono ostile per gli utenti non russofoni che usano screen reader, e la pipeline include una soluzione specifica per ciascuna:
+
+- **Jupyter nel browser codifica forzatamente `lang="en"` sul documento**, e il prompt "Tradurre questa pagina?" non appare comunque mai per le pagine su `localhost`. Un notebook con narrazione russa viene quindi letto con voce TTS inglese — caos totale. La soluzione pragmatica è l'**estensione Jupyter per VS Code**: la sua vista a lista annuncia solo le etichette `code cell` / `markdown cell` senza tag ISO, puoi premere Invio sulle celle di codice e ↓ saltare le celle markdown senza ascoltarne il contenuto, e il problema dell'inglese cablato è confinato alla vista output (`Ctrl+Shift+↓`), che puoi semplicemente non aprire.
+- **`generate_report.py` è praticamente obbligatorio per i lettori non russofoni.** Produce `analysis_report.html` con `<html lang="ru">` e l'insieme completo dei tag `<span lang="…">` per ogni frammento. Aperto in un vero browser (non dentro Jupyter), attiva il prompt "Tradurre questa pagina?" del browser per la narrazione russa, mantenendo allo stesso tempo il cambio di voce TTS sui frammenti del corpus e sui termini tecnici inglesi (POS, NER, nomi dei modelli).
+- **Il Q&A interattivo scrive `qa_results.html` e lo apre per te.** `cell_qa_rag` continua a stampare la domanda e i top-3 risultati su stdout — ma scrive anche lo stesso contenuto in `export_results/<project>/qa_results.html` e chiama `webbrowser.open()`, così la pagina si apre nel browser di sistema, dove sia la traduzione che il cambio di voce TTS per frammento funzionano. La vista output in Jupyter, dove `lang="en"` cablato rende gli involucri russi illeggibili per uno screen reader, non è quindi più l'unica via verso il risultato. Ogni nuova query sovrascrive il file.
+
 ## Layout del repository
 
 ```
