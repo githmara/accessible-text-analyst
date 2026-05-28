@@ -153,6 +153,7 @@ Zawartość:
   "custom_patterns": [],
   "remove_noise": true,
   "ocr_languages": ["en"],
+  "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null
 }
@@ -164,6 +165,7 @@ Zawartość:
 | `custom_patterns`  | string[]         | Opcjonalna lista wyrażeń regularnych usuwanych z surowego tekstu (żywe nagłówki, stopki, powtarzające się szablony). Przykład: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean          | Przełącza `generate_report.py` między trybem czytelnika (`true`, ukrywa paski ładowania Hugging Face/torch i tabele lematyzacji/POS) a pełnym trybem diagnostycznym (`false`). |
 | `ocr_languages`    | string[]         | Języki dla `easyocr` (używane tylko przy skanowanych PDF-ach lub źródłach-obrazach). W ramach jednej instancji `easyocr.Reader` można łączyć tylko języki tego samego skryptu — np. `["ru", "en"]` dla cyrylicy lub `["en", "pl", "it", "fi", "is"]` dla łaciny. |
+| `ui_lang`          | string           | Język UI dla wyjścia konsoli i atrybutu `<html lang>` generowanego raportu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Pusty string lub nieznany kod → fallback `en`. Niezależny od języka analizowanego korpusu — ten wykrywany jest automatycznie. |
 | `lumi_katla_lines` | integer lub null | Opcjonalny limit ornamentu dla raportu Lumi z `shamanic_ai.py`: ile niepustych linii monologu Katli widzi Lumi. `null` lub brak klucza = cała treść; integer N > 0 = pierwsze N linii. |
 | `lumi_vieno_lines` | integer lub null | To samo co `lumi_katla_lines`, dla pieśni ech Vieno. |
 

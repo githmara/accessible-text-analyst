@@ -1,0 +1,8 @@
+generate_report:
+  ok_report_generated: '[OK] Pomyślnie wygenerowano dostępny raport HTML: {path}'
+  info_target_lang: '[INFO] Rozpoznany język docelowy tekstu do tagowania: {language}'
+  info_remove_noise_active: '[INFO] Tryb usuwania technicznego szumu (lematyzacja, POS, logi) jest AKTYWNY.'
+
+generate_md:
+  error_file_not_found: '[BŁĄD] Nie znaleziono pliku {path}'
+  ok_markdown_ready: '[OK] Raport Markdown gotowy: {path}'

@@ -153,6 +153,7 @@ Innihald:
   "custom_patterns": [],
   "remove_noise": true,
   "ocr_languages": ["en"],
+  "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null
 }
@@ -164,6 +165,7 @@ Innihald:
 | `custom_patterns`  | string[]        | Valfrjáls listi af reglulegum tjáningum sem eru fjarlægðar úr hráum texta (hlaupandi hausar, fætur, endurtekið kjarnamál). Dæmi: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Skiptir `generate_report.py` á milli lesendaham (`true`, felur Hugging Face/torch hleðslulínur og uppsláttar/POS-töflur) og fullum greiningarham (`false`). |
 | `ocr_languages`    | string[]        | Tungumál fyrir `easyocr` (notuð aðeins þegar PDF er skann eða uppspretta er mynd). Innan eins `easyocr.Reader` má aðeins blanda tungumálum úr sama letri — t.d. `["ru", "en"]` fyrir kýrillíska eða `["en", "pl", "it", "fi", "is"]` fyrir latneska. |
+| `ui_lang`          | string          | Tungumál notendaviðmóts fyrir úttak í skel og `<html lang>` eigind í myndaðri skýrslu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tómur strengur eða óþekktur kóði → fallback `en`. Óháð tungumáli greinda safnsins, sem er greint sjálfvirkt. |
 | `lumi_katla_lines` | heiltala eða null | Valfrjáls skrautmark fyrir lokaskýrslu Lumi úr `shamanic_ai.py`: hve margar ekki-tómar línur einræðu Kötlu Lumi sér. `null` eða vantandi lykill = allt innihald; heiltala N > 0 = fyrstu N línurnar. |
 | `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
 

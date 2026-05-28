@@ -153,6 +153,7 @@ cp config.example.ini  config.ini
   "custom_patterns": [],
   "remove_noise": true,
   "ocr_languages": ["en"],
+  "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null
 }
@@ -164,6 +165,7 @@ cp config.example.ini  config.ini
 | `custom_patterns`  | string[]        | Необязательный список регулярных выражений, удаляемых из сырого текста (живые колонтитулы, повторяющиеся шаблоны). Пример: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Переключает `generate_report.py` между читательским режимом (`true`, скрывает полосы загрузки Hugging Face/torch и таблицы лемматизации/POS) и полным диагностическим режимом (`false`). |
 | `ocr_languages`    | string[]        | Языки для `easyocr` (используются только при сканированных PDF или изображениях). В одном экземпляре `easyocr.Reader` можно смешивать только языки одной письменности — например `["ru", "en"]` для кириллицы или `["en", "pl", "it", "fi", "is"]` для латиницы. |
+| `ui_lang`          | string          | Язык UI для вывода в консоли и атрибута `<html lang>` сгенерированного отчёта (`pl` / `en` / `ru` / `fi` / `is` / `it`). Пустая строка или неизвестный код → fallback `en`. Независим от языка анализируемого корпуса — тот определяется автоматически. |
 | `lumi_katla_lines` | integer или null | Необязательный лимит орнамента для итогового отчёта Лумми из `shamanic_ai.py`: сколько непустых строк монолога Катлы видит Лумми. `null` или отсутствие ключа = вся содержимое; integer N > 0 = первые N строк. |
 | `lumi_vieno_lines` | integer или null | То же, что и `lumi_katla_lines`, но для песни отзвуков Виено. |
 

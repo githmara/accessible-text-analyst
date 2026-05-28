@@ -153,6 +153,7 @@ Contents:
   "custom_patterns": [],
   "remove_noise": true,
   "ocr_languages": ["en"],
+  "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null
 }
@@ -164,6 +165,7 @@ Contents:
 | `custom_patterns`  | string[]        | Optional regular expressions stripped from the raw text (running heads, footers, repetitive boilerplate). Example: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Toggles `generate_report.py` between reader-facing mode (`true`, hides Hugging Face/torch loading bars and lemmatization/POS tables) and full diagnostic mode (`false`). |
 | `ocr_languages`    | string[]        | Languages for `easyocr` (used only when a PDF is a scan or the source is an image). Within a single `easyocr.Reader` you can only mix languages of the same script — e.g. `["ru", "en"]` for Cyrillic or `["en", "pl", "it", "fi", "is"]` for Latin. |
+| `ui_lang`          | string          | UI language for console output and the generated report's `<html lang>` attribute (`pl` / `en` / `ru` / `fi` / `is` / `it`). Empty string or unknown code → falls back to `en`. Independent from the analysed corpus language, which is detected automatically. |
 | `lumi_katla_lines` | integer or null | Optional ornament cap for `shamanic_ai.py`'s Lumi dispatch: how many non-empty lines of Katla's monologue Lumi sees. `null` or missing key = full content; integer N > 0 = first N lines. |
 | `lumi_vieno_lines` | integer or null | Same as `lumi_katla_lines`, but for Vieno's echo chant. |
 

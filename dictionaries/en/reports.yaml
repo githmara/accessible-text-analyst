@@ -1,0 +1,8 @@
+generate_report:
+  ok_report_generated: '[OK] Accessible HTML report generated successfully: {path}'
+  info_target_lang: '[INFO] Detected target language for tagging: {language}'
+  info_remove_noise_active: '[INFO] Technical-noise removal mode (lemmatization, POS, logs) is ACTIVE.'
+
+generate_md:
+  error_file_not_found: '[ERROR] File not found: {path}'
+  ok_markdown_ready: '[OK] Markdown report ready: {path}'

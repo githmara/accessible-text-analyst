@@ -1,4 +1,5 @@
 import csv
+import json
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -69,6 +70,27 @@ def t(lang, key, **kwargs):
     if kwargs and isinstance(value, str):
         return value.format(**kwargs)
     return value
+
+
+def get_ui_lang(default='en'):
+    """Wczytaj `ui_lang` z config.json / config.ini i znormalizuj do kodu ISO 639-1
+    ze zbioru obsługiwanych języków. Pusty string, brak klucza lub nieznany
+    kod -> zwracamy `default` ('en' wg konwencji v1.1).
+
+    Konsumenci: shamanic_pipeline, shamanic_ai, generate_report, generate_md
+    i notebook (cell_corpus) wczytują przez ten helper, żeby UI był spójny."""
+    for name in ('config.json', 'config.ini'):
+        p = Path(name)
+        if not p.is_file():
+            continue
+        try:
+            with open(p, 'r', encoding='utf-8-sig') as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            break
+        raw = (cfg.get('ui_lang') or '').strip().lower()
+        return raw if raw in LANGUAGE_NAMES else default
+    return default
 
 
 _HTML_LANG_RE = re.compile(r'<html\s+lang="([a-z]{2})"', re.IGNORECASE)

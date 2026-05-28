@@ -1,0 +1,8 @@
+generate_report:
+  ok_report_generated: '[OK] Saavutettava HTML-raportti luotu onnistuneesti: {path}'
+  info_target_lang: '[INFO] Tunnistettu kohdekieli tageja varten: {language}'
+  info_remove_noise_active: '[INFO] Teknisen melun poistotila (lemmatisointi, POS, lokit) on AKTIIVINEN.'
+
+generate_md:
+  error_file_not_found: '[VIRHE] Tiedostoa ei löytynyt: {path}'
+  ok_markdown_ready: '[OK] Markdown-raportti valmis: {path}'

@@ -153,6 +153,7 @@ Contenuto:
   "custom_patterns": [],
   "remove_noise": true,
   "ocr_languages": ["en"],
+  "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null
 }
@@ -164,6 +165,7 @@ Contenuto:
 | `custom_patterns`  | string[]        | Lista opzionale di espressioni regolari da rimuovere dal testo grezzo (intestazioni correnti, piè di pagina, contenuti modello ripetitivi). Esempio: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Alterna `generate_report.py` tra modalità lettore (`true`, nasconde le barre di caricamento di Hugging Face/torch e le tabelle di lemmatizzazione/POS) e modalità diagnostica completa (`false`). |
 | `ocr_languages`    | string[]        | Lingue per `easyocr` (usate solo quando un PDF è una scansione o la sorgente è un'immagine). All'interno di una singola `easyocr.Reader` si possono mescolare solo lingue dello stesso alfabeto — ad es. `["ru", "en"]` per il cirillico o `["en", "pl", "it", "fi", "is"]` per il latino. |
+| `ui_lang`          | string          | Lingua dell'interfaccia per l'output della console e l'attributo `<html lang>` del report generato (`pl` / `en` / `ru` / `fi` / `is` / `it`). Stringa vuota o codice sconosciuto → fallback `en`. Indipendente dalla lingua del corpus analizzato, che viene rilevata automaticamente. |
 | `lumi_katla_lines` | integer o null  | Limite di ornamento opzionale per il dispaccio finale di Lumi in `shamanic_ai.py`: quante righe non vuote del monologo di Katla vede Lumi. `null` o chiave mancante = tutto il contenuto; integer N > 0 = prime N righe. |
 | `lumi_vieno_lines` | integer o null  | Come `lumi_katla_lines`, ma per il canto di echi di Vieno. |
 

@@ -6,16 +6,21 @@ from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
+from shamanic_locale import get_ui_lang, t
+
+# Język UI (printy w konsoli) — odczytywany z config.json/ini, fallback 'en'.
+UI_LANG = get_ui_lang()
+
 try:
     import markdownify
 except ImportError:
-    print("[BŁĄD] Brak biblioteki markdownify. Wykonaj: pip install markdownify")
+    print("[ERROR] markdownify library missing. Run: pip install markdownify")
     sys.exit(1)
 
 try:
     from bs4 import BeautifulSoup
 except ImportError:
-    print("[BŁĄD] Brak biblioteki beautifulsoup4. Wykonaj: pip install beautifulsoup4")
+    print("[ERROR] beautifulsoup4 library missing. Run: pip install beautifulsoup4")
     sys.exit(1)
 
 CONFIG_CANDIDATES = ("config.json", "config.ini")
@@ -83,7 +88,7 @@ def convert_to_markdown():
         with open(INPUT_HTML, 'r', encoding='utf-8') as f:
             html_raw = f.read()
     except FileNotFoundError:
-        print(f"[BŁĄD] Nie znaleziono pliku {INPUT_HTML}")
+        print(t(UI_LANG, 'generate_md.error_file_not_found', path=INPUT_HTML))
         return
 
     # 1. Czyszczenie technicznych tagów dostępnościowych
@@ -105,7 +110,7 @@ def convert_to_markdown():
     with open(OUTPUT_MD, 'w', encoding='utf-8') as f:
         f.write(md_content)
 
-    print(f"[OK] Raport Markdown gotowy: {OUTPUT_MD}")
+    print(t(UI_LANG, 'generate_md.ok_markdown_ready', path=OUTPUT_MD))
 
 if __name__ == "__main__":
     convert_to_markdown()

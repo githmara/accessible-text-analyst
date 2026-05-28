@@ -50,3 +50,27 @@ sami:
     --- SCINTILLA DI SAMI: SINTESI ENERGETICA ---
     Istruzioni TTS: leggere con grande entusiasmo, un ampio sorriso e alta dinamica.
 
+pipeline:
+  starting: 'Avvio del condotto sciamanico di elaborazione...'
+  info_detected_lang: '[INFO] Lingua del corpus rilevata: {language}'
+  warn_no_export_dir: '[AVVISO] La directory {path} non esiste.'
+  ok_oracle: '[OK] Oracolo generato: {filename}'
+  ok_lore: '[OK] Frammenti di lore generati: {dirname}/'
+  ok_roots: '[OK] Radici Grezze generate: {filename}'
+  ok_prophecies: '[OK] Profezie generate: {filename}'
+  done: '[COMPLETATO] Tutti gli artefatti audio sono pronti nella cartella audio_scripts.'
+  fatal_error: '[ERRORE CRITICO] {error}'
+
+ai:
+  starting: "Avvio degli incantesimi LLM avanzati con la chiave dall'aldilà..."
+  info_detected_lang: '[INFO] Lingua del corpus rilevata: {language}'
+  llm_katla: '[LLM] Evocazione degli spiriti per il Rito della Trasformazione...'
+  ok_katla: '[OK] Monologo di Katla salvato in: {filename}'
+  llm_vieno: '[LLM] Intreccio di dimensioni per il Rito degli Echi...'
+  ok_vieno: '[OK] Canto di Vieno salvato in: {filename}'
+  llm_lumi: '[LLM] Chiamata di Lumi per il dispaccio finale...'
+  ok_lumi: '[OK] Dispaccio di Lumi salvato in: {filename}'
+  llm_sami: "[LLM] Evocazione della scintilla di Sami per illuminare l'oscurità del Nord..."
+  ok_sami: '[OK] Sintesi scintillante di Sami salvata in: {filename}'
+  done: '[COMPLETATO] Magia eseguita con successo.'
+  fatal_error: '[ERRORE CRITICO] {error}'

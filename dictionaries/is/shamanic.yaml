@@ -50,3 +50,27 @@ sami:
     --- NEISTI SAMI: ORKUMIKIL SAMANTEKT ---
     TTS leiðbeiningar: lesa með miklum eldmóði, breiðu brosi og mikilli dýnamík.
 
+pipeline:
+  starting: 'Ræsi seiðmagnaða úrvinnsluleiðslu...'
+  info_detected_lang: '[UPPLÝSINGAR] Greint tungumál safnsins: {language}'
+  warn_no_export_dir: '[VIÐVÖRUN] Mappa {path} er ekki til.'
+  ok_oracle: '[OK] Orakel búið til: {filename}'
+  ok_lore: '[OK] Sagnabrot búin til: {dirname}/'
+  ok_roots: '[OK] Hráar Rætur búnar til: {filename}'
+  ok_prophecies: '[OK] Spádómar búnir til: {filename}'
+  done: '[LOKIÐ] Öll hljóð-artefaktar eru tilbúin í möppunni audio_scripts.'
+  fatal_error: '[ALVARLEG VILLA] {error}'
+
+ai:
+  starting: 'Ræsi háþróaða LLM-galdra með lykli úr handanheimum...'
+  info_detected_lang: '[UPPLÝSINGAR] Greint tungumál safnsins: {language}'
+  llm_katla: '[LLM] Kalla á andana fyrir Ummyndunarsiðinn...'
+  ok_katla: '[OK] Eintal Kötlu vistað í: {filename}'
+  llm_vieno: '[LLM] Vef víddir fyrir Bergmálssiðinn...'
+  ok_vieno: '[OK] Söngur Vieno vistaður í: {filename}'
+  llm_lumi: '[LLM] Kalla Lumi til lokaskýrslunnar...'
+  ok_lumi: '[OK] Skýrsla Lumi vistuð í: {filename}'
+  llm_sami: '[LLM] Kalla á neista Sami til að lýsa upp myrkrið í Norðri...'
+  ok_sami: '[OK] Glampandi samantekt Sami vistuð í: {filename}'
+  done: '[LOKIÐ] Galdrar framkvæmdir með góðum árangri.'
+  fatal_error: '[ALVARLEG VILLA] {error}'

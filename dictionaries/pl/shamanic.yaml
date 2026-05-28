@@ -50,3 +50,27 @@ sami:
     --- ISKRA SAMI: ENERGETYCZNA SYNTEZA ---
     Instrukcja TTS: czytać z ogromnym entuzjazmem, szerokim uśmiechem i wysoką dynamiką.
 
+pipeline:
+  starting: 'Inicjowanie szamańskiego potoku przetwarzania...'
+  info_detected_lang: '[INFO] Wykryty język korpusu: {language}'
+  warn_no_export_dir: '[OSTRZEŻENIE] Katalog {path} nie istnieje.'
+  ok_oracle: '[OK] Wygenerowano Wyrocznię: {filename}'
+  ok_lore: '[OK] Wygenerowano Znajdźki: {dirname}/'
+  ok_roots: '[OK] Wygenerowano Surowe Rdzenie: {filename}'
+  ok_prophecies: '[OK] Wygenerowano Przepowiednie: {filename}'
+  done: '[ZAKOŃCZONO] Wszystkie artefakty audio są gotowe w folderze audio_scripts.'
+  fatal_error: '[BŁĄD KRYTYCZNY] {error}'
+
+ai:
+  starting: 'Inicjowanie zaawansowanych czarów LLM z kluczem z zaświatów...'
+  info_detected_lang: '[INFO] Wykryty język korpusu: {language}'
+  llm_katla: '[LLM] Wywoływanie duchów dla Rytuału Transformacji...'
+  ok_katla: '[OK] Zapisano monolog Katli w: {filename}'
+  llm_vieno: '[LLM] Splecenie wymiarów dla Rytuału Ech...'
+  ok_vieno: '[OK] Zapisano pieśń Vieno w: {filename}'
+  llm_lumi: '[LLM] Zwołanie Lumi do ostatecznej relacji...'
+  ok_lumi: '[OK] Zapisano meldunek Lumi w: {filename}'
+  llm_sami: '[LLM] Przyzywanie iskry Sami do rozjaśnienia mroku Północy...'
+  ok_sami: '[OK] Zapisano iskrzącą relację Sami w: {filename}'
+  done: '[ZAKOŃCZONO] Magia odprawiona pomyślnie.'
+  fatal_error: '[BŁĄD KRYTYCZNY] {error}'

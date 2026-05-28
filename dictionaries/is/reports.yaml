@@ -1,0 +1,8 @@
+generate_report:
+  ok_report_generated: '[OK] Aðgengileg HTML-skýrsla búin til með góðum árangri: {path}'
+  info_target_lang: '[UPPLÝSINGAR] Greint markmiðsmál fyrir merkingar: {language}'
+  info_remove_noise_active: '[UPPLÝSINGAR] Stilling fyrir að fjarlægja tæknilegan hávaða (lemmun, POS, annálar) er VIRK.'
+
+generate_md:
+  error_file_not_found: '[VILLA] Skrá fannst ekki: {path}'
+  ok_markdown_ready: '[OK] Markdown-skýrsla tilbúin: {path}'

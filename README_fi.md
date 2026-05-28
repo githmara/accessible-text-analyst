@@ -153,6 +153,7 @@ Sisältö:
   "custom_patterns": [],
   "remove_noise": true,
   "ocr_languages": ["en"],
+  "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null
 }
@@ -164,6 +165,7 @@ Sisältö:
 | `custom_patterns`  | string[]        | Valinnainen lista säännöllisistä lausekkeista, jotka poistetaan raakatekstistä (juoksevat otsikot, alatunnisteet, toistuvat kalvotekstit). Esimerkki: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Vaihtaa `generate_report.py`:n lukijaystävällisen tilan (`true`, piilottaa Hugging Face/torch -latauspalkit ja lemmatisointi/POS-taulukot) ja täyden diagnostisen tilan (`false`) välillä. |
 | `ocr_languages`    | string[]        | `easyocr`:n kielet (käytetään vain skannatuissa PDF:issä tai kuvalähteissä). Yhdessä `easyocr.Reader`-instanssissa voi sekoittaa vain saman kirjaimiston kieliä — esim. `["ru", "en"]` kyrilliselle tai `["en", "pl", "it", "fi", "is"]` latinalaiselle. |
+| `ui_lang`          | string          | Käyttöliittymän kieli konsolituloste ja luodun raportin `<html lang>` -attribuutti (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tyhjä merkkijono tai tuntematon koodi → fallback `en`. Riippumaton analysoidun korpuksen kielestä, joka tunnistetaan automaattisesti. |
 | `lumi_katla_lines` | integer tai null | Valinnainen koristerajoitus `shamanic_ai.py`:n Lumin loppuraportille: kuinka monta ei-tyhjää riviä Katlan monologista Lumi näkee. `null` tai puuttuva avain = koko sisältö; integer N > 0 = ensimmäiset N riviä. |
 | `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
 

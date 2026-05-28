@@ -1,0 +1,8 @@
+generate_report:
+  ok_report_generated: '[OK] Доступный HTML-отчёт успешно сгенерирован: {path}'
+  info_target_lang: '[ИНФО] Распознан целевой язык для тегирования: {language}'
+  info_remove_noise_active: '[ИНФО] Режим удаления технического шума (лемматизация, POS, логи) АКТИВЕН.'
+
+generate_md:
+  error_file_not_found: '[ОШИБКА] Файл не найден: {path}'
+  ok_markdown_ready: '[OK] Markdown-отчёт готов: {path}'

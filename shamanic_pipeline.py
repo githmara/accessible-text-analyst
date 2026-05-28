@@ -3,7 +3,12 @@ import csv
 from collections import Counter
 from pathlib import Path
 
-from shamanic_locale import detect_corpus_lang, t
+from shamanic_locale import detect_corpus_lang, get_ui_lang, t
+
+# Język UI (printy w konsoli) — niezależny od języka korpusu. Pobierany
+# z config.json/ini, fallback 'en'. Headery artefaktów (oracle.header itp.)
+# nadal idą po języku korpusu, bo TTS czyta je w mowie korpusu.
+UI_LANG = get_ui_lang()
 
 # ==========================================
 # 1. KONFIGURACJA I LOKALIZACJA PLIKÓW
@@ -27,7 +32,7 @@ def get_export_dir():
 
     export_dir = Path('export_results') / basename
     if not export_dir.exists():
-        print(f"[OSTRZEŻENIE] Katalog {export_dir} nie istnieje.")
+        print(t(UI_LANG, 'pipeline.warn_no_export_dir', path=export_dir))
 
     return export_dir
 
@@ -57,7 +62,7 @@ def ritual_oracle(export_dir, output_dir, lang):
                     out.write(f"{phrase.strip()}...\n[PAUZA 1.5s]\n")
             out.write("\n")
 
-    print(f"[OK] Wygenerowano Wyrocznię: {output_file.name}")
+    print(t(UI_LANG, 'pipeline.ok_oracle', filename=output_file.name))
 
 def ritual_lore_fragments(export_dir, output_dir, lang):
     paragraphs_file = export_dir / 'paragraphs_with_topics.csv'
@@ -79,7 +84,7 @@ def ritual_lore_fragments(export_dir, output_dir, lang):
                 out.write(t(lang, 'lore.header', topic_id=topic_id, para_id=para_id))
                 out.write(text)
 
-    print(f"[OK] Wygenerowano Znajdźki: {lore_dir.name}/")
+    print(t(UI_LANG, 'pipeline.ok_lore', dirname=lore_dir.name))
 
 def ritual_raw_roots(export_dir, output_dir, lang):
     tfidf_file = export_dir / 'keywords_tfidf.csv'
@@ -99,7 +104,7 @@ def ritual_raw_roots(export_dir, output_dir, lang):
             chant = " . ".join(words[i:i + 3])
             out.write(f"{chant.upper()} .\n")
 
-    print(f"[OK] Wygenerowano Surowe Rdzenie: {output_file.name}")
+    print(t(UI_LANG, 'pipeline.ok_roots', filename=output_file.name))
 
 def ritual_etymological_prophesy(export_dir, output_dir, lang):
     entities_file = export_dir / 'entities.csv'
@@ -169,19 +174,19 @@ def ritual_etymological_prophesy(export_dir, output_dir, lang):
             out.write(t(lang, 'prophecy.section', n=i + 1) + '\n')
             out.write(line + '\n\n')
 
-    print(f"[OK] Wygenerowano Przepowiednie: {output_file.name}")
+    print(t(UI_LANG, 'pipeline.ok_prophecies', filename=output_file.name))
 
 # ==========================================
 # 3. GŁÓWNY POTOK
 # ==========================================
 
 if __name__ == "__main__":
-    print("Inicjowanie szamańskiego potoku przetwarzania...")
+    print(t(UI_LANG, 'pipeline.starting'))
 
     try:
         export_directory = get_export_dir()
         corpus_lang = detect_corpus_lang(export_directory)
-        print(f"[INFO] Wykryty język korpusu: {corpus_lang}")
+        print(t(UI_LANG, 'pipeline.info_detected_lang', language=corpus_lang))
 
         output_directory = export_directory / 'audio_scripts'
         output_directory.mkdir(parents=True, exist_ok=True)
@@ -191,7 +196,7 @@ if __name__ == "__main__":
         ritual_raw_roots(export_directory, output_directory, corpus_lang)
         ritual_etymological_prophesy(export_directory, output_directory, corpus_lang)
 
-        print("\n[ZAKOŃCZONO] Wszystkie artefakty audio są gotowe w folderze audio_scripts.")
+        print(f"\n{t(UI_LANG, 'pipeline.done')}")
 
     except Exception as e:
-        print(f"[BŁĄD KRYTYCZNY] {e}")
+        print(t(UI_LANG, 'pipeline.fatal_error', error=e))

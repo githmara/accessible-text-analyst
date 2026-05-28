@@ -50,3 +50,27 @@ sami:
     --- SAMI'S SPARK: ENERGETIC SYNTHESIS ---
     TTS Instruction: read with immense enthusiasm, a wide smile, and high dynamics.
 
+pipeline:
+  starting: 'Initializing the shamanic processing pipeline...'
+  info_detected_lang: '[INFO] Detected corpus language: {language}'
+  warn_no_export_dir: '[WARNING] Directory {path} does not exist.'
+  ok_oracle: '[OK] Oracle generated: {filename}'
+  ok_lore: '[OK] Lore fragments generated: {dirname}/'
+  ok_roots: '[OK] Raw Roots generated: {filename}'
+  ok_prophecies: '[OK] Prophecies generated: {filename}'
+  done: '[DONE] All audio artefacts are ready in the audio_scripts folder.'
+  fatal_error: '[FATAL] {error}'
+
+ai:
+  starting: 'Initializing advanced LLM spells with the key from beyond...'
+  info_detected_lang: '[INFO] Detected corpus language: {language}'
+  llm_katla: '[LLM] Summoning spirits for the Transformation Ritual...'
+  ok_katla: "[OK] Saved Katla's monologue to: {filename}"
+  llm_vieno: '[LLM] Weaving dimensions for the Ritual of Echoes...'
+  ok_vieno: "[OK] Saved Vieno's chant to: {filename}"
+  llm_lumi: '[LLM] Summoning Lumi for the final dispatch...'
+  ok_lumi: "[OK] Saved Lumi's dispatch to: {filename}"
+  llm_sami: "[LLM] Calling Sami's spark to brighten the gloom of the North..."
+  ok_sami: "[OK] Saved Sami's sparkling synthesis to: {filename}"
+  done: '[DONE] Magic performed successfully.'
+  fatal_error: '[FATAL] {error}'

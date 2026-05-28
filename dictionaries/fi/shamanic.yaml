@@ -50,3 +50,27 @@ sami:
     --- SAMIN KIPINÄ: ENERGINEN SYNTEESI ---
     TTS-ohje: lue suurella innolla, leveällä hymyllä ja korkealla dynamiikalla.
 
+pipeline:
+  starting: 'Käynnistetään šamaanista käsittelyputkea...'
+  info_detected_lang: '[INFO] Tunnistettu korpuksen kieli: {language}'
+  warn_no_export_dir: '[VAROITUS] Hakemistoa {path} ei ole olemassa.'
+  ok_oracle: '[OK] Oraakkeli luotu: {filename}'
+  ok_lore: '[OK] Lore-katkelmat luotu: {dirname}/'
+  ok_roots: "[OK] Raa'at Juuret luotu: {filename}"
+  ok_prophecies: '[OK] Ennustukset luotu: {filename}'
+  done: '[VALMIS] Kaikki ääniartefaktit ovat valmiina kansiossa audio_scripts.'
+  fatal_error: '[KRIITTINEN VIRHE] {error}'
+
+ai:
+  starting: 'Käynnistetään edistyneitä LLM-loitsuja tuonpuoleisen avaimella...'
+  info_detected_lang: '[INFO] Tunnistettu korpuksen kieli: {language}'
+  llm_katla: '[LLM] Kutsutaan henkiä Muunnoksen Rituaalia varten...'
+  ok_katla: '[OK] Katlan monologi tallennettu: {filename}'
+  llm_vieno: '[LLM] Kudotaan ulottuvuuksia Kaikujen Rituaalia varten...'
+  ok_vieno: '[OK] Vienon laulu tallennettu: {filename}'
+  llm_lumi: '[LLM] Kutsutaan Lumi lopulliseen raporttiin...'
+  ok_lumi: '[OK] Lumin raportti tallennettu: {filename}'
+  llm_sami: '[LLM] Kutsutaan Samin kipinää valaisemaan Pohjolan synkkyyttä...'
+  ok_sami: '[OK] Samin kipinäinen synteesi tallennettu: {filename}'
+  done: '[VALMIS] Taikuus suoritettu onnistuneesti.'
+  fatal_error: '[KRIITTINEN VIRHE] {error}'

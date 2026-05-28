@@ -6,6 +6,11 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
+from shamanic_locale import get_ui_lang, t
+
+# Język UI (printy w konsoli) — odczytywany z config.json/ini, fallback 'en'.
+UI_LANG = get_ui_lang()
+
 NOTEBOOK_PATH = "accessible_text_analyst.ipynb"
 # Akceptujemy config.json i config.ini (treść zawsze JSON — .ini to tylko
 # kosmetyczne rozszerzenie dla użytkowników nietechnicznych na Windows,
@@ -76,14 +81,14 @@ OUTPUT_HTML = str(PROJECT_DIR / OUTPUT_HTML_NAME)
 try:
     import markdown
 except ImportError:
-    print("[BŁĄD] Brak biblioteki markdown. Wykonaj: pip install markdown")
+    print("[ERROR] markdown library missing. Run: pip install markdown")
     sys.exit(1)
 
 try:
     from lingua import Language, LanguageDetectorBuilder
 except ImportError:
-    print("[BŁĄD] Brak biblioteki lingua-language-detector.")
-    print("       Wykonaj: pip install lingua-language-detector")
+    print("[ERROR] lingua-language-detector library missing.")
+    print("        Run: pip install lingua-language-detector")
     sys.exit(1)
 
 
@@ -821,10 +826,10 @@ def build_accessible_html():
     with open(OUTPUT_HTML, 'w', encoding='utf-8') as f:
         f.write("\n".join(html_content))
 
-    print(f"[OK] Pomyślnie wygenerowano dostępny raport HTML: {OUTPUT_HTML}")
-    print(f"[INFO] Rozpoznany język docelowy tekstu do tagowania: {target_lang}")
+    print(t(UI_LANG, 'generate_report.ok_report_generated', path=OUTPUT_HTML))
+    print(t(UI_LANG, 'generate_report.info_target_lang', language=target_lang))
     if REMOVE_NOISE:
-        print("[INFO] Tryb usuwania technicznego szumu (lematyzacja, POS, logi) jest AKTYWNY.")
+        print(t(UI_LANG, 'generate_report.info_remove_noise_active'))
 
 if __name__ == "__main__":
     build_accessible_html()
