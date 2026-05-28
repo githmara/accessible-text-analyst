@@ -1,7 +1,9 @@
 import os
 import json
 import csv
+import re
 from pathlib import Path
+from urllib.parse import urlparse
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -70,10 +72,27 @@ def _lumi_line_limit(config, key):
     return n if n > 0 else None
 
 
+def _slugify(s, maxlen=80):
+    # Mirror cell_corpus / generate_report._slugify — `.strip("._")` usuwa
+    # końcowe podkreślniki/kropki, więc np. `..._przyklad_.docx` → katalog
+    # `..._przyklad` (a nie `..._przyklad_`).
+    s = re.sub(r"[^\w\-\.]+", "_", s, flags=re.UNICODE).strip("._")
+    return s[:maxlen] or "_default"
+
+
 def get_export_dir():
     config = _load_config()
-    basename = Path(config.get('source_file', '')).stem
-    return Path('export_results') / basename
+    source_path = (config.get('source_file') or '').strip()
+    if not source_path:
+        name = "_default"
+    elif source_path.startswith(("http://", "https://")):
+        u = urlparse(source_path)
+        host = (u.netloc or "url").replace("www.", "")
+        path = u.path.strip("/").replace("/", "_") or "index"
+        name = _slugify(f"{host}_{path}")
+    else:
+        name = _slugify(Path(source_path).stem)
+    return Path('export_results') / name
 
 
 def ritual_entity_transformation(export_dir, output_dir, lang):

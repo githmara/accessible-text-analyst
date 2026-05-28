@@ -4,6 +4,28 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.1.5 — critical fix: shamanic loaders skipped slugification of the project directory
+
+**Severity.** Whenever the source filename's stem ends in `.` or `_` (e.g. `…__przyklad_.docx`), the entire shamanic post-processing layer silently produced zero artefacts while still printing `[ZAKOŃCZONO] Wszystkie artefakty audio są gotowe`. Upgrade is recommended if you run `shamanic_pipeline.py` or `shamanic_ai.py` on a corpus whose filename stem has trailing `.`/`_`. Pure-Python shamanic pipeline only — the notebook, the HTML report, and the NotebookLM Markdown are unaffected.
+
+**The bug.** Five loaders in the codebase resolve `config.source_file` to a project subdirectory under `export_results/`: the notebook's `cell_corpus`, `generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, and `shamanic_ai.py`. The first three all run the stem through `_slugify(s)`, which ends in `.strip("._")` and therefore drops trailing dots/underscores — so a source file named `…__przyklad_.docx` lands in `export_results/…__przyklad/` (no trailing `_`). But `shamanic_pipeline.get_export_dir` and `shamanic_ai.get_export_dir` were using the bare `Path(source).stem` and therefore looked at `export_results/…__przyklad_/` — a directory that does not exist.
+
+The failure was silent because each `ritual_*` function bails out with an early `if not <csv>.exists(): return` instead of raising, and the wrapping `output_directory.mkdir(parents=True, exist_ok=True)` happily created the (wrong) twin directory on the spot. The result: a warning line `[OSTRZEŻENIE] Katalog … nie istnieje`, four no-op rituals, a misleading `[ZAKOŃCZONO]` line, and an empty `audio_scripts/` subfolder in a brand-new bogus project directory. `detect_corpus_lang()` was collateral damage in the same path — without `accessible_text.html` in the (wrong) directory it fell through to the `en` default, so even the language banner was wrong.
+
+**The fix.** Both `shamanic_pipeline.get_export_dir` and `shamanic_ai.get_export_dir` were rewritten to mirror `_resolve_project_dir` from `generate_report.py` verbatim: a local `_slugify(s, maxlen=80)` (`re.sub(r"[^\w\-\.]+", "_", s).strip("._")[:80] or "_default"`), URL handling via `urlparse` (`{host}_{path}`), bare-filename handling via `_slugify(Path(source).stem)`, and the same `_default` fallback for an empty `source_file`. After the fix the four rituals find their CSVs, `detect_corpus_lang()` reads the right `accessible_text.html`, and the artefacts land alongside the notebook's own exports as the layout has always intended.
+
+The convention is now documented in `CLAUDE.md` ("Every loader in the codebase … probes `config.json` first, then `config.ini`") — what was already true for config probing is now also true for project-directory resolution. A shared helper in `shamanic_locale` was considered and rejected: the rule is "five loaders, identical logic" and copy-paste keeps each loader self-contained, which is the same trade-off the project already made for `_locate_config`.
+
+**Out of scope (deferred).** No cleanup of pre-existing bogus twin directories on disk. If you upgraded after hitting this bug on a real corpus, you will see two sibling directories under `export_results/` — one real (`…_przyklad`, with all CSVs and the new audio_scripts) and one empty (`…_przyklad_`, with only an empty audio_scripts). Delete the empty twin manually; the pipeline will not regenerate it.
+
+**Upgrade.** Pull the new tag. No notebook re-execution required — re-run `shamanic_pipeline.py` (and `shamanic_ai.py` if you use it). No config or dependency change.
+
+### Distribution
+
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.1.4 — housekeeping + RAG accessibility + non-Russian-reader documentation
 
 **Theme.** Three loose ends from the v1.1.3 surgical revert: dead-code cleanup, a localized-filename display mismatch in the markdown narrative, and the realisation that v1.1.3 left the interactive Q&A inaccessible for any reader who does not speak Russian. Plus the missing README documentation explaining *why* the report and the new Q&A HTML are not optional but essentially mandatory for non-Russian users.

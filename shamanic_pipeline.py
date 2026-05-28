@@ -1,7 +1,9 @@
 import json
 import csv
+import re
 from collections import Counter
 from pathlib import Path
+from urllib.parse import urlparse
 
 from shamanic_locale import detect_corpus_lang, get_ui_lang, t
 
@@ -22,15 +24,31 @@ def _locate_config():
     return 'config.json'
 
 
+def _slugify(s, maxlen=80):
+    # Mirror cell_corpus / generate_report._slugify — `.strip("._")` usuwa
+    # końcowe podkreślniki/kropki, więc np. `..._przyklad_.docx` → katalog
+    # `..._przyklad` (a nie `..._przyklad_`).
+    s = re.sub(r"[^\w\-\.]+", "_", s, flags=re.UNICODE).strip("._")
+    return s[:maxlen] or "_default"
+
+
 def get_export_dir():
     # Używamy utf-8-sig by uniknąć problemów z BOM
     with open(_locate_config(), 'r', encoding='utf-8-sig') as f:
         config = json.load(f)
 
-    source_path = config.get('source_file', '')
-    basename = Path(source_path).stem
+    source_path = (config.get('source_file') or '').strip()
+    if not source_path:
+        name = "_default"
+    elif source_path.startswith(("http://", "https://")):
+        u = urlparse(source_path)
+        host = (u.netloc or "url").replace("www.", "")
+        path = u.path.strip("/").replace("/", "_") or "index"
+        name = _slugify(f"{host}_{path}")
+    else:
+        name = _slugify(Path(source_path).stem)
 
-    export_dir = Path('export_results') / basename
+    export_dir = Path('export_results') / name
     if not export_dir.exists():
         print(t(UI_LANG, 'pipeline.warn_no_export_dir', path=export_dir))
 
