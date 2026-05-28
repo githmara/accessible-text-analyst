@@ -1,6 +1,9 @@
 import csv
 import re
+from functools import lru_cache
 from pathlib import Path
+
+import yaml
 
 # Wsparcie dla języków zgodnie z notebookiem (cell_langdet -> SUPPORTED_LANGS).
 LANGUAGE_NAMES = {
@@ -12,248 +15,57 @@ LANGUAGE_NAMES = {
     'it': 'Italian',
 }
 
-# Bundle stringów dla artefaktów wyjściowych. Klucze są płaskie ('ritual.element').
-# Wartości:
-#   - stringi z polami {placeholder} formatuje się przez t(lang, key, **kwargs).
-#   - 'prophecy.templates' to lista 4 wzorców (round-robin po akapitach).
+# Katalog z YAML-owymi słownikami i18n. Struktura: dictionaries/{lang}/*.yaml.
+# Każdy plik to gniazdowany mapping; klucze hierarchiczne (np. prophecy.fallback.loc)
+# są spłaszczane przy ładowaniu — dzięki temu zachowujemy istniejące API t().
 #
 # Uwaga gramatyczna: dla fi/is encje z entities.csv są już w deklinacji
 # (Euroopassa, Yhdysvaltoihin, staðnum...). Bez prawdziwej morfologii nie da się
 # ich odmienić z powrotem do mianownika, więc szablony fi/is używają prefiksów
 # nominalnych (paikan {loc}, staðnum {loc}, hahmon {per} kautta itp.) —
 # brzmi to jak nagłówek mantry, ale jest gramatycznie bezpieczne.
-STRINGS = {
-    'pl': {
-        'oracle.header': (
-            '--- WYROCZNIA STRUMIENIA ŚWIADOMOŚCI ---\n'
-            'Instrukcja TTS: czytać powoli, z narastającym echem.\n\n'
-        ),
-        'roots.header': (
-            '--- RYTUAŁ SUROWYCH RDZENI ---\n'
-            'Instrukcja TTS: odczyt mechaniczny, nieludzki, pozbawiony emocji.\n\n'
-        ),
-        'lore.header': (
-            '// SYGNATURA ZNALEZISKA: TOPIC-{topic_id} / FRAGMENT-{para_id} //\n'
-            '// STATUS: USZKODZONY ZAPIS RADIOWY //\n\n'
-        ),
-        'prophecy.header': (
-            '--- KSIĘGA PRZEPOWIEDNI Z PYŁU ---\n'
-            'Instrukcja TTS: czytać dostojnie, z pauzami przed dwukropkami.\n\n'
-        ),
-        'prophecy.section': '[PRZEPOWIEDNIA {n}]',
-        'prophecy.templates': [
-            'Z pyłu {loc} wstanie {per}, aby {sentence}',
-            'Gdy księżyc krwi zawiśnie nad {loc}, {per} wyrzeknie: {sentence}',
-            'Z trzewi {org} wyszepcze {per} ku {loc}: {sentence}',
-            'Pradawny głos {loc} przemówi przez {per}: {sentence}',
-        ],
-        'prophecy.fallback.loc': 'bezimiennej krainy',
-        'prophecy.fallback.per': 'Bezimienny',
-        'prophecy.fallback.org': 'zapomnianego zakonu',
-        'katla.header': '--- MONOLOG ZAMROŻONYCH BYTÓW (GŁOS: KATLA) ---\n\n',
-        'vieno.header': '--- SZAMAŃSKA INWOKACJA ECH (GŁOS: VIENO) ---\n\n',
-        'lumi.header': '--- MELDUNEK OSTATECZNY Z MROŹNEJ PÓŁNOCY (GŁOS: LUMI) ---\n\n',
-        'lumi.fallback.katla': '(milczenie — Katla jeszcze nie przemówiła)',
-        'lumi.fallback.vieno': '(cisza — pieśń Vieno nie dotarła)',
-        'sami.header': (
-            '--- ISKRA SAMI: ENERGETYCZNA SYNTEZA ---\n'
-            'Instrukcja TTS: czytać z ogromnym entuzjazmem, szerokim uśmiechem i wysoką dynamiką.\n\n'
-        ),
-    },
-    'en': {
-        'oracle.header': (
-            '--- ORACLE OF THE STREAM OF CONSCIOUSNESS ---\n'
-            'TTS instruction: read slowly, with a rising echo.\n\n'
-        ),
-        'roots.header': (
-            '--- RITUAL OF THE RAW ROOTS ---\n'
-            'TTS instruction: mechanical reading, inhuman, devoid of emotion.\n\n'
-        ),
-        'lore.header': (
-            '// FIND SIGNATURE: TOPIC-{topic_id} / FRAGMENT-{para_id} //\n'
-            '// STATUS: CORRUPTED RADIO LOG //\n\n'
-        ),
-        'prophecy.header': (
-            '--- BOOK OF PROPHECIES FROM THE DUST ---\n'
-            'TTS instruction: read solemnly, with pauses before the colons.\n\n'
-        ),
-        'prophecy.section': '[PROPHECY {n}]',
-        'prophecy.templates': [
-            'From the dust of {loc} shall rise {per}, to {sentence}',
-            'When the blood moon hangs over {loc}, {per} shall utter: {sentence}',
-            'From the entrails of {org} {per} shall whisper toward {loc}: {sentence}',
-            'The ancient voice of {loc} shall speak through {per}: {sentence}',
-        ],
-        'prophecy.fallback.loc': 'a nameless land',
-        'prophecy.fallback.per': 'the Nameless One',
-        'prophecy.fallback.org': 'a forgotten order',
-        'katla.header': '--- MONOLOGUE OF THE FROZEN BEINGS (VOICE: KATLA) ---\n\n',
-        'vieno.header': '--- SHAMANIC INVOCATION OF ECHOES (VOICE: VIENO) ---\n\n',
-        'lumi.header': '--- FINAL DISPATCH FROM THE FROZEN NORTH (VOICE: LUMI) ---\n\n',
-        'lumi.fallback.katla': '(silence — Katla has not yet spoken)',
-        'lumi.fallback.vieno': '(hush — Vieno\'s song has not arrived)',
-        'sami.header': (
-            '--- SAMI\'S SPARK: ENERGETIC SYNTHESIS ---\n'
-            'TTS Instruction: read with immense enthusiasm, a wide smile, and high dynamics.\n\n'
-        ),
-    },
-    'ru': {
-        'oracle.header': (
-            '--- ОРАКУЛ ПОТОКА СОЗНАНИЯ ---\n'
-            'Инструкция TTS: читать медленно, с нарастающим эхом.\n\n'
-        ),
-        'roots.header': (
-            '--- РИТУАЛ СЫРЫХ КОРНЕЙ ---\n'
-            'Инструкция TTS: чтение механическое, нечеловеческое, лишённое эмоций.\n\n'
-        ),
-        'lore.header': (
-            '// СИГНАТУРА НАХОДКИ: TOPIC-{topic_id} / FRAGMENT-{para_id} //\n'
-            '// СТАТУС: ПОВРЕЖДЁННАЯ РАДИОЗАПИСЬ //\n\n'
-        ),
-        'prophecy.header': (
-            '--- КНИГА ПРОРОЧЕСТВ ИЗ ПРАХА ---\n'
-            'Инструкция TTS: читать торжественно, с паузами перед двоеточиями.\n\n'
-        ),
-        'prophecy.section': '[ПРОРОЧЕСТВО {n}]',
-        'prophecy.templates': [
-            'Из праха {loc} восстанет {per}, дабы {sentence}',
-            'Когда кровавая луна повиснет над {loc}, {per} изречёт: {sentence}',
-            'Из чрева {org} прошепчет {per} к {loc}: {sentence}',
-            'Древний голос {loc} проговорит через {per}: {sentence}',
-        ],
-        'prophecy.fallback.loc': 'безымянной земли',
-        'prophecy.fallback.per': 'Безымянный',
-        'prophecy.fallback.org': 'забытого ордена',
-        'katla.header': '--- МОНОЛОГ ЗАМЁРЗШИХ СУЩНОСТЕЙ (ГОЛОС: КАТЛА) ---\n\n',
-        'vieno.header': '--- ШАМАНСКАЯ ИНВОКАЦИЯ ОТЗВУКОВ (ГОЛОС: ВИЕНО) ---\n\n',
-        'lumi.header': '--- ПОСЛЕДНИЙ ОТЧЁТ С МОРОЗНОГО СЕВЕРА (ГОЛОС: ЛУМИ) ---\n\n',
-        'lumi.fallback.katla': '(молчание — Катла ещё не заговорила)',
-        'lumi.fallback.vieno': '(тишина — песнь Виено не дошла)',
-        'sami.header': (
-            '--- ИСКРА САМИ: ЭНЕРГИЧНЫЙ СИНТЕЗ ---\n'
-            'Инструкция TTS: читать с огромным энтузиазмом, широкой улыбкой и высокой динамикой.\n\n'
-        ),
-    },
-    'fi': {
-        'oracle.header': (
-            '--- TIETOISUUDEN VIRRAN ORAAKKELI ---\n'
-            'TTS-ohje: lue hitaasti, kasvavalla kaiulla.\n\n'
-        ),
-        'roots.header': (
-            '--- RAAKOJEN JUURTEN RITUAALI ---\n'
-            'TTS-ohje: mekaaninen luku, epäinhimillinen, tunteeton.\n\n'
-        ),
-        'lore.header': (
-            '// LÖYDÖN TUNNUS: TOPIC-{topic_id} / FRAGMENT-{para_id} //\n'
-            '// TILA: VAURIOITUNUT RADIOTALLENNE //\n\n'
-        ),
-        'prophecy.header': (
-            '--- TOMUSTA NOUSEVAN ENNUSTUKSEN KIRJA ---\n'
-            'TTS-ohje: lue arvokkaasti, tauoilla ennen kaksoispisteitä.\n\n'
-        ),
-        'prophecy.section': '[ENNUSTUS {n}]',
-        'prophecy.templates': [
-            'Tomusta — {loc} — nousee {per}, joka: {sentence}',
-            'Kun veren kuu riippuu paikan {loc} yllä, {per} lausuu: {sentence}',
-            'Yhteisön {org} sisältä kuiskaa {per} kohti paikkaa {loc}: {sentence}',
-            'Muinainen ääni — {loc} — puhuu hahmon {per} kautta: {sentence}',
-        ],
-        'prophecy.fallback.loc': 'nimetön maa',
-        'prophecy.fallback.per': 'Nimetön',
-        'prophecy.fallback.org': 'unohdettu veljeskunta',
-        'katla.header': '--- JÄÄTYNEIDEN OLENTOJEN MONOLOGI (ÄÄNI: KATLA) ---\n\n',
-        'vieno.header': '--- KAIKUJEN SAMAANIKUTSU (ÄÄNI: VIENO) ---\n\n',
-        'lumi.header': '--- VIIMEINEN RAPORTTI KYLMÄSTÄ POHJOLASTA (ÄÄNI: LUMI) ---\n\n',
-        'lumi.fallback.katla': '(hiljaisuus — Katla ei ole vielä puhunut)',
-        'lumi.fallback.vieno': '(vaitiolo — Vienon laulu ei ole saapunut)',
-        'sami.header': (
-            '--- SAMIN KIPINÄ: ENERGINEN SYNTEESI ---\n'
-            'TTS-ohje: lue suurella innolla, leveällä hymyllä ja korkealla dynamiikalla.\n\n'
-        ),
-    },
-    'is': {
-        'oracle.header': (
-            '--- ORAKEL VITUNDARSTREYMIS ---\n'
-            'TTS-leiðbeining: lestu hægt, með vaxandi bergmáli.\n\n'
-        ),
-        'roots.header': (
-            '--- RITÚAL HRÁU RÓTANNA ---\n'
-            'TTS-leiðbeining: vélrænn lestur, ómannlegur, tilfinningalaus.\n\n'
-        ),
-        'lore.header': (
-            '// FUNDARSKILRÍKI: TOPIC-{topic_id} / FRAGMENT-{para_id} //\n'
-            '// STAÐA: SKEMMD ÚTVARPSSKRÁ //\n\n'
-        ),
-        'prophecy.header': (
-            '--- BÓK SPÁDÓMA ÚR RYKINU ---\n'
-            'TTS-leiðbeining: lestu með reisn, með pásu fyrir tvípunkta.\n\n'
-        ),
-        'prophecy.section': '[SPÁDÓMUR {n}]',
-        'prophecy.templates': [
-            'Úr ryki — {loc} — rís {per}, til þess að: {sentence}',
-            'Þegar blóðtunglið hangir yfir staðnum {loc}, mun {per} mæla: {sentence}',
-            'Úr innyflum reglunnar {org} hvíslar {per} til staðarins {loc}: {sentence}',
-            'Forn rödd — {loc} — talar gegnum {per}: {sentence}',
-        ],
-        'prophecy.fallback.loc': 'ónefnt land',
-        'prophecy.fallback.per': 'hinn nafnlausi',
-        'prophecy.fallback.org': 'gleymd regla',
-        'katla.header': '--- EINTAL FROSINNA VERA (RÖDD: KATLA) ---\n\n',
-        'vieno.header': '--- SEIÐKALL BERGMÁLA (RÖDD: VIENO) ---\n\n',
-        'lumi.header': '--- LOKASKÝRSLA FRÁ FROSNU NORÐRI (RÖDD: LUMI) ---\n\n',
-        'lumi.fallback.katla': '(þögn — Katla hefur ekki enn talað)',
-        'lumi.fallback.vieno': '(kyrrð — söngur Vieno hefur ekki borist)',
-        'sami.header': (
-            '--- NEISTI SAMI: ORKUMIKIL SAMANTEKT ---\n'
-            'TTS leiðbeiningar: lesa með miklum eldmóði, breiðu brosi og mikilli dýnamík.\n\n'
-        ),
-    },
-    'it': {
-        'oracle.header': (
-            '--- ORACOLO DEL FLUSSO DI COSCIENZA ---\n'
-            'Istruzione TTS: leggere lentamente, con eco crescente.\n\n'
-        ),
-        'roots.header': (
-            '--- RITO DELLE RADICI GREZZE ---\n'
-            'Istruzione TTS: lettura meccanica, inumana, priva di emozioni.\n\n'
-        ),
-        'lore.header': (
-            '// FIRMA DEL RITROVAMENTO: TOPIC-{topic_id} / FRAGMENT-{para_id} //\n'
-            '// STATO: REGISTRAZIONE RADIO DANNEGGIATA //\n\n'
-        ),
-        'prophecy.header': (
-            '--- LIBRO DELLE PROFEZIE DALLA POLVERE ---\n'
-            'Istruzione TTS: leggere solennemente, con pause prima dei due punti.\n\n'
-        ),
-        'prophecy.section': '[PROFEZIA {n}]',
-        'prophecy.templates': [
-            'Dalla polvere di {loc} sorgerà {per}, per {sentence}',
-            'Quando la luna di sangue penderà su {loc}, {per} pronuncerà: {sentence}',
-            'Dalle viscere di {org} sussurrerà {per} verso {loc}: {sentence}',
-            "L'antica voce di {loc} parlerà attraverso {per}: {sentence}",
-        ],
-        'prophecy.fallback.loc': 'una terra senza nome',
-        'prophecy.fallback.per': 'il Senza Nome',
-        'prophecy.fallback.org': 'un ordine dimenticato',
-        'katla.header': '--- MONOLOGO DEGLI ESSERI GHIACCIATI (VOCE: KATLA) ---\n\n',
-        'vieno.header': '--- INVOCAZIONE SCIAMANICA DEGLI ECHI (VOCE: VIENO) ---\n\n',
-        'lumi.header': '--- DISPACCIO FINALE DAL NORD GHIACCIATO (VOCE: LUMI) ---\n\n',
-        'lumi.fallback.katla': '(silenzio — Katla non ha ancora parlato)',
-        'lumi.fallback.vieno': '(quiete — il canto di Vieno non è giunto)',
-        'sami.header': (
-            '--- SCINTILLA DI SAMI: SINTESI ENERGETICA ---\n'
-            'Istruzioni TTS: leggere con grande entusiasmo, un ampio sorriso e alta dinamica.\n\n'
-        ),
-    },
-}
+_DICT_ROOT = Path(__file__).resolve().parent / 'dictionaries'
+
+
+def _flatten(node, prefix=''):
+    """Spłaszcz zagnieżdżone mappingi do kluczy 'a.b.c'.
+    Listy i skalary pozostają jako wartości — nie schodzimy w głąb list."""
+    if not isinstance(node, dict):
+        return {prefix: node}
+    out = {}
+    for k, v in node.items():
+        key = f'{prefix}.{k}' if prefix else str(k)
+        if isinstance(v, dict):
+            out.update(_flatten(v, key))
+        else:
+            out[key] = v
+    return out
+
+
+@lru_cache(maxsize=8)
+def _load_bundle(lang):
+    """Załaduj wszystkie YAML-e z dictionaries/{lang}/ i zwróć spłaszczony bundle.
+    Brak katalogu = pusty bundle (t() spróbuje fallbacku na 'en')."""
+    lang_dir = _DICT_ROOT / lang
+    if not lang_dir.is_dir():
+        return {}
+    bundle = {}
+    for yaml_path in sorted(lang_dir.glob('*.yaml')):
+        try:
+            with open(yaml_path, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        bundle.update(_flatten(data))
+    return bundle
 
 
 def t(lang, key, **kwargs):
     """Pobierz string z bundle'a. Fallback przez en jeśli klucza brak w lang."""
-    bundle = STRINGS.get(lang) or STRINGS['en']
-    value = bundle.get(key)
+    bundle = _load_bundle(lang)
+    value = bundle.get(key) if bundle else None
     if value is None:
-        value = STRINGS['en'].get(key, '')
+        value = _load_bundle('en').get(key, '')
     if kwargs and isinstance(value, str):
         return value.format(**kwargs)
     return value

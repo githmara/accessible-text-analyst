@@ -1,0 +1,52 @@
+oracle:
+  header: |+
+    --- ORACOLO DEL FLUSSO DI COSCIENZA ---
+    Istruzione TTS: leggere lentamente, con eco crescente.
+
+roots:
+  header: |+
+    --- RITO DELLE RADICI GREZZE ---
+    Istruzione TTS: lettura meccanica, inumana, priva di emozioni.
+
+lore:
+  header: |+
+    // FIRMA DEL RITROVAMENTO: TOPIC-{topic_id} / FRAGMENT-{para_id} //
+    // STATO: REGISTRAZIONE RADIO DANNEGGIATA //
+
+prophecy:
+  header: |+
+    --- LIBRO DELLE PROFEZIE DALLA POLVERE ---
+    Istruzione TTS: leggere solennemente, con pause prima dei due punti.
+
+  section: '[PROFEZIA {n}]'
+  templates:
+    - 'Dalla polvere di {loc} sorgerà {per}, per {sentence}'
+    - 'Quando la luna di sangue penderà su {loc}, {per} pronuncerà: {sentence}'
+    - 'Dalle viscere di {org} sussurrerà {per} verso {loc}: {sentence}'
+    - "L'antica voce di {loc} parlerà attraverso {per}: {sentence}"
+  fallback:
+    loc: 'una terra senza nome'
+    per: 'il Senza Nome'
+    org: 'un ordine dimenticato'
+
+katla:
+  header: |+
+    --- MONOLOGO DEGLI ESSERI GHIACCIATI (VOCE: KATLA) ---
+
+vieno:
+  header: |+
+    --- INVOCAZIONE SCIAMANICA DEGLI ECHI (VOCE: VIENO) ---
+
+lumi:
+  header: |+
+    --- DISPACCIO FINALE DAL NORD GHIACCIATO (VOCE: LUMI) ---
+
+  fallback:
+    katla: '(silenzio — Katla non ha ancora parlato)'
+    vieno: '(quiete — il canto di Vieno non è giunto)'
+
+sami:
+  header: |+
+    --- SCINTILLA DI SAMI: SINTESI ENERGETICA ---
+    Istruzioni TTS: leggere con grande entusiasmo, un ampio sorriso e alta dinamica.
+

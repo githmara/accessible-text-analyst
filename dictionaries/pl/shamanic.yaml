@@ -1,0 +1,52 @@
+oracle:
+  header: |+
+    --- WYROCZNIA STRUMIENIA ŚWIADOMOŚCI ---
+    Instrukcja TTS: czytać powoli, z narastającym echem.
+
+roots:
+  header: |+
+    --- RYTUAŁ SUROWYCH RDZENI ---
+    Instrukcja TTS: odczyt mechaniczny, nieludzki, pozbawiony emocji.
+
+lore:
+  header: |+
+    // SYGNATURA ZNALEZISKA: TOPIC-{topic_id} / FRAGMENT-{para_id} //
+    // STATUS: USZKODZONY ZAPIS RADIOWY //
+
+prophecy:
+  header: |+
+    --- KSIĘGA PRZEPOWIEDNI Z PYŁU ---
+    Instrukcja TTS: czytać dostojnie, z pauzami przed dwukropkami.
+
+  section: '[PRZEPOWIEDNIA {n}]'
+  templates:
+    - 'Z pyłu {loc} wstanie {per}, aby {sentence}'
+    - 'Gdy księżyc krwi zawiśnie nad {loc}, {per} wyrzeknie: {sentence}'
+    - 'Z trzewi {org} wyszepcze {per} ku {loc}: {sentence}'
+    - 'Pradawny głos {loc} przemówi przez {per}: {sentence}'
+  fallback:
+    loc: 'bezimiennej krainy'
+    per: 'Bezimienny'
+    org: 'zapomnianego zakonu'
+
+katla:
+  header: |+
+    --- MONOLOG ZAMROŻONYCH BYTÓW (GŁOS: KATLA) ---
+
+vieno:
+  header: |+
+    --- SZAMAŃSKA INWOKACJA ECH (GŁOS: VIENO) ---
+
+lumi:
+  header: |+
+    --- MELDUNEK OSTATECZNY Z MROŹNEJ PÓŁNOCY (GŁOS: LUMI) ---
+
+  fallback:
+    katla: '(milczenie — Katla jeszcze nie przemówiła)'
+    vieno: '(cisza — pieśń Vieno nie dotarła)'
+
+sami:
+  header: |+
+    --- ISKRA SAMI: ENERGETYCZNA SYNTEZA ---
+    Instrukcja TTS: czytać z ogromnym entuzjazmem, szerokim uśmiechem i wysoką dynamiką.
+

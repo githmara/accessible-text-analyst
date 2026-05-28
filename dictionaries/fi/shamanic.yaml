@@ -1,0 +1,52 @@
+oracle:
+  header: |+
+    --- TIETOISUUDEN VIRRAN ORAAKKELI ---
+    TTS-ohje: lue hitaasti, kasvavalla kaiulla.
+
+roots:
+  header: |+
+    --- RAAKOJEN JUURTEN RITUAALI ---
+    TTS-ohje: mekaaninen luku, epäinhimillinen, tunteeton.
+
+lore:
+  header: |+
+    // LÖYDÖN TUNNUS: TOPIC-{topic_id} / FRAGMENT-{para_id} //
+    // TILA: VAURIOITUNUT RADIOTALLENNE //
+
+prophecy:
+  header: |+
+    --- TOMUSTA NOUSEVAN ENNUSTUKSEN KIRJA ---
+    TTS-ohje: lue arvokkaasti, tauoilla ennen kaksoispisteitä.
+
+  section: '[ENNUSTUS {n}]'
+  templates:
+    - 'Tomusta — {loc} — nousee {per}, joka: {sentence}'
+    - 'Kun veren kuu riippuu paikan {loc} yllä, {per} lausuu: {sentence}'
+    - 'Yhteisön {org} sisältä kuiskaa {per} kohti paikkaa {loc}: {sentence}'
+    - 'Muinainen ääni — {loc} — puhuu hahmon {per} kautta: {sentence}'
+  fallback:
+    loc: 'nimetön maa'
+    per: 'Nimetön'
+    org: 'unohdettu veljeskunta'
+
+katla:
+  header: |+
+    --- JÄÄTYNEIDEN OLENTOJEN MONOLOGI (ÄÄNI: KATLA) ---
+
+vieno:
+  header: |+
+    --- KAIKUJEN SAMAANIKUTSU (ÄÄNI: VIENO) ---
+
+lumi:
+  header: |+
+    --- VIIMEINEN RAPORTTI KYLMÄSTÄ POHJOLASTA (ÄÄNI: LUMI) ---
+
+  fallback:
+    katla: '(hiljaisuus — Katla ei ole vielä puhunut)'
+    vieno: '(vaitiolo — Vienon laulu ei ole saapunut)'
+
+sami:
+  header: |+
+    --- SAMIN KIPINÄ: ENERGINEN SYNTEESI ---
+    TTS-ohje: lue suurella innolla, leveällä hymyllä ja korkealla dynamiikalla.
+

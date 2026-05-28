@@ -1,0 +1,52 @@
+oracle:
+  header: |+
+    --- ORACLE OF THE STREAM OF CONSCIOUSNESS ---
+    TTS instruction: read slowly, with a rising echo.
+
+roots:
+  header: |+
+    --- RITUAL OF THE RAW ROOTS ---
+    TTS instruction: mechanical reading, inhuman, devoid of emotion.
+
+lore:
+  header: |+
+    // FIND SIGNATURE: TOPIC-{topic_id} / FRAGMENT-{para_id} //
+    // STATUS: CORRUPTED RADIO LOG //
+
+prophecy:
+  header: |+
+    --- BOOK OF PROPHECIES FROM THE DUST ---
+    TTS instruction: read solemnly, with pauses before the colons.
+
+  section: '[PROPHECY {n}]'
+  templates:
+    - 'From the dust of {loc} shall rise {per}, to {sentence}'
+    - 'When the blood moon hangs over {loc}, {per} shall utter: {sentence}'
+    - 'From the entrails of {org} {per} shall whisper toward {loc}: {sentence}'
+    - 'The ancient voice of {loc} shall speak through {per}: {sentence}'
+  fallback:
+    loc: 'a nameless land'
+    per: 'the Nameless One'
+    org: 'a forgotten order'
+
+katla:
+  header: |+
+    --- MONOLOGUE OF THE FROZEN BEINGS (VOICE: KATLA) ---
+
+vieno:
+  header: |+
+    --- SHAMANIC INVOCATION OF ECHOES (VOICE: VIENO) ---
+
+lumi:
+  header: |+
+    --- FINAL DISPATCH FROM THE FROZEN NORTH (VOICE: LUMI) ---
+
+  fallback:
+    katla: '(silence — Katla has not yet spoken)'
+    vieno: "(hush — Vieno's song has not arrived)"
+
+sami:
+  header: |+
+    --- SAMI'S SPARK: ENERGETIC SYNTHESIS ---
+    TTS Instruction: read with immense enthusiasm, a wide smile, and high dynamics.
+

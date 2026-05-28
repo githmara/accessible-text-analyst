@@ -1,6 +1,7 @@
 # Środowisko i narzędzia
 ipykernel
 nbstripout
+pyyaml
 
 # Parsowanie plików i ekstrakcja tekstu
 pdfplumber

@@ -1,0 +1,52 @@
+oracle:
+  header: |+
+    --- ORAKEL VITUNDARSTREYMIS ---
+    TTS-leiðbeining: lestu hægt, með vaxandi bergmáli.
+
+roots:
+  header: |+
+    --- RITÚAL HRÁU RÓTANNA ---
+    TTS-leiðbeining: vélrænn lestur, ómannlegur, tilfinningalaus.
+
+lore:
+  header: |+
+    // FUNDARSKILRÍKI: TOPIC-{topic_id} / FRAGMENT-{para_id} //
+    // STAÐA: SKEMMD ÚTVARPSSKRÁ //
+
+prophecy:
+  header: |+
+    --- BÓK SPÁDÓMA ÚR RYKINU ---
+    TTS-leiðbeining: lestu með reisn, með pásu fyrir tvípunkta.
+
+  section: '[SPÁDÓMUR {n}]'
+  templates:
+    - 'Úr ryki — {loc} — rís {per}, til þess að: {sentence}'
+    - 'Þegar blóðtunglið hangir yfir staðnum {loc}, mun {per} mæla: {sentence}'
+    - 'Úr innyflum reglunnar {org} hvíslar {per} til staðarins {loc}: {sentence}'
+    - 'Forn rödd — {loc} — talar gegnum {per}: {sentence}'
+  fallback:
+    loc: 'ónefnt land'
+    per: 'hinn nafnlausi'
+    org: 'gleymd regla'
+
+katla:
+  header: |+
+    --- EINTAL FROSINNA VERA (RÖDD: KATLA) ---
+
+vieno:
+  header: |+
+    --- SEIÐKALL BERGMÁLA (RÖDD: VIENO) ---
+
+lumi:
+  header: |+
+    --- LOKASKÝRSLA FRÁ FROSNU NORÐRI (RÖDD: LUMI) ---
+
+  fallback:
+    katla: '(þögn — Katla hefur ekki enn talað)'
+    vieno: '(kyrrð — söngur Vieno hefur ekki borist)'
+
+sami:
+  header: |+
+    --- NEISTI SAMI: ORKUMIKIL SAMANTEKT ---
+    TTS leiðbeiningar: lesa með miklum eldmóði, breiðu brosi og mikilli dýnamík.
+
