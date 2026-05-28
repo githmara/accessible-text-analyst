@@ -4,6 +4,46 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.1.3 — surgical revert: notebook narrative + HTML report back to v1.0 behaviour
+
+**Why.** v1.1's per-fragment language-tagging strategy turned out not to deliver in practice. Modern browsers (Chrome, Edge, Firefox) do not switch TTS voice on inline `<span lang="...">` boundaries with the consistency the design assumed, and they only offer the "translate this page?" prompt based on the document-level `<html lang>` — which under v1.1 was `UI_LANG`, so a Polish reader who actually got Russian fallback text in the narrative was never offered a translation. v1.1.2's explicit per-div `lang` attribute did not fix the underlying browser behaviour either. Different readers prefer different browsers and asking everyone to switch browsers just for one report is a non-starter.
+
+The pragmatic choice: hand the document back to the browser as a single-language Russian artefact, let the browser's built-in "translate this page?" pop up for non-Russian readers, and accept that auto-translation is imperfect rather than ship a tagging scheme the runtime ignores.
+
+**What was reverted.** `accessible_text_analyst.ipynb` and `generate_report.py` are restored to the state at commit `239e529` (v1.1 stage 3a) — i.e. the last commit before notebook narrative was rerouted through `_t(UI_LANG, ...)` and before the HTML report was reframed around `UI_LANG`. Concretely:
+
+- Notebook section headers and the final `cell_summary` report go back to hardcoded Russian.
+- `cell_qa_rag`'s greeting goes back to hardcoded Russian.
+- `generate_report.py` emits `<html lang="ru">` and `<title>Отчёт: Анализ текста</title>` again; the narrative.yaml swap layer and `NARRATIVE_KEYS` mapping are gone; the per-`<div>` `lang` attribute on `markdown-cell` and `output-box` containers (v1.1.2) is gone.
+- `tag_target_language` (corpus-language `<span lang="pl/fi/...">`) and `EN_HARDCODE_PATTERNS` (technical `<span lang="en">`) are kept — they remain useful inside a Russian-default document for the few fragments the browser auto-translator will mishandle.
+
+**What was preserved.** One feature added after v1.0 that survives the revert:
+
+- **Localized theses output filename** (`tezy.txt` / `theses.txt` / `тезисы.txt` / `teesit.txt` / `tilgátur.txt` / `tesi.txt`). Without it, a non-Russian reader navigating the export folder in their file manager hears either total silence (if the SAPI Russian voice is missing) or a mistranslation. The four `t(LANG, "theses.filename")` callsites in `cell_theses`, `cell_export`, and `cell_summary` (guarded) stay.
+
+**Latent bug fix that came out of the revert.** v1.0 / 239e529 already had the `for t in ...:` shadowing pattern that v1.1.1 retroactively patched, but the latent crash never fired because nothing after `cell_topics` called `t()`. After the revert, the four preserved `t(LANG, "theses.filename")` callsites — two of which run *after* `cell_topics` — would crash. Instead of bringing back the v1.1.1-style `from shamanic_locale import t as _t` alias (overkill for four callsites), the two shadowing loop variables were renamed surgically: `cell_topics`' `for t in sorted(df_topics["topic"].unique()):` → `for topic_id in ...`, and `cell_multilang_pass`' `for t in d:` → `for tok in d:`. Twelve lines of mechanical rename; zero functional change. The latent crash is now gone for any `_lg` corpus with topics.
+
+**What stayed localized, untouched.** Everything outside the notebook/HTML-report surface keeps the v1.1 i18n machinery:
+
+- Python-script `print()` output: `generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py` all still route stdout through `t(UI_LANG, ...)`. Operators see localized console messages regardless of corpus language.
+- Shamanic ritual artefacts: `oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, and the four LLM-driven ritual files still render in the corpus language via `t(corpus_lang, ...)` and the YAML dictionaries.
+- Localized artefact filenames (theses) as noted above.
+- README international versions, language-detection logic, multilingual NER, and all other v1.1 functional features are unchanged.
+
+**Robustness fix: qa_rag skip is now content-based.** The v1.0 logic relied on `cell_id in ["md_qa_rag", "cell_qa_rag"]`, but the v1.0 notebook actually has *numeric* top-level cell IDs, so that check never matched at runtime. The interactive Q&A cell only stayed out of the report because Jupyter UI runs of `input()` produced no output, and the "if no outputs, skip" guard caught it. Running the notebook end-to-end via `nbclient` (the path used to regenerate reports here) breaks that accident: `input()` raises `StdinNotImplementedError`, which lands in the cell's outputs and leaks into the report. `generate_report.py` now detects the Q&A boundary by content markers (`(RAG)` in the markdown header; `EXIT_WORDS` plus `_qa_tfidf` in the code cell) and breaks out of the cell loop entirely. The report ends on `cell_summary`'s "Конец отчёта…" line, as the project convention always intended.
+
+**Orphan files.** `dictionaries/{lang}/notebook.yaml` and `dictionaries/{lang}/narrative.yaml` are still in-tree but no longer read by anyone after this revert. Cleanup is deferred to a separate housekeeping change.
+
+**Documentation imprecision (pre-existing).** The Russian markdown narrative cells still refer to the theses file as `тезисы.txt` (the v1.0 hardcoded name) even though the code now writes the localized filename. This inconsistency predates v1.1.3 and is left as-is to avoid scope creep; for a Russian reader the narrative still reads correctly because their corpus also produces `тезисы.txt`.
+
+**Upgrade.** Pull the new tag, re-execute the notebook, re-run `generate_report.py`. No config or dependency change required.
+
+### Distribution
+
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.1.2 — accessibility fix: explicit `lang` on report containers
 
 **Severity.** Screen-reader regression for every non-Russian `ui_lang` user. Upgrade strongly recommended if you read the report with NVDA / JAWS / Narrator / VoiceOver / SAPI.
