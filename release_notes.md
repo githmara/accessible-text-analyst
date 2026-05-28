@@ -4,6 +4,26 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.1.1 — critical fix: `t()` shadowed by loop variable in `cell_topics`
+
+**Severity.** v1.1 is unusable in its default configuration. Upgrade is strongly recommended.
+
+**The bug.** `cell_topics` contains a `for t in sorted(df_topics["topic"].unique()):` loop that leaks the loop variable into module scope, shadowing the `t` function imported from `shamanic_locale`. After `cell_topics` runs, `t` is bound to a `numpy.int32` (the last KMeans topic label) and every subsequent `t(UI_LANG, ...)` call raises `TypeError: 'numpy.int32' object is not callable`. The failure cascades into `cell_export`, `cell_summary`, and `cell_qa_rag` — i.e. the three cells that produce the user-facing artefacts.
+
+A second instance of the same pattern (`for t in d:`) lives in `cell_multilang_pass` and would shadow `t` with a spaCy `Token` even before `cell_topics` runs.
+
+**Trigger.** Any corpus where the `_lg` spaCy model has word vectors and KMeans succeeds — which is the recommended setup and the documented happy path. In practice every default user hits this on first run.
+
+**The fix.** The import is now aliased: `from shamanic_locale import t as _t`, and all 63 call sites inside the notebook were rewritten to use `_t(...)`. The existing `for t in ...:` loops are left in place — they no longer shadow anything that matters. Aliasing was chosen over renaming the two loop variables because it removes the entire class of bug (any future `for t in ...:` will be harmless) at the cost of a wider but purely mechanical rename. The standalone modules (`generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) were not changed; they have no loop variables that could shadow `t`.
+
+**Upgrade.** Pull the new tag and re-execute the notebook from the top. No config, dependency, or data changes are required. The HTML report and DOCX export are regenerated from the freshly-executed notebook as usual.
+
+### Distribution
+
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.1 — internationalized interface
 
 **Theme.** A user who sets `ui_lang: "pl"` (or `en` / `ru` / `fi` / `is` / `it`) in `config.json` gets a fully localized experience in the user-facing artefacts: the HTML report, the NotebookLM Markdown, the shamanic ritual stdout, and the notebook's final `cell_summary`. The corpus-content language is still detected automatically per-fragment via `<span lang="...">` — independent from `ui_lang`.
