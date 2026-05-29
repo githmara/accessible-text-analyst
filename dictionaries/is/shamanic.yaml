@@ -3,6 +3,8 @@ oracle:
     --- ORAKEL VITUNDARSTREYMIS ---
     TTS-leiðbeining: lestu hægt, með vaxandi bergmáli.
 
+  pause: '[HLÉ 1.5s]'
+
 roots:
   header: |+
     --- RITÚAL HRÁU RÓTANNA ---
@@ -70,6 +72,11 @@ pipeline:
   ok_prophecies: '[OK] Spádómar búnir til: {filename}'
   ok_undertow: '[OK] Undirstraumur búinn til: {filename}'
   done: '[LOKIÐ] Öll hljóð-artefaktar eru tilbúin í möppunni audio_scripts.'
+  warn_ritual_failed: '[VILLA] Helgisiðurinn "{ritual}" mistókst: {error}'
+  done_with_errors: '[ÓLOKIÐ] Ekki tókust allir helgisiðir ({failed} af {total}). Eitthvað fór úrskeiðis — sjá skilaboðin að ofan.'
+  warn_nothing_produced: '[ÓLOKIÐ] Engin hljóðafurð varð til. Líklega var minnisbókin (eða útflutningsreitur hennar) ekki keyrð í {path}.'
+  err_no_notebook_output: 'Nauðsynlega skrá {path} vantar — líklega var minnisbókin (eða útflutningsreitur hennar) ekki keyrð.'
+  err_faulty_input: 'Skráin {filename} er tóm eða skemmd — eitthvað fór úrskeiðis í helgisiðnum "{ritual}".'
   fatal_error: '[ALVARLEG VILLA] {error}'
 
 ai:
@@ -84,4 +91,10 @@ ai:
   llm_sami: '[LLM] Kalla á neista Sami til að lýsa upp myrkrið í Norðri...'
   ok_sami: '[OK] Glampandi samantekt Sami vistuð í: {filename}'
   done: '[LOKIÐ] Galdrar framkvæmdir með góðum árangri.'
+  warn_ritual_failed: '[VILLA] Helgisiðurinn "{ritual}" mistókst: {error}'
+  done_with_errors: '[ÓLOKIÐ] Ekki tókust allir LLM-helgisiðir ({failed} af {total}). Eitthvað fór úrskeiðis — sjá skilaboðin að ofan.'
+  warn_nothing_produced: '[ÓLOKIÐ] Engin rödd Norðursins talaði. Líklega var minnisbókin ekki keyrð eða staðbundna ferlið (prophecies.txt) ekki keyrt fyrst.'
+  err_no_export_dir: 'Mappan {path} er ekki til — líklega var minnisbókin (eða útflutningsreitur hennar) ekki keyrð.'
+  err_no_notebook_output: 'Skrána {path} vantar þótt umfjöllunarefni séu til — eitthvað fór úrskeiðis við útflutning minnisbókarinnar.'
+  warn_vieno_too_few_sentences: 'Sýn Vieno byggir á færri en 5 hráum setningum ({count} fundust) — söngurinn yrði of þunnur, svo helgisiðnum var hætt. Athugaðu hvort minnisbókin bjó til fulla sentences.csv-skrá.'
   fatal_error: '[ALVARLEG VILLA] {error}'

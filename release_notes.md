@@ -4,6 +4,54 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.3.1 — the shamanic layer can no longer lie about success
+
+**Theme.** A robustness hardening of the optional shamanic post-processing layer plus one stray hardcoded string. v1.1.5 fixed the *cause* of one silent-failure case (a slug mismatch that pointed the loaders at a non-existent directory), but the *design* that let the failure pass silently survived: every `ritual_*` bailed with an early `if not <file>.exists(): return`, and the `__main__` printed `[ZAKOŃCZONO] … wszystkie artefakty gotowe` regardless of whether anything had actually been written. This release closes that design gap. Pure shamanic-layer change — the notebook, the HTML/Markdown/diagnostic reports, and all analysis behaviour are untouched. No config or dependency change. Patch bump.
+
+### Rituals now report a three-valued status
+
+Each `ritual_*` in both `shamanic_pipeline.py` and `shamanic_ai.py` now returns a status instead of `None`:
+
+- **produced** → `return True` after the artefact is written;
+- **legitimately skipped** → `return False` silently, when a *conditionally-written* input is simply absent;
+- **failed** → `raise RuntimeError(...)`, when an input is present but unusable (empty/corrupted), or when a required-but-missing file means the notebook never ran.
+
+The skip-vs-fail line is drawn by which exports the notebook guarantees. `sentences.csv` and `paragraphs.csv` are written by **every** successful export-cell run; `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, and `sentiment.csv` are written **conditionally** (empty result, a non-`_lg` model with no vectors, or sentiment switched off). So a missing *conditional* input is a valid partial pipeline (`return False`); a missing `paragraphs.csv`/`sentences.csv` means the export cell never ran (`raise`).
+
+### No more false `[ZAKOŃCZONO]`
+
+Both `__main__` blocks were rewritten:
+
+- A **critical guard** at the top raises immediately if the export directory or `paragraphs.csv` is missing (`shamanic_ai.py` checks the directory) — the operator gets *"the notebook or its export cell was probably not executed"* instead of a cheerful all-clear over an empty `audio_scripts/`.
+- Rituals run through a **per-ritual `try/except` loop**, so one faulty input no longer aborts the independent rituals after it; each failure is reported on its own line.
+- The **final message is classified**: any failure → `*.done_with_errors` ("not all rituals succeeded — something went wrong"); zero artefacts produced but no failure → `*.warn_nothing_produced`; otherwise the original `*.done`.
+
+Two message flavours carry the distinction the user actually needs: *probable non-execution of the notebook / its export cell* (`*.err_no_notebook_output`, `*.err_no_export_dir`) versus *something went wrong with a file that is present* (`*.err_faulty_input`).
+
+### Prophecies generate from paragraphs alone
+
+`ritual_etymological_prophesy` used to skip silently when `entities.csv` was absent. But the prophecy templates already fall back to placeholder `loc`/`per`/`org` via `pick()` — and even *with* `entities.csv` present, every slot lands on a fallback whenever none of the sampled paragraphs happened to carry an entity. So entities were never actually required: as long as `paragraphs.csv` parses, the book of prophecies can be cast. The ritual now treats `entities.csv` as a genuinely optional ornament (read it if present, otherwise an empty entity set → all-fallback templates) and produces `prophecies.txt` regardless.
+
+### AI layer: Lumi/Sami stay silent, Vieno now warns
+
+In `shamanic_ai.py`, Lumi and Sami keep their **silent** `return` when `prophecies.txt` (from the local pipeline) or Lumi's report is absent — that just means the local pipeline was not run first, which is not an error. But Vieno's non-sentiment branch, which previously returned silently when it found fewer than 5 raw sentences, now **raises a warning** (`ai.warn_vieno_too_few_sentences`) — a thin or truncated `sentences.csv` is a signal worth surfacing, not swallowing. The warning is raised *before* the OpenAI call, so it costs nothing.
+
+### Localization: the last hardcoded ritual string
+
+`ritual_oracle` wrote the TTS pause marker as a hardcoded Polish `[PAUZA 1.5s]` regardless of corpus language. It now comes from the new `oracle.pause` key (`[PAUSE 1.5s]` / `[ПАУЗА 1.5с]` / `[TAUKO 1.5s]` / `[HLÉ 1.5s]` / `[PAUSA 1.5s]`), localized like every other artefact-body string by `t(corpus_lang, …)`. All the new operator-facing keys (`warn_ritual_failed`, `done_with_errors`, `warn_nothing_produced`, `err_no_notebook_output`, `err_no_export_dir`, `err_faulty_input`, `warn_vieno_too_few_sentences`) are added to all six `dictionaries/{lang}/shamanic.yaml` bundles; `fi`/`is`/`it` remain drafted-but-unreviewed per the standing note.
+
+### Documentation
+
+`CLAUDE.md` gains a "Failure-handling contract" paragraph in the shamanic-layer section documenting the three-valued status, the guaranteed-vs-conditional export split, and the message classification.
+
+**Upgrade.** Pull the new tag and re-run `shamanic_pipeline.py` (and `shamanic_ai.py` if you use it). No notebook re-execution, config, or dependency change required.
+
+### Distribution
+
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.3.0 — optional sentiment analysis as a shamanic feed
 
 **Theme.** Sentiment analysis returns to the pipeline, redesigned. The original `cell_sentiment` was dropped back in `e5ae27c`: it crashed at runtime (a tokenizer-dependency problem), and even working it presented a tweet-trained model's shaky verdicts directly to the screen-reader user. The reanimated version inverts that: it is **opt-in and off by default**, it never shows a verdict to the user, and its only purpose is to feed the optional shamanic layer. Fully backward-compatible — with the flag off (the default) nothing changes — so this is a minor bump.

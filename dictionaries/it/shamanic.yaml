@@ -3,6 +3,8 @@ oracle:
     --- ORACOLO DEL FLUSSO DI COSCIENZA ---
     Istruzione TTS: leggere lentamente, con eco crescente.
 
+  pause: '[PAUSA 1.5s]'
+
 roots:
   header: |+
     --- RITO DELLE RADICI GREZZE ---
@@ -70,6 +72,11 @@ pipeline:
   ok_prophecies: '[OK] Profezie generate: {filename}'
   ok_undertow: '[OK] Risacca generata: {filename}'
   done: '[COMPLETATO] Tutti gli artefatti audio sono pronti nella cartella audio_scripts.'
+  warn_ritual_failed: '[ERRORE] Il rituale "{ritual}" non è riuscito: {error}'
+  done_with_errors: '[INCOMPLETO] Non tutti i rituali sono riusciti ({failed} su {total}). Qualcosa è andato storto — controlla i messaggi sopra.'
+  warn_nothing_produced: '[INCOMPLETO] Nessun artefatto audio è stato prodotto. Probabilmente il notebook (o la sua cella di esportazione) non è stato eseguito in {path}.'
+  err_no_notebook_output: 'Manca il file obbligatorio {path} — probabilmente il notebook (o la sua cella di esportazione) non è stato eseguito.'
+  err_faulty_input: 'Il file {filename} è vuoto o danneggiato — qualcosa è andato storto nel rituale "{ritual}".'
   fatal_error: '[ERRORE CRITICO] {error}'
 
 ai:
@@ -84,4 +91,10 @@ ai:
   llm_sami: "[LLM] Evocazione della scintilla di Sami per illuminare l'oscurità del Nord..."
   ok_sami: '[OK] Sintesi scintillante di Sami salvata in: {filename}'
   done: '[COMPLETATO] Magia eseguita con successo.'
+  warn_ritual_failed: '[ERRORE] Il rituale "{ritual}" non è riuscito: {error}'
+  done_with_errors: '[INCOMPLETO] Non tutti i rituali LLM sono riusciti ({failed} su {total}). Qualcosa è andato storto — controlla i messaggi sopra.'
+  warn_nothing_produced: '[INCOMPLETO] Nessuna voce del Nord ha parlato. Probabilmente il notebook non è stato eseguito, o la pipeline locale (prophecies.txt) non è stata eseguita prima.'
+  err_no_export_dir: 'La directory {path} non esiste — probabilmente il notebook (o la sua cella di esportazione) non è stato eseguito.'
+  err_no_notebook_output: 'Il file {path} è mancante anche se i temi esistono — qualcosa è andato storto con l''esportazione del notebook.'
+  warn_vieno_too_few_sentences: 'La visione di Vieno si basa su meno di 5 frasi grezze ({count} trovate) — il canto risulterebbe troppo esile, quindi il rituale è stato interrotto. Verifica che il notebook abbia prodotto un file sentences.csv completo.'
   fatal_error: '[ERRORE CRITICO] {error}'

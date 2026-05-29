@@ -3,6 +3,8 @@ oracle:
     --- TIETOISUUDEN VIRRAN ORAAKKELI ---
     TTS-ohje: lue hitaasti, kasvavalla kaiulla.
 
+  pause: '[TAUKO 1.5s]'
+
 roots:
   header: |+
     --- RAAKOJEN JUURTEN RITUAALI ---
@@ -70,6 +72,11 @@ pipeline:
   ok_prophecies: '[OK] Ennustukset luotu: {filename}'
   ok_undertow: '[OK] Pohjavirta luotu: {filename}'
   done: '[VALMIS] Kaikki ääniartefaktit ovat valmiina kansiossa audio_scripts.'
+  warn_ritual_failed: '[VIRHE] Rituaali "{ritual}" epäonnistui: {error}'
+  done_with_errors: '[KESKEN] Kaikki rituaalit eivät onnistuneet ({failed}/{total}). Jokin meni pieleen — katso viestit yltä.'
+  warn_nothing_produced: '[KESKEN] Yhtään ääniartefaktia ei syntynyt. Notebookia (tai sen vientisolua) ei todennäköisesti suoritettu hakemistossa {path}.'
+  err_no_notebook_output: 'Pakollinen tiedosto {path} puuttuu — notebookia (tai sen vientisolua) ei todennäköisesti suoritettu.'
+  err_faulty_input: 'Tiedosto {filename} on tyhjä tai vioittunut — jokin meni pieleen rituaalissa "{ritual}".'
   fatal_error: '[KRIITTINEN VIRHE] {error}'
 
 ai:
@@ -84,4 +91,10 @@ ai:
   llm_sami: '[LLM] Kutsutaan Samin kipinää valaisemaan Pohjolan synkkyyttä...'
   ok_sami: '[OK] Samin kipinäinen synteesi tallennettu: {filename}'
   done: '[VALMIS] Taikuus suoritettu onnistuneesti.'
+  warn_ritual_failed: '[VIRHE] Rituaali "{ritual}" epäonnistui: {error}'
+  done_with_errors: '[KESKEN] Kaikki LLM-rituaalit eivät onnistuneet ({failed}/{total}). Jokin meni pieleen — katso viestit yltä.'
+  warn_nothing_produced: '[KESKEN] Yksikään Pohjolan ääni ei puhunut. Notebookia ei todennäköisesti suoritettu tai paikallista putkea (prophecies.txt) ei ajettu ensin.'
+  err_no_export_dir: 'Hakemistoa {path} ei ole — notebookia (tai sen vientisolua) ei todennäköisesti suoritettu.'
+  err_no_notebook_output: 'Tiedosto {path} puuttuu, vaikka aiheita on — notebookin viennissä meni jokin pieleen.'
+  warn_vieno_too_few_sentences: 'Vienon näky perustuu alle viiteen raakalauseeseen (löytyi {count}) — laulusta tulisi ohut, joten rituaali keskeytettiin. Tarkista, että notebook tuotti täyden sentences.csv-tiedoston.'
   fatal_error: '[KRIITTINEN VIRHE] {error}'

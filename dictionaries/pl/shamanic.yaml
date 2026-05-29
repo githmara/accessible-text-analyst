@@ -3,6 +3,8 @@ oracle:
     --- WYROCZNIA STRUMIENIA ŚWIADOMOŚCI ---
     Instrukcja TTS: czytać powoli, z narastającym echem.
 
+  pause: '[PAUZA 1.5s]'
+
 roots:
   header: |+
     --- RYTUAŁ SUROWYCH RDZENI ---
@@ -70,6 +72,11 @@ pipeline:
   ok_prophecies: '[OK] Wygenerowano Przepowiednie: {filename}'
   ok_undertow: '[OK] Wygenerowano Prąd Podskórny: {filename}'
   done: '[ZAKOŃCZONO] Wszystkie artefakty audio są gotowe w folderze audio_scripts.'
+  warn_ritual_failed: '[BŁĄD] Rytuał „{ritual}" nie powiódł się: {error}'
+  done_with_errors: '[NIEPEŁNE] Nie wszystkie rytuały się powiodły ({failed} z {total}). Coś poszło nie tak — sprawdź komunikaty powyżej.'
+  warn_nothing_produced: '[NIEPEŁNE] Nie powstał żaden artefakt audio. Prawdopodobnie notebook (lub jego komórka eksportowa) nie został wykonany w katalogu {path}.'
+  err_no_notebook_output: 'Brak wymaganego pliku {path} — prawdopodobnie notebook (lub jego komórka eksportowa) nie został wykonany.'
+  err_faulty_input: 'Plik {filename} jest pusty lub uszkodzony — coś poszło nie tak przy rytuale „{ritual}".'
   fatal_error: '[BŁĄD KRYTYCZNY] {error}'
 
 ai:
@@ -84,4 +91,10 @@ ai:
   llm_sami: '[LLM] Przyzywanie iskry Sami do rozjaśnienia mroku Północy...'
   ok_sami: '[OK] Zapisano iskrzącą relację Sami w: {filename}'
   done: '[ZAKOŃCZONO] Magia odprawiona pomyślnie.'
+  warn_ritual_failed: '[BŁĄD] Rytuał „{ritual}" nie powiódł się: {error}'
+  done_with_errors: '[NIEPEŁNE] Nie wszystkie rytuały LLM się powiodły ({failed} z {total}). Coś poszło nie tak — sprawdź komunikaty powyżej.'
+  warn_nothing_produced: '[NIEPEŁNE] Żaden głos Północy nie przemówił. Prawdopodobnie notebook nie został wykonany albo nie odpalono najpierw lokalnego potoku (prophecies.txt).'
+  err_no_export_dir: 'Katalog {path} nie istnieje — prawdopodobnie notebook (lub jego komórka eksportowa) nie został wykonany.'
+  err_no_notebook_output: 'Brak pliku {path}, choć tematy istnieją — coś poszło nie tak z eksportem notebooka.'
+  warn_vieno_too_few_sentences: 'Wizja Vieno opiera się na mniej niż 5 surowych zdaniach (znaleziono {count}) — pieśń wyszłaby uboga, więc rytuał przerwano. Sprawdź, czy notebook wygenerował pełny plik sentences.csv.'
   fatal_error: '[BŁĄD KRYTYCZNY] {error}'

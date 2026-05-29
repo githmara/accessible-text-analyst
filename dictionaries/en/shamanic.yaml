@@ -3,6 +3,8 @@ oracle:
     --- ORACLE OF THE STREAM OF CONSCIOUSNESS ---
     TTS instruction: read slowly, with a rising echo.
 
+  pause: '[PAUSE 1.5s]'
+
 roots:
   header: |+
     --- RITUAL OF THE RAW ROOTS ---
@@ -70,6 +72,11 @@ pipeline:
   ok_prophecies: '[OK] Prophecies generated: {filename}'
   ok_undertow: '[OK] Undertow generated: {filename}'
   done: '[DONE] All audio artefacts are ready in the audio_scripts folder.'
+  warn_ritual_failed: '[ERROR] Ritual "{ritual}" failed: {error}'
+  done_with_errors: '[INCOMPLETE] Not all rituals succeeded ({failed} of {total}). Something went wrong — check the messages above.'
+  warn_nothing_produced: '[INCOMPLETE] No audio artefact was produced. The notebook (or its export cell) was most likely not executed in {path}.'
+  err_no_notebook_output: 'Required file {path} is missing — the notebook (or its export cell) was most likely not executed.'
+  err_faulty_input: 'File {filename} is empty or corrupted — something went wrong in ritual "{ritual}".'
   fatal_error: '[FATAL] {error}'
 
 ai:
@@ -84,4 +91,10 @@ ai:
   llm_sami: "[LLM] Calling Sami's spark to brighten the gloom of the North..."
   ok_sami: "[OK] Saved Sami's sparkling synthesis to: {filename}"
   done: '[DONE] Magic performed successfully.'
+  warn_ritual_failed: '[ERROR] Ritual "{ritual}" failed: {error}'
+  done_with_errors: '[INCOMPLETE] Not all LLM rituals succeeded ({failed} of {total}). Something went wrong — check the messages above.'
+  warn_nothing_produced: '[INCOMPLETE] No voice of the North spoke. The notebook was most likely not executed, or the local pipeline (prophecies.txt) was not run first.'
+  err_no_export_dir: 'Directory {path} does not exist — the notebook (or its export cell) was most likely not executed.'
+  err_no_notebook_output: 'File {path} is missing even though topics exist — something went wrong with the notebook export.'
+  warn_vieno_too_few_sentences: 'Vieno''s vision rests on fewer than 5 raw sentences ({count} found) — the chant would be too thin, so the ritual was aborted. Check that the notebook produced a full sentences.csv file.'
   fatal_error: '[FATAL] {error}'

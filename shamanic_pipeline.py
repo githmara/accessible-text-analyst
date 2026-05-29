@@ -61,7 +61,9 @@ def get_export_dir():
 def ritual_oracle(export_dir, output_dir, lang):
     theses_file = export_dir / 'theses.csv'
     if not theses_file.exists():
-        return
+        # theses.csv pisane warunkowo (len(df_theses) > 0) — brak = korpus bez
+        # tez (np. zbyt krótki). To dozwolony stan częściowy, pomijamy po cichu.
+        return False
 
     output_file = output_dir / 'oracle_script.txt'
 
@@ -69,6 +71,13 @@ def ritual_oracle(export_dir, output_dir, lang):
         reader = csv.DictReader(f)
         sorted_theses = sorted(reader, key=lambda x: float(x['score']), reverse=True)
 
+    if not sorted_theses:
+        raise RuntimeError(t(UI_LANG, 'pipeline.err_faulty_input',
+                             filename=theses_file.name, ritual='oracle'))
+
+    # Marker pauzy TTS jest częścią artefaktu czytanego głosem korpusu,
+    # więc lokalizujemy go po języku korpusu (nie UI).
+    pause = t(lang, 'oracle.pause')
     with open(output_file, 'w', encoding='utf-8') as out:
         out.write(t(lang, 'oracle.header'))
 
@@ -77,19 +86,23 @@ def ritual_oracle(export_dir, output_dir, lang):
             phrases = sentence.split(',')
             for phrase in phrases:
                 if phrase.strip():
-                    out.write(f"{phrase.strip()}...\n[PAUZA 1.5s]\n")
+                    out.write(f"{phrase.strip()}...\n{pause}\n")
             out.write("\n")
 
     print(t(UI_LANG, 'pipeline.ok_oracle', filename=output_file.name))
+    return True
 
 def ritual_lore_fragments(export_dir, output_dir, lang):
     paragraphs_file = export_dir / 'paragraphs_with_topics.csv'
     if not paragraphs_file.exists():
-        return
+        # Tematy pisane warunkowo (len(df_topics) > 0 — wymaga wektorów modelu
+        # _lg). Brak = dozwolony stan częściowy (model bez wektorów), pomijamy.
+        return False
 
     lore_dir = output_dir / 'lore_fragments'
     lore_dir.mkdir(exist_ok=True)
 
+    written = 0
     with open(paragraphs_file, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -101,19 +114,30 @@ def ritual_lore_fragments(export_dir, output_dir, lang):
             with open(fragment_file, 'w', encoding='utf-8') as out:
                 out.write(t(lang, 'lore.header', topic_id=topic_id, para_id=para_id))
                 out.write(text)
+            written += 1
+
+    if written == 0:
+        raise RuntimeError(t(UI_LANG, 'pipeline.err_faulty_input',
+                             filename=paragraphs_file.name, ritual='lore'))
 
     print(t(UI_LANG, 'pipeline.ok_lore', dirname=lore_dir.name))
+    return True
 
 def ritual_raw_roots(export_dir, output_dir, lang):
     tfidf_file = export_dir / 'keywords_tfidf.csv'
     if not tfidf_file.exists():
-        return
+        # keywords_tfidf.csv pisane warunkowo — brak = dozwolony stan częściowy.
+        return False
 
     output_file = output_dir / 'raw_roots_chant.txt'
 
     with open(tfidf_file, 'r', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         words = [row['term'] for row in reader]
+
+    if not words:
+        raise RuntimeError(t(UI_LANG, 'pipeline.err_faulty_input',
+                             filename=tfidf_file.name, ritual='raw_roots'))
 
     with open(output_file, 'w', encoding='utf-8') as out:
         out.write(t(lang, 'roots.header'))
@@ -123,21 +147,33 @@ def ritual_raw_roots(export_dir, output_dir, lang):
             out.write(f"{chant.upper()} .\n")
 
     print(t(UI_LANG, 'pipeline.ok_roots', filename=output_file.name))
+    return True
 
 def ritual_etymological_prophesy(export_dir, output_dir, lang):
     entities_file = export_dir / 'entities.csv'
     paragraphs_file = export_dir / 'paragraphs.csv'
-    if not entities_file.exists() or not paragraphs_file.exists():
-        return
+    # paragraphs.csv pisze KAŻDE udane wykonanie komórki eksportowej — jego brak
+    # to twardy sygnał, że notebook się nie wykonał (a nie dozwolony stan
+    # częściowy). Strażnik w __main__ łapie to wcześniej, ale zostawiamy
+    # asekurację na wypadek wywołania rytuału w izolacji.
+    if not paragraphs_file.exists():
+        raise RuntimeError(t(UI_LANG, 'pipeline.err_no_notebook_output',
+                             path=paragraphs_file))
 
-    # Częstotliwość encji per etykieta — top-N w obrębie każdej grupy.
+    # entities.csv jest OPCJONALNE dla przepowiedni. Szablony mają fallbacki
+    # loc/per/org (przez pick()), a w obecnej konfiguracji i tak wszystkie mogą
+    # trafić na fallback, jeśli akurat żaden z wylosowanych paragrafów nie miał
+    # encji. Skoro paragraphs.csv parsuje się poprawnie, przepowiednie da się
+    # zbudować — brak encji to po prostu zbiór encji pusty, nie powód do
+    # pominięcia rytuału.
     counts_by_label = {}
-    with open(entities_file, 'r', encoding='utf-8-sig') as f:
-        for row in csv.DictReader(f):
-            ent = (row.get('entity') or '').strip()
-            lbl = (row.get('label') or '').strip()
-            if ent and lbl:
-                counts_by_label.setdefault(lbl, Counter())[ent] += 1
+    if entities_file.exists():
+        with open(entities_file, 'r', encoding='utf-8-sig') as f:
+            for row in csv.DictReader(f):
+                ent = (row.get('entity') or '').strip()
+                lbl = (row.get('label') or '').strip()
+                if ent and lbl:
+                    counts_by_label.setdefault(lbl, Counter())[ent] += 1
 
     def top_n(labels, n=10):
         merged = Counter()
@@ -155,7 +191,8 @@ def ritual_etymological_prophesy(export_dir, output_dir, lang):
     top_paragraphs = paragraphs[:10]
 
     if not top_paragraphs:
-        return
+        raise RuntimeError(t(UI_LANG, 'pipeline.err_faulty_input',
+                             filename=paragraphs_file.name, ritual='prophecy'))
 
     def first_sentence(text):
         # Pierwszy znak kończący zdanie po przynajmniej 10 znakach, ale nie dalej niż 300.
@@ -193,6 +230,7 @@ def ritual_etymological_prophesy(export_dir, output_dir, lang):
             out.write(line + '\n\n')
 
     print(t(UI_LANG, 'pipeline.ok_prophecies', filename=output_file.name))
+    return True
 
 def ritual_emotional_undertow(export_dir, output_dir, lang):
     """Lokalny (offline) rytuał karmiony OPCJONALNYM sentiment.csv.
@@ -204,12 +242,14 @@ def ritual_emotional_undertow(export_dir, output_dir, lang):
     końcu dorzucamy bilans."""
     sentiment_file = export_dir / 'sentiment.csv'
     if not sentiment_file.exists():
-        return
+        # Sentyment jest w pełni opcjonalny (enable_sentiment domyślnie false) —
+        # jego brak to NIE błąd, tylko wyłączona funkcja. Pomijamy po cichu.
+        return False
 
     with open(sentiment_file, 'r', encoding='utf-8-sig') as f:
         rows = list(csv.DictReader(f))
     if not rows:
-        return
+        return False
 
     mood = {
         'negative': t(lang, 'undertow.mood_negative'),
@@ -240,6 +280,7 @@ def ritual_emotional_undertow(export_dir, output_dir, lang):
             out.write(f"{mood[key]}: {c} ({round(c * 100 / total)}%)\n")
 
     print(t(UI_LANG, 'pipeline.ok_undertow', filename=output_file.name))
+    return True
 
 # ==========================================
 # 3. GŁÓWNY POTOK
@@ -250,19 +291,51 @@ if __name__ == "__main__":
 
     try:
         export_directory = get_export_dir()
+
+        # Krytyczny strażnik. paragraphs.csv pisze KAŻDE udane wykonanie komórki
+        # eksportowej notebooka. Jego brak (lub brak katalogu) oznacza, że
+        # notebook się nie wykonał — przerywamy z czytelnym komunikatem, zamiast
+        # po cichu odprawić zero rytuałów i skłamać „[ZAKOŃCZONO]".
+        para_csv = export_directory / 'paragraphs.csv'
+        if not export_directory.exists() or not para_csv.exists():
+            raise RuntimeError(t(UI_LANG, 'pipeline.err_no_notebook_output',
+                                 path=para_csv))
+
         corpus_lang = detect_corpus_lang(export_directory)
         print(t(UI_LANG, 'pipeline.info_detected_lang', language=corpus_lang))
 
         output_directory = export_directory / 'audio_scripts'
         output_directory.mkdir(parents=True, exist_ok=True)
 
-        ritual_oracle(export_directory, output_directory, corpus_lang)
-        ritual_lore_fragments(export_directory, output_directory, corpus_lang)
-        ritual_raw_roots(export_directory, output_directory, corpus_lang)
-        ritual_etymological_prophesy(export_directory, output_directory, corpus_lang)
-        ritual_emotional_undertow(export_directory, output_directory, corpus_lang)
+        # Lokalne rytuały są od siebie niezależne: błąd jednego (wadliwy plik
+        # wejściowy) nie przerywa pozostałych. Zbieramy wyniki i dopiero na
+        # końcu decydujemy, czy wolno ogłosić sukces.
+        rituals = (
+            ('oracle', ritual_oracle),
+            ('lore', ritual_lore_fragments),
+            ('raw_roots', ritual_raw_roots),
+            ('prophecy', ritual_etymological_prophesy),
+            ('undertow', ritual_emotional_undertow),
+        )
+        produced = 0
+        failures = []
+        for name, fn in rituals:
+            try:
+                if fn(export_directory, output_directory, corpus_lang):
+                    produced += 1
+            except Exception as e:
+                failures.append(name)
+                print(t(UI_LANG, 'pipeline.warn_ritual_failed', ritual=name, error=e))
 
-        print(f"\n{t(UI_LANG, 'pipeline.done')}")
+        if failures:
+            # Coś poszło nie tak — nie wolno udawać, że wszystko gotowe.
+            print(f"\n{t(UI_LANG, 'pipeline.done_with_errors', failed=len(failures), total=len(rituals))}")
+        elif produced == 0:
+            # Katalog istnieje, ale żaden artefakt nie powstał — pipeline ledwo
+            # się wykonał albo eksport jest niekompletny.
+            print(f"\n{t(UI_LANG, 'pipeline.warn_nothing_produced', path=export_directory)}")
+        else:
+            print(f"\n{t(UI_LANG, 'pipeline.done')}")
 
     except Exception as e:
         print(t(UI_LANG, 'pipeline.fatal_error', error=e))
