@@ -1253,7 +1253,7 @@ all_lemmas = [
 doc0 = docs[0]
 content_toks = [t for t in doc0 if t.is_alpha and t.text.lower() not in stop_words]
 pairs = [(t.text, t.lemma_.lower()) for t in content_toks[:30]]
-print("Документ 1 — пары исходное слово → лемма (первые 30):")
+print("Пары исходное слово → лемма (Документ 1, первые 30):")
 _h1, _h2, _sep = "Исходное", "Лемма", "-" * 22
 print(f"  {_h1:<22} {_h2}")
 print(f"  {_sep} -----")
