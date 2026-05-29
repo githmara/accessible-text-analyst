@@ -194,6 +194,53 @@ def ritual_etymological_prophesy(export_dir, output_dir, lang):
 
     print(t(UI_LANG, 'pipeline.ok_prophecies', filename=output_file.name))
 
+def ritual_emotional_undertow(export_dir, output_dir, lang):
+    """Lokalny (offline) rytuał karmiony OPCJONALNYM sentiment.csv.
+
+    Brak pliku = sentyment wyłączony albo się nie powiódł → po prostu nie
+    tworzymy artefaktu (zachowanie domyślne). Surowe dane: nie filtrujemy
+    ani po pewności, ani po języku — bierzemy każdy akapit po kolei i
+    układamy z nastrojów „pływ" tekstu (mantra przypływu/odpływu), a na
+    końcu dorzucamy bilans."""
+    sentiment_file = export_dir / 'sentiment.csv'
+    if not sentiment_file.exists():
+        return
+
+    with open(sentiment_file, 'r', encoding='utf-8-sig') as f:
+        rows = list(csv.DictReader(f))
+    if not rows:
+        return
+
+    mood = {
+        'negative': t(lang, 'undertow.mood_negative'),
+        'neutral':  t(lang, 'undertow.mood_neutral'),
+        'positive': t(lang, 'undertow.mood_positive'),
+    }
+
+    def mood_word(label):
+        return mood.get((label or '').strip().lower(), (label or '?').strip())
+
+    output_file = output_dir / 'emotional_undertow.txt'
+    with open(output_file, 'w', encoding='utf-8') as out:
+        out.write(t(lang, 'undertow.header'))
+
+        # Pływ: po jednym słowie-nastroju na akapit, po kolei, 4 na linię.
+        words = [mood_word(r.get('label')) for r in rows]
+        for i in range(0, len(words), 4):
+            chant = " . ".join(w.upper() for w in words[i:i + 4])
+            out.write(f"{chant} .\n")
+        out.write("\n")
+
+        # Bilans pływu (sury liczbowe — szaman widzi całość).
+        counts = Counter((r.get('label') or '').strip().lower() for r in rows)
+        total = sum(counts.values()) or 1
+        out.write(t(lang, 'undertow.summary_header') + "\n")
+        for key in ('negative', 'neutral', 'positive'):
+            c = counts.get(key, 0)
+            out.write(f"{mood[key]}: {c} ({round(c * 100 / total)}%)\n")
+
+    print(t(UI_LANG, 'pipeline.ok_undertow', filename=output_file.name))
+
 # ==========================================
 # 3. GŁÓWNY POTOK
 # ==========================================
@@ -213,6 +260,7 @@ if __name__ == "__main__":
         ritual_lore_fragments(export_directory, output_directory, corpus_lang)
         ritual_raw_roots(export_directory, output_directory, corpus_lang)
         ritual_etymological_prophesy(export_directory, output_directory, corpus_lang)
+        ritual_emotional_undertow(export_directory, output_directory, corpus_lang)
 
         print(f"\n{t(UI_LANG, 'pipeline.done')}")
 

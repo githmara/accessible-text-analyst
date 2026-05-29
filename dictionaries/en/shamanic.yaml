@@ -50,6 +50,16 @@ sami:
     --- SAMI'S SPARK: ENERGETIC SYNTHESIS ---
     TTS Instruction: read with immense enthusiasm, a wide smile, and high dynamics.
 
+undertow:
+  header: |+
+    --- THE UNDERTOW: EMOTIONAL TIDE OF THE TEXT ---
+    TTS instruction: read like an ebb and flow, with pauses between the waves.
+
+  mood_negative: 'darkness'
+  mood_neutral: 'stillness'
+  mood_positive: 'light'
+  summary_header: 'Balance of the tide:'
+
 pipeline:
   starting: 'Initializing the shamanic processing pipeline...'
   info_detected_lang: '[INFO] Detected corpus language: {language}'
@@ -58,6 +68,7 @@ pipeline:
   ok_lore: '[OK] Lore fragments generated: {dirname}/'
   ok_roots: '[OK] Raw Roots generated: {filename}'
   ok_prophecies: '[OK] Prophecies generated: {filename}'
+  ok_undertow: '[OK] Undertow generated: {filename}'
   done: '[DONE] All audio artefacts are ready in the audio_scripts folder.'
   fatal_error: '[FATAL] {error}'
 

@@ -50,6 +50,16 @@ sami:
     --- NEISTI SAMI: ORKUMIKIL SAMANTEKT ---
     TTS leiðbeiningar: lesa með miklum eldmóði, breiðu brosi og mikilli dýnamík.
 
+undertow:
+  header: |+
+    --- UNDIRSTRAUMUR: TILFINNINGAFLÓÐ TEXTANS ---
+    TTS-leiðbeining: lestu eins og flóð og fjöru, með pásu milli bylgjanna.
+
+  mood_negative: 'myrkur'
+  mood_neutral: 'kyrrð'
+  mood_positive: 'ljós'
+  summary_header: 'Jafnvægi flóðsins:'
+
 pipeline:
   starting: 'Ræsi seiðmagnaða úrvinnsluleiðslu...'
   info_detected_lang: '[UPPLÝSINGAR] Greint tungumál safnsins: {language}'
@@ -58,6 +68,7 @@ pipeline:
   ok_lore: '[OK] Sagnabrot búin til: {dirname}/'
   ok_roots: '[OK] Hráar Rætur búnar til: {filename}'
   ok_prophecies: '[OK] Spádómar búnir til: {filename}'
+  ok_undertow: '[OK] Undirstraumur búinn til: {filename}'
   done: '[LOKIÐ] Öll hljóð-artefaktar eru tilbúin í möppunni audio_scripts.'
   fatal_error: '[ALVARLEG VILLA] {error}'
 

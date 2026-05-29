@@ -8,12 +8,12 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 
 ## Projektin sisältö
 
-- `accessible_text_analyst.ipynb` — Jupyter-notebook, joka sisältää koko analyysiputken (40 solua: 20 koodia + 20 markdown; sisäinen kerronta on venäjäksi). Kirjoittaa kaksi saavutettavuusartefaktia (`accessible_text.html`, `accessible_text.docx`), joissa jokainen kappale ja jokainen vieraskielinen lause sisältää oman `lang`-attribuuttinsa — ruudunlukijat ja TTS-moottorit vaihtavat ääntä automaattisesti, jopa offline-tilassa.
+- `accessible_text_analyst.ipynb` — Jupyter-notebook, joka sisältää koko analyysiputken (42 solua: 21 koodia + 21 markdown; sisäinen kerronta on venäjäksi). Kirjoittaa kaksi saavutettavuusartefaktia (`accessible_text.html`, `accessible_text.docx`), joissa jokainen kappale ja jokainen vieraskielinen lause sisältää oman `lang`-attribuuttinsa — ruudunlukijat ja TTS-moottorit vaihtavat ääntä automaattisesti, jopa offline-tilassa.
 - `generate_report.py` — jälkikäsittelyskripti, joka muuntaa suoritetun notebookin yhdeksi saavutettavaksi HTML-tiedostoksi (`analysis_report.html`). Se kääräisee vieraskieliset katkelmat tagiin `<span lang="target_lang">` ja — korpuksen kielestä riippumatta — pakottaa `<span lang="en">` teknisen englannin sisältöön (POS-tagit, NER-tunnisteet, spaCyn/Hugging Facen mallien tunnisteet, ASCII-polut). Kerronnan inline-koodi ja koodilohkot saavat poikkeuksetta `lang="en"`. Lukutilassa (`remove_noise: true`) se lyhentää notebookin dokumenttikohtaiset diagnostiikkasilmukat ensimmäisiin muutamaan dokumenttiin satojen tulostamisen sijaan.
 - `generate_diagnostic.py` — riippumaton täyden **diagnostiikkaraportin** (`diagnostic_report.html`) luoja, joka rakennetaan suoraan notebookin CSV/JSON-vienneistä (ei `generate_report.py`:n ulostulosta). Navigoitava, ruudunlukijoille suunniteltu rakenne: sisällysluettelo `<nav>` ja osiot — kullakin oma otsikko ja listat — yleiskatsaukselle, aiheille kappaleineen, teeseille, nimetyille entiteeteille tyypeittäin ja tärkeimmille avainsanoille. Rakenteelliset tekstit seuraavat `ui_lang`-asetusta; korpuksen katkelmat saavat `<span lang="…">`, NER-tunnisteet `<span lang="en">`.
 - `generate_md.py` — muuntaa `analysis_report.html`-tiedoston Markdown-muotoon (`notebooklm_report.md`) NotebookLM:ää varten. Saavutettavuus-spanit puretaan, koska NotebookLM ei käytä niitä.
-- `shamanic_pipeline.py` *(valinnainen)* — ei-LLM-jälkikäsittelijä, joka muuntaa notebookin CSV/JSON-viennit neljäksi rituaaliseksi tekstiartefaktiksi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`) ja on täysin lokalisoitu kaikille kuudelle tuetulle kielelle.
-- `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu OpenAI:ta neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Vaatii `OPENAI_API_KEY`:n tiedostossa `golden_key.env`.
+- `shamanic_pipeline.py` *(valinnainen)* — ei-LLM-jälkikäsittelijä, joka muuntaa notebookin CSV/JSON-viennit rituaalisiksi tekstiartefakteiksi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` ja — kun valinnainen sentimenttianalyysi on käytössä — `emotional_undertow.txt`) ja on täysin lokalisoitu kaikille kuudelle tuetulle kielelle.
+- `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu OpenAI:ta neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Kun valinnainen `sentiment.csv` on saatavilla, Vieno rakentaa laulunsa tekstin tunnekaaren varaan raakalauseiden sijaan. Vaatii `OPENAI_API_KEY`:n tiedostossa `golden_key.env`.
 - `shamanic_locale.py` — molempien shamanististen skriptien lokalisointipaketti (mallit, otsikot ja Lumin fallback-merkkijonot kaikilla kuudella kielellä).
 
 ## Mitä putki tekee
@@ -25,7 +25,8 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 5. Vektoriedustukset: Bag of Words, TF-IDF + auto-kyselyhaku kosinilajittelulla.
 6. Rakenne: lauseet → kappaleet (3–6 lausetta kukin) → teesit (paras lause per kappale). Jokainen kappale ja lause merkitään tunnistetulla ISO 639-1 -koodilla.
 7. Aiheen mallinnus KMeansilla spaCyn kappalevektoreiden päällä.
-8. CSV/JSON-vienti + tekstimuotoinen yhteenvetoraportti + saavutettava HTML- ja DOCX-vienti + globaali HTML-raportti (`analysis_report.html`).
+8. *(Valinnainen, oletuksena pois päältä)* Kappalekohtainen sentimenttipisteytys mallilla `cardiffnlp/twitter-xlm-roberta-base-sentiment`, kirjoitettuna tiedostoon `sentiment.csv`. Tulosta ei koskaan näytetä käyttäjälle — se on olemassa vain syötteenä shamanistiselle kerrokselle. Katso **Asetukset** (`enable_sentiment`).
+9. CSV/JSON-vienti + tekstimuotoinen yhteenvetoraportti + saavutettava HTML- ja DOCX-vienti + globaali HTML-raportti (`analysis_report.html`).
 
 ## Tuetut kielet
 
@@ -132,6 +133,12 @@ python -m spacy download fi_core_news_lg
 # 3. (Valinnainen) Islanninkielinen tuki — poista kommenttimerkit `transformers`:in ja
 # `torch`:in edestä tiedostossa requirements.txt ja aja uudelleen `pip install -r requirements.txt`.
 # IceBERT ja MIM-GOLD-22 ladataan sitten Hugging Facelta ensimmäisellä ajolla.
+
+# 4. (Valinnainen) Sentimenttianalyysi — poista kommenttimerkit `transformers`:in, `torch`:in,
+# `sentencepiece`:n, `protobuf`:in ja `tiktoken`:in edestä tiedostossa requirements.txt, aja
+# `pip install` uudelleen ja aseta "enable_sentiment": true tiedostossa config.json. Malli
+# (~1,1 GB) ladataan Hugging Facelta ensimmäisellä ajolla ja tallennetaan välimuistiin sen jälkeen.
+# Kaikki viisi pakettia tarvitaan yhdessä XLM-RoBERTa-tokenisaattorin rakentamiseen.
 ```
 
 ## Asetukset
@@ -154,6 +161,7 @@ Sisältö:
   "custom_patterns": [],
   "remove_noise": true,
   "ocr_languages": ["en"],
+  "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null
@@ -166,9 +174,12 @@ Sisältö:
 | `custom_patterns`  | string[]        | Valinnainen lista säännöllisistä lausekkeista, jotka poistetaan raakatekstistä (juoksevat otsikot, alatunnisteet, toistuvat kalvotekstit). Esimerkki: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Vaihtaa `generate_report.py`:n lukijaystävällisen tilan (`true`, piilottaa Hugging Face/torch -latauspalkit ja lemmatisointi/POS-taulukot) ja täyden diagnostisen tilan (`false`) välillä. |
 | `ocr_languages`    | string[]        | `easyocr`:n kielet (käytetään vain skannatuissa PDF:issä tai kuvalähteissä). Yhdessä `easyocr.Reader`-instanssissa voi sekoittaa vain saman kirjaimiston kieliä — esim. `["ru", "en"]` kyrilliselle tai `["en", "pl", "it", "fi", "is"]` latinalaiselle. |
+| `enable_sentiment` | boolean         | Ottaa käyttöön valinnaisen kappalekohtaisen sentimenttianalyysin (oletuksena `false`). Vaatii kommentoidut sentimenttiriippuvuudet (katso asennusvaihe 4). Kirjoittaa `sentiment.csv`-tiedoston; tulosta ei koskaan näytetä käyttäjälle, se vain syöttää shamanistista kerrosta (`emotional_undertow.txt`-rituaali ja Vienon laulu). Minkä tahansa latausvirheen sattuessa se ohitetaan hiljaisesti — ei fallbackia. |
 | `ui_lang`          | string          | Käyttöliittymän kieli konsolituloste ja luodun raportin `<html lang>` -attribuutti (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tyhjä merkkijono tai tuntematon koodi → fallback `en`. Riippumaton analysoidun korpuksen kielestä, joka tunnistetaan automaattisesti. |
 | `lumi_katla_lines` | integer tai null | Valinnainen koristerajoitus `shamanic_ai.py`:n Lumin loppuraportille: kuinka monta ei-tyhjää riviä Katlan monologista Lumi näkee. `null` tai puuttuva avain = koko sisältö; integer N > 0 = ensimmäiset N riviä. |
 | `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
+
+> **Sentimenttianalyysi — CPU-kuorma.** Kun `enable_sentiment: true`, kappalekohtainen ajo on laskennallisesti raskas CPU:lla — suunnilleen verrattavissa paikallisen Whisper-puheentunnistuksen ajamiseen CPU:lla. Vanhemmilla tai lämmöllisesti rajoitetuilla koneilla tämä jatkuva kuorma voi todella rasittaa prosessoria; ota se käyttöön harkiten, mieluiten koneella jossa on GPU tai pelivaraa pitkäkestoiseen täyskuormatyöhön.
 
 > **`ui_lang` — lokalisoinnin laajuus.** Neljän putken ympärillä olevan skriptin (`generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) konsolituloste on täysin lokalisoitu. Itse notebook on lokalisoitu *osittain* — 16 osion otsikkoa (`--- Otsikko ---`), koko lopullinen `cell_summary`-raportti ja `cell_qa_rag`-solun "Q&A valmis"-tervehdys seuraavat `ui_lang`-asetusta, mutta vaihekohtaiset diagnostiset printit (korpuksen latauksen yksityiskohdat, OCR-edistys, tokenien/POS/NER-esikatselut, monikielisen vaiheen diagnostiikka) pysyvät venäjäksi. Notebook on kehittäjälle tarkoitettu työkalu; **täysin lokalisoitu käyttäjälle näkyvä artefakti on `analysis_report.html`**, jonka tuottaa `generate_report.py`. Käännökset `fi` / `is` / `it` ovat luonnoksia eivätkä tarkistettuja — ilmoita epätarkkuuksista GitHubissa.
 
@@ -227,9 +238,10 @@ python shamanic_pipeline.py
 #                                          /raw_roots_chant.txt
 #                                          /prophecies.txt
 #                                          /lore_fragments/intercepted_log_T*_P*.txt
+#                                          /emotional_undertow.txt   # vain jos sentiment.csv on olemassa
 ```
 
-Luo neljä rituaalista tekstiartefaktia suoraan notebookin CSV/JSON-vientien pohjalta — ei LLM-kutsua, ei verkkoa. Kaikki merkkijonot tulevat tiedostosta `shamanic_locale.py` ja on lokalisoitu kaikille kuudelle tuetulle kielelle.
+Luo rituaalisia tekstiartefakteja suoraan notebookin CSV/JSON-vientien pohjalta — ei LLM-kutsua, ei verkkoa. Kaikki merkkijonot tulevat tiedostosta `shamanic_locale.py` ja on lokalisoitu kaikille kuudelle tuetulle kielelle. Kun valinnainen `sentiment.csv` on saatavilla, se tuottaa lisäksi `emotional_undertow.txt`-tiedoston — kappalekohtaisen "tunnevuoroveden" sekä tasapainoyhteenvedon; ilman sitä tämä yksi rituaali yksinkertaisesti ohitetaan.
 
 ### 5. Shamanistinen LLM-jälkikäsittelijä (valinnainen, vaatii OpenAI-avaimen)
 
@@ -250,7 +262,7 @@ OPENAI_API_KEY=sk-...
 `golden_key.env` täsmää kuvioon `*.env` `.gitignore`:ssa, joten sitä ei commitata. Neljä ääntä ajetaan järjestyksessä:
 
 1. **Katla** muuttaa entiteettilistan (`entities.csv`) jäätyneiden pohjoisten henkien monologiksi.
-2. **Vieno** kanttaa avainsana-/aiheluettelon yli viidellä raakalauseella korpuksesta toisen ulottuvuuden kaikuna.
+2. **Vieno** kanttaa avainsana-/aiheluettelon yli. Oletuksena hän kutoo mukaan viisi raakalausetta korpuksesta toisen ulottuvuuden kaikuina; kun valinnainen `sentiment.csv` on saatavilla, hän sen sijaan lukee tekstin tunnekaaren (kappalekohtaiset tunnelmat, alasnäytteistettyinä mahtumaan mallin token-rajaan pitkillä korpuksilla) ja antaa sen muovata laulun dynamiikkaa.
 3. **Lumi** lukee `prophecies.txt`:n (pakollinen) sekä Katlan monologin ja Vienon laulun (valinnainen koriste) ja tuottaa loppuraportin. Lokalisoidut fallback-merkkijonot kattavat tapauksen, jossa Katla tai Vieno puuttuvat.
 4. **Sami** lukee Lumin raportin ja toimittaa korkeaenergisen synteesin toivon kipinällä tai toimintakutsulla.
 
@@ -269,6 +281,7 @@ Jokainen alihakemisto sisältää:
 | `paragraphs_with_topics.csv`    | notebook          | kappaleet määrätyllä KMeans-aiheellaan            |
 | `topic_keywords.json`           | notebook          | avainsanat aiheittain                             |
 | `entities.csv`                  | notebook          | kaikki nimennetyt entiteetit ja niiden tunnisteet |
+| `sentiment.csv`                 | notebook *(valinnainen)* | kappalekohtainen sentimentti (`para_id`, `label`, `score`, `lang`) — vain kun `enable_sentiment` on `true`; syöte shamanistiselle kerrokselle, ei koskaan näytetä käyttäjälle |
 | `accessible_text.html`          | notebook          | kappale- ja lausetason `lang`-attribuutit — ruudunlukijat vaihtavat ääntä automaattisesti per katkelma |
 | `accessible_text.docx`          | notebook          | sama sisältö `<w:lang>`:lla asetettuna per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word ja SAPI käyttävät sitä offline-tilassa ilman online-tunnistinta |
 | `analysis_report.html`           | `generate_report.py` | globaali saavutettava HTML-raportti            |
@@ -299,7 +312,7 @@ Notebookin selostus ja useimpien solujen `print()`-tuloste on kirjoitettu venäj
 
 ```
 accessible_text_analyst/
-├── accessible_text_analyst.ipynb   # pääputki (40 solua)
+├── accessible_text_analyst.ipynb   # pääputki (42 solua)
 ├── generate_report.py              # HTML-raportin generaattori (lukijanäkymä)
 ├── generate_diagnostic.py          # diagnostiikka-HTML-raportti CSV/JSON-vienneistä
 ├── generate_md.py                  # NotebookLM-Markdown-muunnin

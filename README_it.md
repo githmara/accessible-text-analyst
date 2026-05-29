@@ -8,12 +8,12 @@ Pipeline NLP multilingue progettata per **l'accessibilità con i lettori di sche
 
 ## Contenuto del progetto
 
-- `accessible_text_analyst.ipynb` — un notebook Jupyter con la pipeline completa di analisi (40 celle: 20 codice + 20 markdown; la narrazione interna al notebook è in russo). Produce due artefatti di accessibilità (`accessible_text.html`, `accessible_text.docx`) in cui ogni paragrafo e ogni frase in lingua straniera porta il proprio attributo `lang` — lettori di schermo e motori TTS cambiano voce automaticamente, anche offline.
+- `accessible_text_analyst.ipynb` — un notebook Jupyter con la pipeline completa di analisi (42 celle: 21 codice + 21 markdown; la narrazione interna al notebook è in russo). Produce due artefatti di accessibilità (`accessible_text.html`, `accessible_text.docx`) in cui ogni paragrafo e ogni frase in lingua straniera porta il proprio attributo `lang` — lettori di schermo e motori TTS cambiano voce automaticamente, anche offline.
 - `generate_report.py` — uno script di post-processing che trasforma il notebook eseguito in un singolo file HTML accessibile (`analysis_report.html`). Avvolge i frammenti in lingua straniera in `<span lang="target_lang">` e, indipendentemente dalla lingua del corpus, marca con `<span lang="en">` i contenuti tecnici inglesi (tag POS, etichette NER, identificativi dei modelli spaCy/Hugging Face, percorsi ASCII). Il codice inline e i blocchi di codice nella narrazione ricevono in massa `lang="en"`. In modalità lettore (`remove_noise: true`) tronca i cicli diagnostici per-documento del notebook ai primi pochi documenti invece di stamparne centinaia.
 - `generate_diagnostic.py` — un generatore indipendente di un report **diagnostico** completo (`diagnostic_report.html`) costruito direttamente dalle esportazioni CSV/JSON del notebook (non dall'output di `generate_report.py`). Una struttura navigabile e pensata per gli screen reader: un indice `<nav>` più sezioni — ciascuna con il proprio titolo ed elenchi — per una panoramica, i temi con i relativi paragrafi, le tesi, le entità nominate per tipo e le parole chiave principali. Le etichette strutturali seguono `ui_lang`; i frammenti del corpus ricevono `<span lang="…">`, le etichette NER `<span lang="en">`.
 - `generate_md.py` — converte `analysis_report.html` in `notebooklm_report.md` per NotebookLM. Gli span di accessibilità vengono rimossi perché NotebookLM non li consuma.
-- `shamanic_pipeline.py` *(opzionale)* — un post-processore senza LLM che trasforma gli export CSV/JSON del notebook in quattro artefatti testuali rituali (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`), completamente localizzati nelle sei lingue supportate.
-- `shamanic_ai.py` *(opzionale, basato su LLM)* — chiama OpenAI per generare quattro voci narrative (`Katla`, `Vieno`, `Lumi`, `Sami`) sopra gli stessi export. Richiede `OPENAI_API_KEY` in `golden_key.env`.
+- `shamanic_pipeline.py` *(opzionale)* — un post-processore senza LLM che trasforma gli export CSV/JSON del notebook in artefatti testuali rituali (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` e — quando l'analisi del sentiment opzionale è abilitata — `emotional_undertow.txt`), completamente localizzati nelle sei lingue supportate.
+- `shamanic_ai.py` *(opzionale, basato su LLM)* — chiama OpenAI per generare quattro voci narrative (`Katla`, `Vieno`, `Lumi`, `Sami`) sopra gli stessi export. Quando il `sentiment.csv` opzionale è presente, Vieno costruisce il suo canto sull'arco emotivo del testo invece che sulle frasi grezze. Richiede `OPENAI_API_KEY` in `golden_key.env`.
 - `shamanic_locale.py` — il pacchetto di localizzazione per entrambi gli script sciamanici (template, intestazioni e stringhe di fallback di Lumi in tutte e sei le lingue).
 
 ## Cosa fa la pipeline
@@ -25,7 +25,8 @@ Pipeline NLP multilingue progettata per **l'accessibilità con i lettori di sche
 5. Rappresentazioni vettoriali: Bag of Words, TF-IDF + ricerca con query automatica e ranking coseno.
 6. Struttura: frasi → paragrafi (3–6 frasi ciascuno) → tesi (la frase migliore per paragrafo). Ogni paragrafo e ogni frase viene marcato con il proprio codice ISO 639-1 rilevato.
 7. Modellazione di argomenti con KMeans sui vettori paragrafo di spaCy.
-8. Export CSV/JSON + un report testuale di sintesi + export HTML e DOCX accessibili + un report HTML globale (`analysis_report.html`).
+8. *(Opzionale, disattivata per impostazione predefinita)* Punteggio del sentiment per paragrafo con `cardiffnlp/twitter-xlm-roberta-base-sentiment`, scritto in `sentiment.csv`. Il risultato non viene mai mostrato all'utente — esiste solo come alimentazione per lo strato sciamanico. Vedi **Configurazione** (`enable_sentiment`).
+9. Export CSV/JSON + un report testuale di sintesi + export HTML e DOCX accessibili + un report HTML globale (`analysis_report.html`).
 
 ## Lingue supportate
 
@@ -132,6 +133,12 @@ python -m spacy download fi_core_news_lg
 # 3. (Opzionale) Supporto islandese — decommenta `transformers` e
 # `torch` in requirements.txt e riesegui `pip install -r requirements.txt`.
 # IceBERT e MIM-GOLD-22 vengono poi scaricati da Hugging Face alla prima esecuzione.
+
+# 4. (Opzionale) Analisi del sentiment — decommenta `transformers`, `torch`,
+# `sentencepiece`, `protobuf` e `tiktoken` in requirements.txt, riesegui
+# l'installazione e imposta "enable_sentiment": true in config.json. Il modello
+# (~1.1 GB) viene scaricato da Hugging Face alla prima esecuzione e poi messo in cache.
+# Tutti e cinque i pacchetti sono necessari insieme per costruire il tokenizer XLM-RoBERTa.
 ```
 
 ## Configurazione
@@ -154,6 +161,7 @@ Contenuto:
   "custom_patterns": [],
   "remove_noise": true,
   "ocr_languages": ["en"],
+  "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null
@@ -166,9 +174,12 @@ Contenuto:
 | `custom_patterns`  | string[]        | Lista opzionale di espressioni regolari da rimuovere dal testo grezzo (intestazioni correnti, piè di pagina, contenuti modello ripetitivi). Esempio: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Alterna `generate_report.py` tra modalità lettore (`true`, nasconde le barre di caricamento di Hugging Face/torch e le tabelle di lemmatizzazione/POS) e modalità diagnostica completa (`false`). |
 | `ocr_languages`    | string[]        | Lingue per `easyocr` (usate solo quando un PDF è una scansione o la sorgente è un'immagine). All'interno di una singola `easyocr.Reader` si possono mescolare solo lingue dello stesso alfabeto — ad es. `["ru", "en"]` per il cirillico o `["en", "pl", "it", "fi", "is"]` per il latino. |
+| `enable_sentiment` | boolean         | Attiva l'analisi del sentiment per paragrafo opzionale (`false` per impostazione predefinita). Richiede le dipendenze del sentiment commentate (vedi Installazione passo 4). Scrive `sentiment.csv`; il risultato non viene mai mostrato all'utente, alimenta solo lo strato sciamanico (il rituale `emotional_undertow.txt` e il canto di Vieno). In caso di qualsiasi errore di caricamento salta silenziosamente — nessun fallback. |
 | `ui_lang`          | string          | Lingua dell'interfaccia per l'output della console e l'attributo `<html lang>` del report generato (`pl` / `en` / `ru` / `fi` / `is` / `it`). Stringa vuota o codice sconosciuto → fallback `en`. Indipendente dalla lingua del corpus analizzato, che viene rilevata automaticamente. |
 | `lumi_katla_lines` | integer o null  | Limite di ornamento opzionale per il dispaccio finale di Lumi in `shamanic_ai.py`: quante righe non vuote del monologo di Katla vede Lumi. `null` o chiave mancante = tutto il contenuto; integer N > 0 = prime N righe. |
 | `lumi_vieno_lines` | integer o null  | Come `lumi_katla_lines`, ma per il canto di echi di Vieno. |
+
+> **Analisi del sentiment — costo della CPU.** Con `enable_sentiment: true`, il passaggio per paragrafo è computazionalmente pesante sulla CPU — all'incirca paragonabile all'esecuzione locale del riconoscimento vocale Whisper su CPU. Su macchine più vecchie o con vincoli termici questo carico sostenuto può rappresentare una vera sollecitazione per il processore; attivalo deliberatamente, idealmente su una macchina con una GPU o con margine per un lavoro prolungato a pieno carico.
 
 > **`ui_lang` — ambito della localizzazione.** L'output della console dei quattro script attorno alla pipeline (`generate_report.py`, `generate_md.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) è completamente localizzato. Il notebook stesso è localizzato *parzialmente* — i 16 header di sezione (`--- Titolo ---`), l'intero report finale `cell_summary` e il saluto "Q&A pronto" di `cell_qa_rag` seguono `ui_lang`, ma le stampe diagnostiche per ogni passaggio (dettagli di caricamento del corpus, avanzamento OCR, anteprime di token/POS/NER, diagnostica del passaggio multilingue) rimangono in russo. Il notebook è uno strumento per sviluppatori; **l'artefatto user-facing completamente localizzato è `analysis_report.html`** prodotto da `generate_report.py`. Le traduzioni in `fi` / `is` / `it` sono bozze non revisionate — segnala imprecisioni su GitHub.
 
@@ -227,9 +238,10 @@ python shamanic_pipeline.py
 #                                          /raw_roots_chant.txt
 #                                          /prophecies.txt
 #                                          /lore_fragments/intercepted_log_T*_P*.txt
+#                                          /emotional_undertow.txt   # solo se sentiment.csv esiste
 ```
 
-Genera quattro artefatti testuali rituali direttamente dagli export CSV/JSON del notebook — nessuna chiamata LLM, nessuna rete. Tutte le stringhe provengono da `shamanic_locale.py` e sono completamente localizzate nelle sei lingue supportate.
+Genera artefatti testuali rituali direttamente dagli export CSV/JSON del notebook — nessuna chiamata LLM, nessuna rete. Tutte le stringhe provengono da `shamanic_locale.py` e sono completamente localizzate nelle sei lingue supportate. Quando il `sentiment.csv` opzionale è presente, produce anche `emotional_undertow.txt` — una "marea di umore" per paragrafo più un riepilogo di bilanciamento; senza di esso, quel singolo rituale viene semplicemente saltato.
 
 ### 5. Post-processore sciamanico LLM (opzionale, richiede chiave OpenAI)
 
@@ -250,7 +262,7 @@ OPENAI_API_KEY=sk-...
 `golden_key.env` corrisponde a `*.env` in `.gitignore`, quindi non verrà committato. Le quattro voci girano in sequenza:
 
 1. **Katla** trasmuta l'elenco delle entità (`entities.csv`) in un monologo di spiriti settentrionali ghiacciati.
-2. **Vieno** intona un canto sull'elenco di parole chiave/argomenti, intrecciandovi cinque frasi grezze dal corpus come echi da un'altra dimensione.
+2. **Vieno** intona un canto sull'elenco di parole chiave/argomenti. Per impostazione predefinita vi intreccia cinque frasi grezze dal corpus come echi da un'altra dimensione; quando il `sentiment.csv` opzionale è presente, legge invece l'arco emotivo del testo (umori per paragrafo, sottocampionati per rientrare nel limite di token del modello su corpus lunghi) e lo lascia plasmare la dinamica del canto.
 3. **Lumi** legge `prophecies.txt` (obbligatorio) più il monologo di Katla e il canto di Vieno (ornamento opzionale) e produce il dispaccio finale. Le stringhe di fallback localizzate coprono il caso in cui Katla o Vieno manchino.
 4. **Sami** legge il rapporto di Lumi e fornisce una sintesi ad alta energia con la scintilla di speranza o un invito all'azione.
 
@@ -269,6 +281,7 @@ Ogni sottodirectory contiene:
 | `paragraphs_with_topics.csv`    | notebook          | paragrafi con il loro argomento KMeans assegnato  |
 | `topic_keywords.json`           | notebook          | parole chiave per argomento                       |
 | `entities.csv`                  | notebook          | tutte le entità nominate e le loro etichette      |
+| `sentiment.csv`                 | notebook *(opzionale)* | sentiment per paragrafo (`para_id`, `label`, `score`, `lang`) — solo quando `enable_sentiment` è `true`; alimentazione per lo strato sciamanico, mai mostrato all'utente |
 | `accessible_text.html`          | notebook          | attributi `lang` a livello di paragrafo e frase — i lettori di schermo cambiano voce automaticamente per frammento |
 | `accessible_text.docx`          | notebook          | lo stesso contenuto con `<w:lang>` impostato per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word e SAPI lo usano offline, senza rilevatore online |
 | `analysis_report.html`           | `generate_report.py` | report HTML globale accessibile                |
@@ -299,7 +312,7 @@ La narrazione del notebook e l'output `print()` della maggior parte delle celle 
 
 ```
 accessible_text_analyst/
-├── accessible_text_analyst.ipynb   # pipeline principale (40 celle)
+├── accessible_text_analyst.ipynb   # pipeline principale (42 celle)
 ├── generate_report.py              # generatore di report HTML (vista lettore)
 ├── generate_diagnostic.py          # report HTML diagnostico dalle esportazioni CSV/JSON
 ├── generate_md.py                  # convertitore Markdown per NotebookLM

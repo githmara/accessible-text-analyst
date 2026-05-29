@@ -4,6 +4,31 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.3.0 — optional sentiment analysis as a shamanic feed
+
+**Theme.** Sentiment analysis returns to the pipeline, redesigned. The original `cell_sentiment` was dropped back in `e5ae27c`: it crashed at runtime (a tokenizer-dependency problem), and even working it presented a tweet-trained model's shaky verdicts directly to the screen-reader user. The reanimated version inverts that: it is **opt-in and off by default**, it never shows a verdict to the user, and its only purpose is to feed the optional shamanic layer. Fully backward-compatible — with the flag off (the default) nothing changes — so this is a minor bump.
+
+### New: optional `cell_sentiment` (off by default)
+
+Gated by `enable_sentiment` in `config.json` (default `false`). When on, it scores **each paragraph** (not each document, as the old cell did — the corpus is now joined and re-segmented into paragraphs) with `cardiffnlp/twitter-xlm-roberta-base-sentiment`, and writes **raw, unfiltered** rows to `sentiment.csv` (`para_id`, `label`, `score`, `lang`) — no confidence floor, no outlier exclusion. On any load failure it prints a warning and skips: **no English-model fallback**, `sentiment.csv` is simply not written, and the rest of the pipeline is unchanged. The cell is excluded from `analysis_report.html` (it is feed, not a user-facing result). The notebook is now 42 cells (21 code + 21 markdown).
+
+### New consumers in the shamanic layer
+
+- **`ritual_emotional_undertow`** (`shamanic_pipeline.py`, non-LLM) → `emotional_undertow.txt`: a per-paragraph "mood tide" (localized mood words, in reading order) plus a balance summary. Produced only when `sentiment.csv` exists.
+- **Vieno branch** (`shamanic_ai.py`, LLM): when `sentiment.csv` exists, Vieno's chant is built on the text's **emotional arc** instead of five raw sentences. To respect the gpt-4o token-per-minute limit, long corpora are downsampled to ≤ 40 ordered segments (a 2579-paragraph book drops a ~32k-token request to ~1.4k); short corpora (≤ 150 paragraphs) get the full raw rows. Without `sentiment.csv`, Vieno is byte-identical to before.
+
+### Dependencies
+
+The sentiment model needs **five** packages, all commented out in `requirements.txt` by default (mirroring the OCR/Icelandic blocks): `transformers`, `torch`, `sentencepiece`, `protobuf`, `tiktoken`. The last three are all required at once to build the XLM-RoBERTa SentencePiece tokenizer (the model ships no `tokenizer.json`) — missing `sentencepiece`/`protobuf` raises `Error parsing line b'\x0e' ...`, missing `tiktoken` raises `tiktoken is required to read a tiktoken file`. `_silence_hf_progress()` now also quiets the `huggingface_hub` "unauthenticated requests" warning.
+
+**Performance caveat.** On CPU the sentiment pass is heavy — empirically comparable to running local Whisper speech-to-text on CPU. On older or thermally-constrained machines this sustained full-load work can strain the processor; it is opt-in for exactly this reason.
+
+### Documentation
+
+All six READMEs document the optional sentiment feature (the `enable_sentiment` flag, the dependency block, and the two consuming rituals). `CLAUDE.md` gains a "Sentiment as optional shamanic feed" section.
+
+---
+
 ## v1.2.0 — jupytext editing workflow, reader-mode report truncation, and a structured diagnostic report
 
 **Theme.** Three independent improvements plus one real bug fix. The developer workflow for editing the notebook moves from fragile one-shot patch scripts to a jupytext pairing; the reader-facing HTML report stops dumping hundreds of kilobytes of per-document diagnostics; and a new standalone script produces a navigable, screen-reader-first diagnostic report from the CSV/JSON exports. Backward-compatible — no config or output-name changes — so this is a minor bump, not a hotfix.

@@ -50,6 +50,16 @@ sami:
     --- SAMIN KIPINÄ: ENERGINEN SYNTEESI ---
     TTS-ohje: lue suurella innolla, leveällä hymyllä ja korkealla dynamiikalla.
 
+undertow:
+  header: |+
+    --- POHJAVIRTA: TEKSTIN TUNNEVUOKSI ---
+    TTS-ohje: lue kuin nousu- ja laskuvesi, tauoilla aaltojen välissä.
+
+  mood_negative: 'pimeys'
+  mood_neutral: 'hiljaisuus'
+  mood_positive: 'valo'
+  summary_header: 'Vuoksen tasapaino:'
+
 pipeline:
   starting: 'Käynnistetään šamaanista käsittelyputkea...'
   info_detected_lang: '[INFO] Tunnistettu korpuksen kieli: {language}'
@@ -58,6 +68,7 @@ pipeline:
   ok_lore: '[OK] Lore-katkelmat luotu: {dirname}/'
   ok_roots: "[OK] Raa'at Juuret luotu: {filename}"
   ok_prophecies: '[OK] Ennustukset luotu: {filename}'
+  ok_undertow: '[OK] Pohjavirta luotu: {filename}'
   done: '[VALMIS] Kaikki ääniartefaktit ovat valmiina kansiossa audio_scripts.'
   fatal_error: '[KRIITTINEN VIRHE] {error}'
 

@@ -2,6 +2,7 @@ import os
 import json
 import csv
 import re
+from collections import Counter
 from pathlib import Path
 from urllib.parse import urlparse
 from openai import OpenAI
@@ -154,9 +155,7 @@ CRITICAL OUTPUT RULES:
 
 def ritual_echoes_of_the_old_world(export_dir, output_dir, lang):
     topics_file = export_dir / 'topic_keywords.json'
-    sentences_file = export_dir / 'sentences.csv'
-
-    if not topics_file.exists() or not sentences_file.exists():
+    if not topics_file.exists():
         return
 
     with open(topics_file, 'r', encoding='utf-8-sig') as f:
@@ -166,14 +165,6 @@ def ritual_echoes_of_the_old_world(export_dir, output_dir, lang):
             if str(i) in topics:
                 keywords.extend(topics[str(i)])
 
-    sentences = []
-    with open(sentences_file, 'r', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            sentences.append(row['sentence'])
-            if len(sentences) > 5:
-                break
-
     language_name = LANGUAGE_NAMES.get(lang, 'English')
 
     system_message = (
@@ -181,7 +172,94 @@ def ritual_echoes_of_the_old_world(export_dir, output_dir, lang):
         "You chant in hypnotic, dark cadences."
     )
 
-    prompt = f"""Here are the keywords extracted from the analysed text: {', '.join(keywords)}.
+    # Rozgałęzienie. Jeśli włączono OPCJONALNY sentyment i się powiódł
+    # (sentiment.csv istnieje i ma wiersze), Vieno buduje pieśń na PEŁNEJ,
+    # surowej analizie sentymentu — zamiast na 5 surowych zdaniach. Słowa
+    # kluczowe zostają w obu wariantach. Jeśli sentymentu nie ma (wyłączony
+    # albo coś poszło nie tak — np. brak tiktoken, bez fallbacku), schodzimy
+    # na ścieżkę domyślną z echami zdań z sentences.csv (jak dotychczas).
+    sentiment_file = export_dir / 'sentiment.csv'
+    sentiment_rows = []
+    if sentiment_file.exists():
+        with open(sentiment_file, 'r', encoding='utf-8-sig') as f:
+            sentiment_rows = [r for r in csv.DictReader(f)
+                              if (r.get('label') or '').strip()]
+
+    if sentiment_rows:
+        # Łuk segmentowy. „Cała surowa analiza" nie mieści się w limicie TPM
+        # dla długich korpusów (np. 2579 akapitów = ~32k tokenów > 30k TPM),
+        # więc małe korpusy (<= _SENT_MAX_RAW akapitów) dostają pełne surowe
+        # wiersze, a większe — downsampling do <= _SENT_SEGMENTS segmentów
+        # (dominujący nastrój + miks per segment). Vieno i tak czyta to jako
+        # emocjonalny kontur całości, nie potrzebuje 2579 punktów danych.
+        _SENT_MAX_RAW = 150
+        _SENT_SEGMENTS = 40
+
+        def _label_of(r):
+            return (r.get('label') or '').strip().lower()
+
+        total = len(sentiment_rows)
+        dist = Counter(_label_of(r) for r in sentiment_rows)
+        dist_line = ", ".join(
+            f"{lab}: {dist.get(lab, 0)}" for lab in ('negative', 'neutral', 'positive'))
+
+        if total <= _SENT_MAX_RAW:
+            mode_note = "the full raw analysis, paragraph by paragraph (label + confidence)"
+            body_lines = [
+                f"Paragraph {r.get('para_id', '?')} [{r.get('lang', '?')}]: "
+                f"{r.get('label', '?')} (confidence {r.get('score', '?')})"
+                for r in sentiment_rows
+            ]
+        else:
+            seg = -(-total // _SENT_SEGMENTS)  # ceil — rozmiar jednego segmentu
+            mode_note = (f"a downsampled emotional arc of the whole text "
+                         f"({total} paragraphs condensed into segments, in reading order)")
+            body_lines = []
+            for i in range(0, total, seg):
+                chunk = sentiment_rows[i:i + seg]
+                c = Counter(_label_of(r) for r in chunk)
+                dom = c.most_common(1)[0][0] if c else '?'
+                mix = ", ".join(f"{k} {v}" for k, v in c.most_common())
+                body_lines.append(
+                    f"Paragraphs {chunk[0].get('para_id', '?')}-{chunk[-1].get('para_id', '?')}: "
+                    f"{dom} (mix: {mix})")
+
+        analysis_block = (
+            f"Overall mood distribution across {total} paragraphs: {dist_line}.\n"
+            f"Below is {mode_note}:\n\n" + "\n".join(body_lines))
+
+        prompt = f"""Here are the keywords extracted from the analysed text: {', '.join(keywords)}.
+
+This is the emotional cartography of the whole work — read it as the rise and fall of mood from beginning to end: where it sinks into the negative, where it rests in the neutral, where it lifts to the positive.
+
+{analysis_block}
+
+It does not matter whether the text was about trains or a master's thesis. Forge a primal, shamanic trance-chant from the keywords above, and let this emotional arc shape its DYNAMICS — let the chant darken across the negative stretches and let light break through where the mood turns positive. An old Polish folk song captures the voice you channel: "{SHAMAN_QUOTE_PL}" (meaning in English: "{SHAMAN_QUOTE_GLOSS}"). The chant must be hypnotic and dark.
+
+CRITICAL OUTPUT RULES:
+- Write the entire chant in {language_name}.
+- Every line of the chant — narration, invocation, transitions — must be in {language_name}.
+- Do not switch to English. Do not include translations.
+- Do not dump the raw analysis back; transmute the moods into imagery and rhythm.
+- Do not include the Polish quote or its gloss in your output — they are for your voice only.
+- Do not list the keywords verbatim — weave them into the chant.
+"""
+    else:
+        sentences_file = export_dir / 'sentences.csv'
+        if not sentences_file.exists():
+            return
+
+        sentences = []
+        with open(sentences_file, 'r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                sentences.append(row['sentence'])
+                if len(sentences) > 5:
+                    break
+        if len(sentences) < 5:
+            return
+
+        prompt = f"""Here are the keywords extracted from the analysed text: {', '.join(keywords)}.
 
 It does not matter whether the text was about trains or a master's thesis. Forge a primal, shamanic ritual from these words.
 

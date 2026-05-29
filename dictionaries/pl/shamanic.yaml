@@ -50,6 +50,16 @@ sami:
     --- ISKRA SAMI: ENERGETYCZNA SYNTEZA ---
     Instrukcja TTS: czytać z ogromnym entuzjazmem, szerokim uśmiechem i wysoką dynamiką.
 
+undertow:
+  header: |+
+    --- PRĄD PODSKÓRNY: EMOCJONALNY PŁYW TEKSTU ---
+    Instrukcja TTS: czytać jak przypływ i odpływ, z pauzami między falami.
+
+  mood_negative: 'mrok'
+  mood_neutral: 'cisza'
+  mood_positive: 'światło'
+  summary_header: 'Bilans pływu:'
+
 pipeline:
   starting: 'Inicjowanie szamańskiego potoku przetwarzania...'
   info_detected_lang: '[INFO] Wykryty język korpusu: {language}'
@@ -58,6 +68,7 @@ pipeline:
   ok_lore: '[OK] Wygenerowano Znajdźki: {dirname}/'
   ok_roots: '[OK] Wygenerowano Surowe Rdzenie: {filename}'
   ok_prophecies: '[OK] Wygenerowano Przepowiednie: {filename}'
+  ok_undertow: '[OK] Wygenerowano Prąd Podskórny: {filename}'
   done: '[ZAKOŃCZONO] Wszystkie artefakty audio są gotowe w folderze audio_scripts.'
   fatal_error: '[BŁĄD KRYTYCZNY] {error}'
 

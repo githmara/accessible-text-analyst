@@ -50,6 +50,16 @@ sami:
     --- SCINTILLA DI SAMI: SINTESI ENERGETICA ---
     Istruzioni TTS: leggere con grande entusiasmo, un ampio sorriso e alta dinamica.
 
+undertow:
+  header: |+
+    --- LA RISACCA: MAREA EMOTIVA DEL TESTO ---
+    Istruzione TTS: leggere come un flusso e riflusso, con pause tra le onde.
+
+  mood_negative: 'oscurità'
+  mood_neutral: 'quiete'
+  mood_positive: 'luce'
+  summary_header: 'Bilancio della marea:'
+
 pipeline:
   starting: 'Avvio del condotto sciamanico di elaborazione...'
   info_detected_lang: '[INFO] Lingua del corpus rilevata: {language}'
@@ -58,6 +68,7 @@ pipeline:
   ok_lore: '[OK] Frammenti di lore generati: {dirname}/'
   ok_roots: '[OK] Radici Grezze generate: {filename}'
   ok_prophecies: '[OK] Profezie generate: {filename}'
+  ok_undertow: '[OK] Risacca generata: {filename}'
   done: '[COMPLETATO] Tutti gli artefatti audio sono pronti nella cartella audio_scripts.'
   fatal_error: '[ERRORE CRITICO] {error}'
 

@@ -63,6 +63,11 @@ CUSTOM_PATTERNS = []
 # ["en", "pl", "it", "fi", "is"] для латиницы. Если корпус — скан или
 # изображение, выставите ocr_languages в config.json под скрипт документа.
 OCR_LANGS = ["en"]
+# Опциональный анализ тональности (по умолчанию выключен). Включается ключом
+# "enable_sentiment": true в config.json. Это тяжёлая опция (~1,1 ГБ модель
+# cardiffnlp при первом запуске) и она НЕ выводит вердикт пользователю —
+# результат пишется только в sentiment.csv как «пища» для шаманского слоя.
+ENABLE_SENTIMENT = False
 
 # Принимаем config.json и config.ini (содержимое — всегда JSON,
 # расширение .ini — лишь косметика для нетехнических пользователей
@@ -81,6 +86,7 @@ if _CONFIG_PATH is not None:
         _ocr_cfg = _cfg.get("ocr_languages")
         if isinstance(_ocr_cfg, list) and _ocr_cfg:
             OCR_LANGS = [str(x).strip() for x in _ocr_cfg if str(x).strip()]
+        ENABLE_SENTIMENT = bool(_cfg.get("enable_sentiment", False))
         print(f"[OK] Конфигурация загружена: {_CONFIG_PATH}")
     except Exception as _e:
         print(f"[ВНИМАНИЕ] Не удалось прочитать {_CONFIG_PATH}: {_e}")
@@ -804,6 +810,13 @@ def _silence_hf_progress():
         import transformers
         transformers.logging.set_verbosity_error()
         transformers.utils.logging.disable_progress_bar()
+    except Exception:
+        pass
+    # Предупреждение «unauthenticated requests to the HF Hub» приходит из
+    # huggingface_hub, а не из transformers, поэтому глушим его отдельно.
+    try:
+        from huggingface_hub.utils import logging as _hf_logging
+        _hf_logging.set_verbosity_error()
     except Exception:
         pass
 
@@ -2299,6 +2312,82 @@ else:
         ex = subset[0][:200].replace("\n", " ")
         print(f"  Пример: {ex}...")
         print()
+
+# %% [markdown] id="md_sentiment" tags=["md_sentiment"]
+# ## Анализ тональности (опционально)
+#
+# Эта ячейка выполняется только если в `config.json` задан ключ `"enable_sentiment": true`.
+# Модель `cardiffnlp/twitter-xlm-roberta-base-sentiment` оценивает тональность каждого
+# абзаца (негативно / нейтрально / позитивно). Результат сознательно **не** выводится
+# пользователю как вердикт — он пишется только в `sentiment.csv` и служит «пищей» для
+# шаманского слоя (рытуал Vieno и локальный «подводное течение»). Если опция выключена
+# или модель не поднялась (например, отсутствует `tiktoken`), ячейка молча пропускается,
+# и весь остальной конвейер работает как прежде — без английского фолбэка.
+
+# %% id="cell_sentiment" tags=["cell_sentiment"]
+print("--- Анализ тональности (опционально) ---")
+sentiment_written = False
+if not ENABLE_SENTIMENT:
+    print("Опция выключена (enable_sentiment != true в config.json) — пропуск.")
+    print("Шаманский слой использует поведение по умолчанию.")
+elif not paragraphs:
+    print("Нет абзацев для анализа — пропуск.")
+else:
+    _silence_hf_progress()
+    SENTIMENT_MODEL = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+    _sent_clf = None
+    try:
+        from transformers import pipeline as _hf_pipeline
+        print(f"Загрузка модели тональности: {SENTIMENT_MODEL}")
+        print("Первый запуск скачивает веса (~1,1 ГБ), далее — локальный кэш.")
+        _sent_clf = _hf_pipeline(
+            "sentiment-analysis",
+            model=SENTIMENT_MODEL,
+            truncation=True,
+            max_length=512,
+        )
+        print("[OK] Модель тональности загружена.")
+    except Exception as _exc:
+        # Намеренно БЕЗ английского фолбэка: если модель не поднялась — просто
+        # пропускаем, sentiment.csv не пишется, и шаманский слой ведёт себя
+        # как раньше. Токенизатор XLM-RoBERTa требует ОДНОВРЕМЕННО
+        # sentencepiece + protobuf (иначе "Error parsing line b'\x0e' ...")
+        # И tiktoken (иначе "tiktoken is required to read a tiktoken file").
+        _sent_clf = None
+        print(f"[ВНИМАНИЕ] Модель тональности недоступна: {_exc}")
+        print("  Анализ тональности пропущен (без фолбэка). Конвейер продолжает работу.")
+
+    if _sent_clf is not None:
+        # Нормализация меток: новый формат (negative/neutral/positive)
+        # и старый (LABEL_0/LABEL_1/LABEL_2).
+        _LABEL_NORM = {
+            "negative": "negative", "neutral": "neutral", "positive": "positive",
+            "label_0": "negative", "label_1": "neutral", "label_2": "positive",
+        }
+        _rows = []
+        for _i, (_para, _plang) in enumerate(zip(paragraphs, para_langs), 1):
+            try:
+                _res = _sent_clf(_para[:2000])[0]
+                _label = _LABEL_NORM.get(str(_res["label"]).lower(),
+                                         str(_res["label"]).lower())
+                _score = round(float(_res["score"]), 4)
+            except Exception:
+                _label, _score = "error", 0.0
+            _rows.append({"para_id": _i, "label": _label,
+                          "score": _score, "lang": _plang})
+
+        # Сырые данные: ничего не фильтруем (ни по порогу уверенности, ни по
+        # иноязычным абзацам) — шаман получает полную картину и решает сам.
+        _df_sentiment = pd.DataFrame(_rows, columns=["para_id", "label", "score", "lang"])
+        _df_sentiment.to_csv(PROJECT_DIR / "sentiment.csv", index=False, encoding="utf-8-sig")
+        sentiment_written = True
+        print(f"\nПроанализировано абзацев: {len(_rows)}")
+        _dist = Counter(r["label"] for r in _rows)
+        for _lab in ("negative", "neutral", "positive"):
+            print(f"  {_lab:<9}: {_dist.get(_lab, 0)}")
+        if _dist.get("error"):
+            print(f"  error    : {_dist['error']} (абзацы, на которых модель упала)")
+        print(f"Сохранено (сырые данные для шаманов): {PROJECT_DIR / 'sentiment.csv'}")
 
 # %% [markdown] id="md_export" tags=["md_export"]
 # ## Экспорт результатов

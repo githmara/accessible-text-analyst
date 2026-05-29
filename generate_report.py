@@ -879,9 +879,24 @@ def build_accessible_html():
             return "EXIT_WORDS" in src and "_qa_tfidf" in src
         return False
 
+    def _is_sentiment_cell(cell):
+        # cell_sentiment/md_sentiment: opcjonalny sentyment to POŻYWKA dla
+        # szamanów, a nie wynik dla użytkownika — świadomie nie wchodzi do
+        # raportu czytelniczego (analogicznie do qa_rag). Ale to NIE ostatni
+        # blok, więc pomijamy przez `continue`, nie `break`. Detekcja po
+        # treści (numeryczne top-level cell IDs nie nadają się do matchu).
+        src = "".join(cell.get("source", []))
+        if cell["cell_type"] == "markdown":
+            return "enable_sentiment" in src and "тональност" in src
+        if cell["cell_type"] == "code":
+            return "SENTIMENT_MODEL" in src or "sentiment_written" in src
+        return False
+
     for cell in nb.get("cells", []):
         if _is_qa_rag_boundary(cell):
             break
+        if _is_sentiment_cell(cell):
+            continue
 
         if cell["cell_type"] == "markdown":
             source = "".join(cell.get("source", []))

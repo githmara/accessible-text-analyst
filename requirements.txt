@@ -32,6 +32,26 @@ markdownify
 openai
 python-dotenv
 
+# Opcjonalna analiza sentymentu (pożywka dla rytuału Vieno i lokalnego rytuału
+# "prąd podskórny"). Odkomentuj te linie ORAZ ustaw "enable_sentiment": true
+# w config.json — komórka cell_sentiment oceni nastrój każdego akapitu modelem
+# cardiffnlp/twitter-xlm-roberta-base-sentiment (3 klasy, ~1,1 GB przy pierwszym
+# pobraniu, potem lokalny cache). Model ma tokenizer SentencePiece (XLM-RoBERTa)
+# i NIE dołącza tokenizer.json, więc transformers 5.x buduje tokenizer z pliku
+# sentencepiece.bpe.model. Wymaga to TRZECH dodatkowych zależności naraz:
+#   - sentencepiece + protobuf — bez nich parser czyta binarny model jako tekst
+#     i pada na "Error parsing line b'\x0e' ...";
+#   - tiktoken — bez niego ścieżka ładowania tokenizera pada na komunikacie
+#     "tiktoken is required to read a tiktoken file".
+# Brak którejkolwiek z nich => sentyment jest po prostu pomijany (bez fallbacku),
+# a reszta potoku działa jak dotąd. transformers i torch współdzielone z blokami
+# islandzkim/OCR.
+# transformers
+# torch
+# sentencepiece
+# protobuf
+# tiktoken
+
 # Wsparcie OCR dla skanowanych PDF-ów i obrazów (.png/.jpg/.jpeg/.tif/.tiff/.bmp/.webp).
 # Odkomentuj obie linie, jeśli twój korpus zawiera skany lub obrazy — pozwoli to
 # renderować strony PDF przez pypdfium2 i rozpoznawać tekst przez easyocr.
