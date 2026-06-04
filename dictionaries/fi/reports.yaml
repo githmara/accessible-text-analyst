@@ -7,3 +7,16 @@ generate_report:
 generate_md:
   error_file_not_found: '[VIRHE] Tiedostoa ei löytynyt: {path}'
   ok_markdown_ready: '[OK] Markdown-raportti valmis: {path}'
+
+dispatcher:
+  starting: 'Ääniohjaaja: shamaaniäänten synteesi ElevenLabsin kautta...'
+  err_no_api_key: 'ELEVENLABS_API_KEY ei löytynyt tiedostosta golden_key.env — ääntä ei voi syntetisoida.'
+  err_no_voices: 'Ei "voices"-kartoitusta tiedostossa config.json/.ini — lisää ElevenLabs-ääni-ID:t kohteille katla/vieno/lumi/sami.'
+  err_no_audio_scripts: 'Ei audio_scripts/-kansiota polussa {path} — aja ensin shamaaniputki (shamanic_ai.py).'
+  warn_no_voice_id: '[OHITETTU] Ei ääni-ID:tä kohteelle "{voice}" asetuksen "voices" alla — ohitetaan tämä ääni.'
+  ok_voice: '[OK] {voice}: ääni tallennettu nimellä {filename}'
+  warn_voice_failed: '[VIRHE] Ääni "{voice}" epäonnistui: {error}'
+  done_with_errors: '[KESKEN] Kaikkia ääniä ei syntetisoitu (epäonnistui {failed}/{total}). Katso viestit yltä.'
+  warn_nothing_produced: '[KESKEN] Ääntä ei tuotettu. Artefaktit polussa {path} puuttuvat tai ovat tyhjiä — ajettiinko shamanic_ai.py ensin?'
+  done: '[VALMIS] Valmiita ääninauhoituksia: {count}. Tiedostot kansiossa audio_scripts.'
+  fatal_error: '[KRIITTINEN VIRHE] {error}'

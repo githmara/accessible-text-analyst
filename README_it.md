@@ -14,6 +14,7 @@ Pipeline NLP multilingue progettata per **l'accessibilità con i lettori di sche
 - `generate_md.py` — converte `analysis_report.html` in `notebooklm_report.md` per NotebookLM. Gli span di accessibilità vengono rimossi perché NotebookLM non li consuma.
 - `shamanic_pipeline.py` *(opzionale)* — un post-processore senza LLM che trasforma gli export CSV/JSON del notebook in artefatti testuali rituali (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` e — quando l'analisi del sentiment opzionale è abilitata — `emotional_undertow.txt`), completamente localizzati nelle sei lingue supportate.
 - `shamanic_ai.py` *(opzionale, basato su LLM)* — chiama OpenAI per generare quattro voci narrative (`Katla`, `Vieno`, `Lumi`, `Sami`) sopra gli stessi export. Quando il `sentiment.csv` opzionale è presente, Vieno costruisce il suo canto sull'arco emotivo del testo invece che sulle frasi grezze. Richiede `OPENAI_API_KEY` in `golden_key.env`.
+- `shamanic_voice.py` *(opzionale, richiede ElevenLabs)* — un dispatcher autonomo a esecuzione singola che sintetizza in audio `.mp3` i quattro artefatti narrativi prodotti da `shamanic_ai.py` tramite l'API ElevenLabs, registra ogni successo/fallimento sulla console ed esce (nessun bot, nessun server). Richiede `ELEVENLABS_API_KEY` in `golden_key.env` e una mappatura `voices` nella configurazione.
 - `shamanic_locale.py` — il pacchetto di localizzazione per entrambi gli script sciamanici (template, intestazioni e stringhe di fallback di Lumi in tutte e sei le lingue).
 
 ## Cosa fa la pipeline
@@ -164,7 +165,13 @@ Contenuto:
   "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
-  "lumi_vieno_lines": null
+  "lumi_vieno_lines": null,
+  "voices": {
+    "katla": "",
+    "vieno": "",
+    "lumi": "",
+    "sami": ""
+  }
 }
 ```
 
@@ -178,6 +185,7 @@ Contenuto:
 | `ui_lang`          | string          | Lingua dell'interfaccia per l'output della console e l'attributo `<html lang>` del report generato (`pl` / `en` / `ru` / `fi` / `is` / `it`). Stringa vuota o codice sconosciuto → fallback `en`. Indipendente dalla lingua del corpus analizzato, che viene rilevata automaticamente. |
 | `lumi_katla_lines` | integer o null  | Limite di ornamento opzionale per il dispaccio finale di Lumi in `shamanic_ai.py`: quante righe non vuote del monologo di Katla vede Lumi. `null` o chiave mancante = tutto il contenuto; integer N > 0 = prime N righe. |
 | `lumi_vieno_lines` | integer o null  | Come `lumi_katla_lines`, ma per il canto di echi di Vieno. |
+| `voices`           | oggetto         | Associa ciascuna voce sciamanica (`katla` / `vieno` / `lumi` / `sami`) a un ID voce ElevenLabs, consumato da `shamanic_voice.py`. Una voce con un ID vuoto o mancante viene saltata. Necessario solo se esegui il dispatcher audio. |
 
 > **Analisi del sentiment — costo della CPU.** Con `enable_sentiment: true`, il passaggio per paragrafo è computazionalmente pesante sulla CPU — all'incirca paragonabile all'esecuzione locale del riconoscimento vocale Whisper su CPU. Su macchine più vecchie o con vincoli termici questo carico sostenuto può rappresentare una vera sollecitazione per il processore; attivalo deliberatamente, idealmente su una macchina con una GPU o con margine per un lavoro prolungato a pieno carico.
 
@@ -266,6 +274,23 @@ OPENAI_API_KEY=sk-...
 3. **Lumi** legge `prophecies.txt` (obbligatorio) più il monologo di Katla e il canto di Vieno (ornamento opzionale) e produce il dispaccio finale. Le stringhe di fallback localizzate coprono il caso in cui Katla o Vieno manchino.
 4. **Sami** legge il rapporto di Lumi e fornisce una sintesi ad alta energia con la scintilla di speranza o un invito all'azione.
 
+### 6. Dispatcher audio sciamanico (opzionale, richiede ElevenLabs)
+
+```bash
+python shamanic_voice.py
+# → export_results/<project>/audio_scripts/katla_entity_monologue.mp3
+#                                          /vieno_echoes_chant.mp3
+#                                          /lumi_final_report.mp3
+#                                          /sami_energetic_spark.mp3
+```
+
+Uno script autonomo a esecuzione singola che legge i quattro artefatti narrativi prodotti da `shamanic_ai.py` e sintetizza ciascuno in un `.mp3` tramite il modello `eleven_multilingual_v2` di ElevenLabs (che rileva automaticamente la lingua parlata, quindi non viene passato alcun parametro di lingua). Registra ogni successo o fallimento sulla console ed esce — non c'è alcun bot, nessun server, nessuna sessione interattiva. Richiede due cose:
+
+- `ELEVENLABS_API_KEY` in `golden_key.env` (lo stesso file che contiene `OPENAI_API_KEY`).
+- una mappatura `voices` in `config.json` / `config.ini` che assegni un ID voce ElevenLabs a ciascuno di `katla`, `vieno`, `lumi`, `sami`. Una voce il cui ID è vuoto o il cui artefatto è mancante viene saltata (esegui prima `shamanic_ai.py`); il fallimento di una voce non interrompe le altre.
+
+> **Privacy e costo.** Come `shamanic_ai.py` con OpenAI, questo script invia il testo degli artefatti a un servizio di terze parti (ElevenLabs) per la sintesi, ed ElevenLabs è un'API **a pagamento**. Il contenuto lascia la tua macchina — non eseguirlo su materiale che non puoi condividere all'esterno.
+
 ## Output
 
 Ogni corpus analizzato ottiene la propria sottodirectory sotto `export_results/`, denominata in base al file sorgente (percorso ed estensione rimossi) o in base a un `domain_slug` per gli URL. Il corpus di esempio integrato usa `export_results/_default/`.
@@ -288,6 +313,7 @@ Ogni sottodirectory contiene:
 | `diagnostic_report.html`         | `generate_diagnostic.py` | report diagnostico strutturato (temi, tesi, entità per tipo, parole chiave) dalle esportazioni CSV/JSON |
 | `notebooklm_report.md`      | `generate_md.py`     | Markdown pronto per NotebookLM                 |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | artefatti testuali rituali / narrativi |
+| `audio_scripts/*.mp3`           | `shamanic_voice.py` *(opzionale)* | le quattro voci narrative sintetizzate in audio tramite ElevenLabs |
 
 ## Accessibilità
 
@@ -318,6 +344,7 @@ accessible_text_analyst/
 ├── generate_md.py                  # convertitore Markdown per NotebookLM
 ├── shamanic_pipeline.py            # opzionale: post-processore rituale senza LLM
 ├── shamanic_ai.py                  # opzionale: narratori rituali LLM
+├── shamanic_voice.py               # opzionale: dispatcher audio ElevenLabs (esecuzione singola)
 ├── shamanic_locale.py              # pacchetto di localizzazione per lo strato sciamanico
 ├── config.example.json             # template di configurazione, estensione JSON (versionato)
 ├── config.example.ini              # template di configurazione, estensione INI (versionato)

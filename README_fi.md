@@ -14,6 +14,7 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 - `generate_md.py` — muuntaa `analysis_report.html`-tiedoston Markdown-muotoon (`notebooklm_report.md`) NotebookLM:ää varten. Saavutettavuus-spanit puretaan, koska NotebookLM ei käytä niitä.
 - `shamanic_pipeline.py` *(valinnainen)* — ei-LLM-jälkikäsittelijä, joka muuntaa notebookin CSV/JSON-viennit rituaalisiksi tekstiartefakteiksi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` ja — kun valinnainen sentimenttianalyysi on käytössä — `emotional_undertow.txt`) ja on täysin lokalisoitu kaikille kuudelle tuetulle kielelle.
 - `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu OpenAI:ta neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Kun valinnainen `sentiment.csv` on saatavilla, Vieno rakentaa laulunsa tekstin tunnekaaren varaan raakalauseiden sijaan. Vaatii `OPENAI_API_KEY`:n tiedostossa `golden_key.env`.
+- `shamanic_voice.py` *(valinnainen, vaatii ElevenLabsin)* — itsenäinen, kertasuoritteinen dispatcher, joka syntetisoi `shamanic_ai.py`:n tuottamat neljä kerronnallista artefaktia `.mp3`-äänitiedostoiksi ElevenLabs-API:n kautta, kirjaa kunkin onnistumisen/epäonnistumisen konsoliin ja päättyy (ei bottia, ei palvelinta). Tarvitsee `ELEVENLABS_API_KEY`:n tiedostossa `golden_key.env` sekä `voices`-määrityksen asetuksissa.
 - `shamanic_locale.py` — molempien shamanististen skriptien lokalisointipaketti (mallit, otsikot ja Lumin fallback-merkkijonot kaikilla kuudella kielellä).
 
 ## Mitä putki tekee
@@ -164,7 +165,13 @@ Sisältö:
   "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
-  "lumi_vieno_lines": null
+  "lumi_vieno_lines": null,
+  "voices": {
+    "katla": "",
+    "vieno": "",
+    "lumi": "",
+    "sami": ""
+  }
 }
 ```
 
@@ -178,6 +185,7 @@ Sisältö:
 | `ui_lang`          | string          | Käyttöliittymän kieli konsolituloste ja luodun raportin `<html lang>` -attribuutti (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tyhjä merkkijono tai tuntematon koodi → fallback `en`. Riippumaton analysoidun korpuksen kielestä, joka tunnistetaan automaattisesti. |
 | `lumi_katla_lines` | integer tai null | Valinnainen koristerajoitus `shamanic_ai.py`:n Lumin loppuraportille: kuinka monta ei-tyhjää riviä Katlan monologista Lumi näkee. `null` tai puuttuva avain = koko sisältö; integer N > 0 = ensimmäiset N riviä. |
 | `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
+| `voices`           | object          | Yhdistää jokaisen shamanistisen äänen (`katla` / `vieno` / `lumi` / `sami`) ElevenLabs-äänen tunnisteeseen; käyttää `shamanic_voice.py`. Ääni, jonka tunniste on tyhjä tai puuttuu, ohitetaan. Tarvitaan vain, jos ajat äänidispatcherin. |
 
 > **Sentimenttianalyysi — CPU-kuorma.** Kun `enable_sentiment: true`, kappalekohtainen ajo on laskennallisesti raskas CPU:lla — suunnilleen verrattavissa paikallisen Whisper-puheentunnistuksen ajamiseen CPU:lla. Vanhemmilla tai lämmöllisesti rajoitetuilla koneilla tämä jatkuva kuorma voi todella rasittaa prosessoria; ota se käyttöön harkiten, mieluiten koneella jossa on GPU tai pelivaraa pitkäkestoiseen täyskuormatyöhön.
 
@@ -266,6 +274,23 @@ OPENAI_API_KEY=sk-...
 3. **Lumi** lukee `prophecies.txt`:n (pakollinen) sekä Katlan monologin ja Vienon laulun (valinnainen koriste) ja tuottaa loppuraportin. Lokalisoidut fallback-merkkijonot kattavat tapauksen, jossa Katla tai Vieno puuttuvat.
 4. **Sami** lukee Lumin raportin ja toimittaa korkeaenergisen synteesin toivon kipinällä tai toimintakutsulla.
 
+### 6. Shamanistinen äänidispatcher (valinnainen, vaatii ElevenLabsin)
+
+```bash
+python shamanic_voice.py
+# → export_results/<project>/audio_scripts/katla_entity_monologue.mp3
+#                                          /vieno_echoes_chant.mp3
+#                                          /lumi_final_report.mp3
+#                                          /sami_energetic_spark.mp3
+```
+
+Itsenäinen, kertasuoritteinen skripti, joka lukee `shamanic_ai.py`:n tuottamat neljä kerronnallista artefaktia ja syntetisoi kunkin `.mp3`-tiedostoksi ElevenLabsin `eleven_multilingual_v2`-mallilla (joka tunnistaa puhutun kielen automaattisesti, joten kieliparametria ei välitetä). Se kirjaa kunkin onnistumisen tai epäonnistumisen konsoliin ja päättyy — ei bottia, ei palvelinta, ei interaktiivista istuntoa. Se tarvitsee kaksi asiaa:
+
+- `ELEVENLABS_API_KEY`:n tiedostossa `golden_key.env` (sama tiedosto, joka sisältää `OPENAI_API_KEY`:n).
+- `voices`-määrityksen tiedostossa `config.json` / `config.ini`, joka liittää ElevenLabs-äänen tunnisteen kuhunkin äänistä `katla`, `vieno`, `lumi`, `sami`. Ääni, jonka tunniste on tyhjä tai jonka artefakti puuttuu, ohitetaan (aja `shamanic_ai.py` ensin); yhden äänen epäonnistuminen ei keskeytä muita.
+
+> **Yksityisyys ja kustannukset.** Kuten `shamanic_ai.py` OpenAI:n kanssa, tämä skripti lähettää artefaktitekstin kolmannen osapuolen palveluun (ElevenLabs) syntetisoitavaksi, ja ElevenLabs on **maksullinen** API. Sisältö poistuu koneeltasi — älä aja sitä materiaalilla, jota et voi jakaa ulkopuolelle.
+
 ## Tuloste
 
 Jokainen analysoitu korpus saa oman alihakemistonsa kohdassa `export_results/`, nimettynä lähdetiedoston mukaan (polku ja pääte poistettuna) tai `domain_slug`:n mukaan URL-osoitteille. Sisäänrakennettu esimerkkikorpus käyttää `export_results/_default/`.
@@ -288,6 +313,7 @@ Jokainen alihakemisto sisältää:
 | `diagnostic_report.html`         | `generate_diagnostic.py` | jäsennelty diagnostiikkaraportti (aiheet, teesit, entiteetit tyypeittäin, avainsanat) CSV/JSON-vienneistä |
 | `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-valmis Markdown                     |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | rituaaliset / kerronnalliset tekstiartefaktit |
+| `audio_scripts/*.mp3`           | `shamanic_voice.py` *(valinnainen)* | neljä kerronnallista ääntä syntetisoituna äänitiedostoiksi ElevenLabsin kautta |
 
 ## Saavutettavuus
 
@@ -318,6 +344,7 @@ accessible_text_analyst/
 ├── generate_md.py                  # NotebookLM-Markdown-muunnin
 ├── shamanic_pipeline.py            # valinnainen: ei-LLM rituaalinen jälkikäsittelijä
 ├── shamanic_ai.py                  # valinnainen: LLM-vetoiset rituaaliset kertojat
+├── shamanic_voice.py               # valinnainen: ElevenLabs-äänidispatcher (kertasuoritteinen)
 ├── shamanic_locale.py              # lokalisointipaketti shamanistiselle kerrokselle
 ├── config.example.json             # asetusmalli, JSON-pääte (versioidaan)
 ├── config.example.ini              # asetusmalli, INI-pääte (versioidaan)

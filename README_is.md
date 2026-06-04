@@ -14,6 +14,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 - `generate_md.py` — breytir `analysis_report.html` í `notebooklm_report.md` fyrir NotebookLM. Aðgengis-spans eru afpökkuð því NotebookLM notar þau ekki.
 - `shamanic_pipeline.py` *(valfrjálst)* — eftirvinnsluforrit án LLM sem breytir CSV/JSON-útflutningi minnisbókarinnar í helgisiðatextagripi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` og — þegar valfrjáls tilfinningagreining er virk — `emotional_undertow.txt`), öll að fullu staðfærð fyrir sex studdu tungumálin.
 - `shamanic_ai.py` *(valfrjálst, byggt á LLM)* — kallar í OpenAI til að búa til fjórar frásagnarraddir (`Katla`, `Vieno`, `Lumi`, `Sami`) ofan á sömu útflutninga. Þegar valfrjálsa `sentiment.csv` er til staðar byggir Vieno söng sinn á tilfinningabogadrætti textans í stað hráu setninganna. Krefst `OPENAI_API_KEY` í `golden_key.env`.
+- `shamanic_voice.py` *(valfrjálst, krefst ElevenLabs)* — sjálfstæður afgreiðari sem keyrir einu sinni og myndgerir frásagnargripina fjóra sem `shamanic_ai.py` bjó til í `.mp3`-hljóð gegnum ElevenLabs API-ið, skráir hvern árangur/villu í skelina og hættir svo (enginn botni, enginn þjónn). Þarf `ELEVENLABS_API_KEY` í `golden_key.env` og `voices`-vörpun í stillingunum.
 - `shamanic_locale.py` — staðfærsluböggull fyrir bæði shamanísku forritin (sniðmát, hausa og fallback-strengi Lumi á öllum sex tungumálum).
 
 ## Hvað gerir leiðslan
@@ -164,7 +165,13 @@ Innihald:
   "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
-  "lumi_vieno_lines": null
+  "lumi_vieno_lines": null,
+  "voices": {
+    "katla": "",
+    "vieno": "",
+    "lumi": "",
+    "sami": ""
+  }
 }
 ```
 
@@ -178,6 +185,7 @@ Innihald:
 | `ui_lang`          | string          | Tungumál notendaviðmóts fyrir úttak í skel og `<html lang>` eigind í myndaðri skýrslu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tómur strengur eða óþekktur kóði → fallback `en`. Óháð tungumáli greinda safnsins, sem er greint sjálfvirkt. |
 | `lumi_katla_lines` | heiltala eða null | Valfrjáls skrautmark fyrir lokaskýrslu Lumi úr `shamanic_ai.py`: hve margar ekki-tómar línur einræðu Kötlu Lumi sér. `null` eða vantandi lykill = allt innihald; heiltala N > 0 = fyrstu N línurnar. |
 | `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
+| `voices`           | hlutur          | Varpar hverri shamanískri rödd (`katla` / `vieno` / `lumi` / `sami`) yfir á ElevenLabs radd-auðkenni, notað af `shamanic_voice.py`. Rödd með tómu eða vantandi auðkenni er sleppt. Aðeins nauðsynlegt ef þú keyrir hljóðafgreiðarann. |
 
 > **Tilfinningagreining — álag á örgjörva.** Þegar `enable_sentiment: true` er virkt er greiningin per málsgrein reikniþung á CPU — nokkurn veginn sambærileg við að keyra staðbundna Whisper tal-í-texta á CPU. Á eldri eða hitatakmörkuðum vélum getur þetta viðvarandi álag verið raunverulegt erfiði fyrir örgjörvann; virkjaðu það meðvitað, helst á vél með GPU eða með svigrúm fyrir langvarandi vinnu á fullu álagi.
 
@@ -266,6 +274,23 @@ OPENAI_API_KEY=sk-...
 3. **Lumi** les `prophecies.txt` (skylda) auk einræðu Katlu og söngs Vieno (valfrjálst skraut) og myndar lokaskýrslu. Staðfærðir fallback-strengir taka við þegar Katla eða Vieno vantar.
 4. **Sami** les skýrslu Lumi og afhendir orkuríka samantekt með neista vonar eða ákalli til aðgerða.
 
+### 6. Shamanískur hljóðafgreiðari (valfrjálst, krefst ElevenLabs)
+
+```bash
+python shamanic_voice.py
+# → export_results/<project>/audio_scripts/katla_entity_monologue.mp3
+#                                          /vieno_echoes_chant.mp3
+#                                          /lumi_final_report.mp3
+#                                          /sami_energetic_spark.mp3
+```
+
+Sjálfstætt skript sem keyrir einu sinni, les frásagnargripina fjóra sem `shamanic_ai.py` bjó til og myndgerir hvern þeirra í `.mp3` gegnum ElevenLabs-líkanið `eleven_multilingual_v2` (sem greinir sjálfkrafa talaða tungumálið, svo enginn tungumálastiki er sendur). Það skráir hvern árangur eða villu í skelina og hættir svo — enginn botni, enginn þjónn, engin gagnvirk lota. Það þarf tvennt:
+
+- `ELEVENLABS_API_KEY` í `golden_key.env` (sömu skrá og geymir `OPENAI_API_KEY`).
+- `voices`-vörpun í `config.json` / `config.ini` sem úthlutar ElevenLabs radd-auðkenni á hvert af `katla`, `vieno`, `lumi`, `sami`. Rödd með tómu auðkenni eða þeirri sem vantar gripinn fyrir er sleppt (keyrðu `shamanic_ai.py` fyrst); ein rödd sem mistekst stöðvar ekki hinar.
+
+> **Friðhelgi og kostnaður.** Eins og `shamanic_ai.py` með OpenAI sendir þetta skript texta gripanna til þriðja aðila (ElevenLabs) til myndgerðar, og ElevenLabs er **gjaldskyld** API. Innihaldið yfirgefur vél þína — ekki keyra það á efni sem þú mátt ekki deila út á við.
+
 ## Úttak
 
 Hver greint safn fær sína undirmöppu undir `export_results/`, nefnda eftir upprunaskránni (slóð og ending fjarlægð) eða eftir `domain_slug` fyrir URL. Innbyggða sýnishornssafnið notar `export_results/_default/`.
@@ -288,6 +313,7 @@ Hver undirmappa inniheldur:
 | `diagnostic_report.html`         | `generate_diagnostic.py` | uppbyggð greiningarskýrsla (þemu, tesur, nafnliðir eftir tegund, lykilorð) úr CSV/JSON-útflutningi |
 | `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-tilbúið Markdown                    |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | helgisiða- / frásagnartextagripi |
+| `audio_scripts/*.mp3`           | `shamanic_voice.py` *(valfrjálst)* | frásagnarraddirnar fjórar myndgerðar í hljóð gegnum ElevenLabs |
 
 ## Aðgengi
 
@@ -318,6 +344,7 @@ accessible_text_analyst/
 ├── generate_md.py                  # NotebookLM-Markdown-breytari
 ├── shamanic_pipeline.py            # valfrjálst: helgisiða-eftirvinnsluforrit án LLM
 ├── shamanic_ai.py                  # valfrjálst: LLM-drifnir helgisiðafrásagnamenn
+├── shamanic_voice.py               # valfrjálst: ElevenLabs hljóðafgreiðari (keyrir einu sinni)
 ├── shamanic_locale.py              # staðfærsluböggull fyrir shamanístíska lagið
 ├── config.example.json             # stillingarsniðmát, JSON-ending (versjónað)
 ├── config.example.ini              # stillingarsniðmát, INI-ending (versjónað)

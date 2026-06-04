@@ -7,3 +7,16 @@ generate_report:
 generate_md:
   error_file_not_found: '[ОШИБКА] Файл не найден: {path}'
   ok_markdown_ready: '[OK] Markdown-отчёт готов: {path}'
+
+dispatcher:
+  starting: 'Аудиорежиссёр: синтез шаманских голосов через ElevenLabs...'
+  err_no_api_key: 'ELEVENLABS_API_KEY не найден в golden_key.env — синтез аудио невозможен.'
+  err_no_voices: 'Нет сопоставления "voices" в config.json/.ini — добавьте идентификаторы голосов ElevenLabs для katla/vieno/lumi/sami.'
+  err_no_audio_scripts: 'Нет папки audio_scripts/ в {path} — сначала запустите шаманский конвейер (shamanic_ai.py).'
+  warn_no_voice_id: '[ПРОПУЩЕНО] Нет идентификатора голоса для "{voice}" в конфигурации "voices" — пропускаю этот голос.'
+  ok_voice: '[OK] {voice}: аудио сохранено как {filename}'
+  warn_voice_failed: '[ОШИБКА] Голос "{voice}" не удался: {error}'
+  done_with_errors: '[НЕ ЗАВЕРШЕНО] Синтезированы не все голоса (не удалось {failed} из {total}). Смотрите сообщения выше.'
+  warn_nothing_produced: '[НЕ ЗАВЕРШЕНО] Аудио не создано. Артефакты в {path} отсутствуют или пусты — был ли запущен shamanic_ai.py?'
+  done: '[ЗАВЕРШЕНО] Готовых голосовых записей: {count}. Файлы в папке audio_scripts.'
+  fatal_error: '[КРИТИЧЕСКАЯ ОШИБКА] {error}'

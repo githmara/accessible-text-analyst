@@ -7,3 +7,16 @@ generate_report:
 generate_md:
   error_file_not_found: '[VILLA] Skrá fannst ekki: {path}'
   ok_markdown_ready: '[OK] Markdown-skýrsla tilbúin: {path}'
+
+dispatcher:
+  starting: 'Hljóðstjóri: nýmyndun shaman-radda í gegnum ElevenLabs...'
+  err_no_api_key: 'ELEVENLABS_API_KEY fannst ekki í golden_key.env — ekki er hægt að nýmynda hljóð.'
+  err_no_voices: 'Engin "voices"-vörpun í config.json/.ini — bættu við ElevenLabs radd-auðkennum fyrir katla/vieno/lumi/sami.'
+  err_no_audio_scripts: 'Engin audio_scripts/-mappa á {path} — keyrðu shaman-ferlið (shamanic_ai.py) fyrst.'
+  warn_no_voice_id: '[SLEPPT] Ekkert radd-auðkenni fyrir "{voice}" í stillingunni "voices" — sleppi þessari rödd.'
+  ok_voice: '[OK] {voice}: hljóð vistað sem {filename}'
+  warn_voice_failed: '[VILLA] Röddin "{voice}" mistókst: {error}'
+  done_with_errors: '[ÓLOKIÐ] Ekki voru allar raddir nýmyndaðar ({failed} af {total} mistókust). Sjá skilaboðin að ofan.'
+  warn_nothing_produced: '[ÓLOKIÐ] Ekkert hljóð var framleitt. Artefaktar í {path} vantar eða eru tómir — var shamanic_ai.py keyrt fyrst?'
+  done: '[LOKIÐ] Tilbúnar raddupptökur: {count}. Skrár í möppunni audio_scripts.'
+  fatal_error: '[ALVARLEG VILLA] {error}'

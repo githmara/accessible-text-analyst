@@ -4,6 +4,32 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.4.0 — ElevenLabs audio dispatcher (and a documented detection gap)
+
+**Theme.** A new optional script, `shamanic_voice.py`, turns the four `shamanic_ai.py` narrative artefacts into spoken `.mp3` audio via ElevenLabs. It replaces an untracked Discord-bot skeleton (`lumi_dispatcher.py`) with a plain run-once script in the same shape as the other shamanic modules. This release also documents — and deliberately declines to build — a loanword-origin detection layer. Optional-layer plus documentation change: the notebook, the analysis pipeline, and the HTML/Markdown/diagnostic reports are untouched. Minor bump.
+
+### New: `shamanic_voice.py` (optional, paid + third-party)
+
+- Reads `katla_entity_monologue.txt`, `vieno_echoes_chant.txt`, `lumi_final_report.txt`, and `sami_energetic_spark.txt` from `audio_scripts/` and POSTs each body to the ElevenLabs `eleven_multilingual_v2` model, writing a sibling `.mp3`. The model auto-detects the spoken language, so no corpus-language parameter is passed.
+- Run-once and non-interactive: it logs each success/failure to the console and exits. No Discord, no server, no background thread, no emoji — consistent with the project's screen-reader-clean stdout rule (the old bot skeleton used emoji in every message).
+- Follows the same three-valued contract as the rituals (see v1.3.1): a synthesized voice is counted; a missing artefact / empty body / missing voice ID is skipped; an HTTP or synthesis error is raised and caught **per voice**, so one failure does not abort the others. An up-front critical guard reports a missing `audio_scripts/` directory, a missing `ELEVENLABS_API_KEY`, or a missing `voices` mapping.
+- New config key **`voices`** maps `katla` / `vieno` / `lumi` / `sami` to ElevenLabs voice IDs (mirrored in `config.example.json` / `.ini`). A voice with an empty or missing ID is skipped. Console strings are localized across all six languages via a new `dispatcher.*` block in `dictionaries/{lang}/reports.yaml` (it is an operator-facing console script, so it lives with `generate_report` / `generate_md`, not in `shamanic.yaml`).
+- **No new dependencies:** `requests` and `python-dotenv` were already required; the dropped `discord.py` is gone. `ELEVENLABS_API_KEY` lives in the same gitignored `golden_key.env` as `OPENAI_API_KEY`.
+
+**Privacy & cost.** Like `shamanic_ai.py` with OpenAI, this sends artefact text to a third-party service (ElevenLabs), which is a **paid** API — the content leaves your machine. Do not run it on material you cannot share externally.
+
+### Considered and rejected: loanword-origin detection
+
+A proposed extra detection layer would have spotted explicit borrowing-origin markers in the text (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`), stripped the cited foreign material of unsupported languages from the analysis, and ISO-tagged supported ones. It is **not implementable** within this pipeline's paradigm and has been documented as a known limitation instead (`CLAUDE.md`, the `cell_para` section):
+
+- **Markers are an open class** — abbreviation, inflected adjective, prepositional phrase, full verbal description — i.e. relation extraction, not a fixed regex list.
+- **No delimitable block** — the etymology is woven into ordinary prose (e.g. *«Слово фразеология имеет греческое происхождение: фразис означает …»*); there is nothing discrete to cut.
+- **The cited word is usually transliterated into the host script** (`фразис`, not `φράσις`), so tagging it with the donor language's ISO code would *mislead* the screen reader rather than help it.
+
+The tractable subset — fragments written in an actual foreign *script* — is already covered by the per-fragment `lingua` pass in `cell_para` / `cell_foreign_resegment`. Reliable detection of the rest would require a trained model or an LLM, disproportionate to an otherwise deterministic, offline pipeline.
+
+---
+
 ## v1.3.1 — the shamanic layer can no longer lie about success
 
 **Theme.** A robustness hardening of the optional shamanic post-processing layer plus one stray hardcoded string. v1.1.5 fixed the *cause* of one silent-failure case (a slug mismatch that pointed the loaders at a non-existent directory), but the *design* that let the failure pass silently survived: every `ritual_*` bailed with an early `if not <file>.exists(): return`, and the `__main__` printed `[ZAKOŃCZONO] … wszystkie artefakty gotowe` regardless of whether anything had actually been written. This release closes that design gap. Pure shamanic-layer change — the notebook, the HTML/Markdown/diagnostic reports, and all analysis behaviour are untouched. No config or dependency change. Patch bump.

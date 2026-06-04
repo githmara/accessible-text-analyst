@@ -7,3 +7,16 @@ generate_report:
 generate_md:
   error_file_not_found: '[ERROR] File not found: {path}'
   ok_markdown_ready: '[OK] Markdown report ready: {path}'
+
+dispatcher:
+  starting: 'Audio dispatcher: synthesizing the shamanic voices via ElevenLabs...'
+  err_no_api_key: 'ELEVENLABS_API_KEY not found in golden_key.env — cannot synthesize audio.'
+  err_no_voices: 'No "voices" mapping in config.json/.ini — add ElevenLabs voice IDs for katla/vieno/lumi/sami.'
+  err_no_audio_scripts: 'No audio_scripts/ directory at {path} — run the shamanic pipeline (shamanic_ai.py) first.'
+  warn_no_voice_id: '[SKIP] No voice ID for "{voice}" in config "voices" — skipping this voice.'
+  ok_voice: '[OK] {voice}: audio saved as {filename}'
+  warn_voice_failed: '[ERROR] Voice "{voice}" failed: {error}'
+  done_with_errors: '[INCOMPLETE] Not all voices were synthesized ({failed} of {total} failed). Check the messages above.'
+  warn_nothing_produced: '[INCOMPLETE] No audio was produced. The artefacts in {path} are missing or empty — was shamanic_ai.py run first?'
+  done: '[DONE] {count} voice recording(s) ready in the audio_scripts folder.'
+  fatal_error: '[FATAL] {error}'

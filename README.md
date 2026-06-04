@@ -14,6 +14,7 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 - `generate_md.py` — converts the generated `analysis_report.html` into `notebooklm_report.md` for NotebookLM ingestion. The accessibility spans are unwrapped since NotebookLM does not consume them.
 - `shamanic_pipeline.py` *(optional)* — a non-LLM post-processor that turns the notebook's CSV/JSON exports into ritual text artefacts (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, and — when the optional sentiment analysis is enabled — `emotional_undertow.txt`), all fully localized across the six supported languages.
 - `shamanic_ai.py` *(optional, LLM-driven)* — calls OpenAI to generate four narrative voices (`Katla`, `Vieno`, `Lumi`, `Sami`) on top of the same exports. When the optional `sentiment.csv` is present, Vieno builds her chant on the text's emotional arc instead of raw sentences. Requires `OPENAI_API_KEY` in `golden_key.env`.
+- `shamanic_voice.py` *(optional, requires ElevenLabs)* — a standalone, run-once dispatcher that synthesizes the four narrative artefacts produced by `shamanic_ai.py` into `.mp3` audio via the ElevenLabs API, logs each success/failure to the console, and exits (no bot, no server). Needs `ELEVENLABS_API_KEY` in `golden_key.env` and a `voices` mapping in the config.
 - `shamanic_locale.py` — the localization bundle for both shamanic scripts (templates, headers, and Lumi's fallback strings in all six supported languages).
 
 ## What the pipeline does
@@ -164,7 +165,13 @@ Contents:
   "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
-  "lumi_vieno_lines": null
+  "lumi_vieno_lines": null,
+  "voices": {
+    "katla": "",
+    "vieno": "",
+    "lumi": "",
+    "sami": ""
+  }
 }
 ```
 
@@ -178,6 +185,7 @@ Contents:
 | `ui_lang`          | string          | UI language for console output and the generated report's `<html lang>` attribute (`pl` / `en` / `ru` / `fi` / `is` / `it`). Empty string or unknown code → falls back to `en`. Independent from the analysed corpus language, which is detected automatically. |
 | `lumi_katla_lines` | integer or null | Optional ornament cap for `shamanic_ai.py`'s Lumi dispatch: how many non-empty lines of Katla's monologue Lumi sees. `null` or missing key = full content; integer N > 0 = first N lines. |
 | `lumi_vieno_lines` | integer or null | Same as `lumi_katla_lines`, but for Vieno's echo chant. |
+| `voices`           | object          | Maps each shamanic voice (`katla` / `vieno` / `lumi` / `sami`) to an ElevenLabs voice ID, consumed by `shamanic_voice.py`. A voice with an empty or missing ID is skipped. Only needed if you run the audio dispatcher. |
 
 > **Sentiment analysis — CPU cost.** With `enable_sentiment: true`, the per-paragraph pass is computationally heavy on CPU — roughly comparable to running local Whisper speech-to-text on CPU. On older or thermally-constrained machines this sustained load can be a real strain on the processor; enable it deliberately, ideally on a machine with a GPU or with headroom for prolonged full-load work.
 
@@ -266,6 +274,23 @@ OPENAI_API_KEY=sk-...
 3. **Lumi** reads `prophecies.txt` (mandatory) plus Katla's monologue and Vieno's chant (optional ornament) and produces the final dispatch. Localized fallback strings cover the case where Katla or Vieno are missing.
 4. **Sami** reads Lumi's report and delivers a high-energy synthesis with the spark of hope or call to action.
 
+### 6. Shamanic audio dispatcher (optional, requires ElevenLabs)
+
+```bash
+python shamanic_voice.py
+# → export_results/<project>/audio_scripts/katla_entity_monologue.mp3
+#                                          /vieno_echoes_chant.mp3
+#                                          /lumi_final_report.mp3
+#                                          /sami_energetic_spark.mp3
+```
+
+A standalone, run-once script that reads the four narrative artefacts produced by `shamanic_ai.py` and synthesizes each into an `.mp3` via the ElevenLabs `eleven_multilingual_v2` model (which auto-detects the spoken language, so no language parameter is passed). It logs each success or failure to the console and exits — there is no bot, no server, no interactive session. It needs two things:
+
+- `ELEVENLABS_API_KEY` in `golden_key.env` (the same file that holds `OPENAI_API_KEY`).
+- a `voices` mapping in `config.json` / `config.ini` that assigns an ElevenLabs voice ID to each of `katla`, `vieno`, `lumi`, `sami`. A voice whose ID is empty or whose artefact is missing is skipped (run `shamanic_ai.py` first); one voice failing does not abort the others.
+
+> **Privacy & cost.** Like `shamanic_ai.py` with OpenAI, this script sends artefact text to a third-party service (ElevenLabs) for synthesis, and ElevenLabs is a **paid** API. The content leaves your machine — do not run it on material you cannot share externally.
+
 ## Output
 
 Every analyzed corpus gets its own subdirectory under `export_results/`, named after the source file (path and extension stripped) or after a `domain_slug` for URLs. The built-in example corpus uses `export_results/_default/`.
@@ -288,6 +313,7 @@ Each subdirectory contains:
 | `diagnostic_report.html`         | `generate_diagnostic.py` | structured diagnostic report (topics, theses, entities by type, keywords) from the CSV/JSON exports |
 | `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-ready Markdown                      |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | ritual / narrative text artefacts |
+| `audio_scripts/*.mp3`           | `shamanic_voice.py` *(optional)* | the four narrative voices synthesized to audio via ElevenLabs |
 
 ## Accessibility
 
@@ -318,6 +344,7 @@ accessible_text_analyst/
 ├── generate_md.py                  # NotebookLM Markdown converter
 ├── shamanic_pipeline.py            # optional: non-LLM ritual post-processor
 ├── shamanic_ai.py                  # optional: LLM-driven ritual narrators
+├── shamanic_voice.py               # optional: ElevenLabs audio dispatcher (run-once)
 ├── shamanic_locale.py              # localization bundle for the shamanic layer
 ├── config.example.json             # config template, JSON extension (versioned)
 ├── config.example.ini              # config template, INI extension (versioned)

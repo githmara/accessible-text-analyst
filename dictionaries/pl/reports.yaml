@@ -7,3 +7,16 @@ generate_report:
 generate_md:
   error_file_not_found: '[BŁĄD] Nie znaleziono pliku {path}'
   ok_markdown_ready: '[OK] Raport Markdown gotowy: {path}'
+
+dispatcher:
+  starting: 'Reżyserka audio: synteza głosów szamańskich przez ElevenLabs...'
+  err_no_api_key: 'Nie znaleziono ELEVENLABS_API_KEY w golden_key.env — nie mogę zsyntetyzować audio.'
+  err_no_voices: 'Brak mapowania "voices" w config.json/.ini — dodaj identyfikatory głosów ElevenLabs dla katla/vieno/lumi/sami.'
+  err_no_audio_scripts: 'Brak katalogu audio_scripts/ w {path} — najpierw uruchom potok szamański (shamanic_ai.py).'
+  warn_no_voice_id: '[POMINIĘTO] Brak ID głosu dla "{voice}" w konfiguracji "voices" — pomijam ten głos.'
+  ok_voice: '[OK] {voice}: audio zapisane jako {filename}'
+  warn_voice_failed: '[BŁĄD] Głos "{voice}" zawiódł: {error}'
+  done_with_errors: '[NIEPEŁNE] Nie wszystkie głosy zsyntetyzowano (zawiodło {failed} z {total}). Sprawdź komunikaty powyżej.'
+  warn_nothing_produced: '[NIEPEŁNE] Nie powstało żadne audio. Artefakty w {path} są nieobecne lub puste — czy shamanic_ai.py został uruchomiony wcześniej?'
+  done: '[ZAKOŃCZONO] Gotowych nagrań głosowych: {count}. Pliki w folderze audio_scripts.'
+  fatal_error: '[BŁĄD KRYTYCZNY] {error}'
