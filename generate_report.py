@@ -168,7 +168,7 @@ _SPACY_PIPELINE_COMPONENTS = (
     r"tok2vec|tagger|parser|attribute_ruler|lemmatizer|ner|sentencizer|senter|"
     r"morphologizer|trainable_lemmatizer|tok2vec_listener|transformer|textcat|"
     r"entity_linker|entity_ruler|merge_entities|merge_noun_chunks|"
-    r"icebert_vectors|icelandic_ner"
+    r"icebert_vectors|icelandic_ner|omorfi_lemmas"
 )
 
 _HF_ORG_PREFIXES = (
@@ -182,6 +182,10 @@ _PROJECT_IDENTIFIERS = (
     r"SUPPORTED_LANGS|LANG_NAMES|LANG_DETECTOR|LANG_TO_LOCALE|PROJECT_DIR|"
     r"PROJECT_NAME|SOURCE_FILE|HF_IS_VECTORS|HF_IS_NER|RELATED_ARTICLES_STOPWORDS|"
     r"PARA_MIN|PARA_MAX|TOKEN_PAT|AUTO_QUERY|THESES_FILE|"
+    # Narzędzia fińskiej morfologii — gołe wystąpienia w stdout cell_model
+    # ("Подключён omorfi: ...", "Пакет omorfi не установлен", "omorfi-download");
+    # omorfi-download przed omorfi, żeby myślnik nie ucinał matcha.
+    r"OMORFI_MODEL_CANDIDATES|omorfi-download|omorfi|pyhfst|"
     # Krótkie identyfikatory pojawiające się w narracji rosyjskiej.
     # Bezpieczne przez \b — nie matchują w słowach ani inflexji.
     r"LANG|Run|lang|attr|lemma"
@@ -242,8 +246,10 @@ EN_HARDCODE_PATTERNS = [
     # z _NLP_DOMAIN_WORDS) zostaną zatagowane wcześniej i rozbiją
     # pełną nazwę pliku na osobne fragmenty (sentences  .csv).
 
-    # Pliki ASCII z rozszerzeniem technicznym (pomija cyryliczne typu тезисы.txt)
-    (r"\b([A-Za-z][A-Za-z0-9_-]*\.(?:csv|json|html|docx|py|md|txt|ipynb|yaml|yml|toml|cfg|ini|sh|bat|ps1))\b",
+    # Pliki ASCII z rozszerzeniem technicznym (pomija cyryliczne typu тезисы.txt).
+    # Kropka w klasie znaków trzonu obsługuje nazwy wielokropkowe w całości
+    # (omorfi_recased.describe.hfst, config.example.json).
+    (r"\b([A-Za-z][A-Za-z0-9_.-]*\.(?:csv|json|html|docx|py|md|txt|ipynb|yaml|yml|toml|cfg|ini|sh|bat|ps1|hfst))\b",
      r'<span lang="en">\1</span>'),
 
     # Nazwy modeli spaCy: pl_core_news_lg, en_core_web_lg, ...

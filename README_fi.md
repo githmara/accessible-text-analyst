@@ -11,7 +11,7 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 - `accessible_text_analyst.ipynb` — Jupyter-notebook, joka sisältää koko analyysiputken (42 solua: 21 koodia + 21 markdown; sisäinen kerronta on venäjäksi). Kirjoittaa kaksi saavutettavuusartefaktia (`accessible_text.html`, `accessible_text.docx`), joissa jokainen kappale ja jokainen vieraskielinen lause sisältää oman `lang`-attribuuttinsa — ruudunlukijat ja TTS-moottorit vaihtavat ääntä automaattisesti, jopa offline-tilassa.
 - `generate_report.py` — jälkikäsittelyskripti, joka muuntaa suoritetun notebookin yhdeksi saavutettavaksi HTML-tiedostoksi (`analysis_report.html`). Se kääräisee vieraskieliset katkelmat tagiin `<span lang="target_lang">` ja — korpuksen kielestä riippumatta — pakottaa `<span lang="en">` teknisen englannin sisältöön (POS-tagit, NER-tunnisteet, spaCyn/Hugging Facen mallien tunnisteet, ASCII-polut). Kerronnan inline-koodi ja koodilohkot saavat poikkeuksetta `lang="en"`. Lukutilassa (`remove_noise: true`) se lyhentää notebookin dokumenttikohtaiset diagnostiikkasilmukat ensimmäisiin muutamaan dokumenttiin satojen tulostamisen sijaan.
 - `generate_diagnostic.py` — riippumaton täyden **diagnostiikkaraportin** (`diagnostic_report.html`) luoja, joka rakennetaan suoraan notebookin CSV/JSON-vienneistä (ei `generate_report.py`:n ulostulosta). Navigoitava, ruudunlukijoille suunniteltu rakenne: sisällysluettelo `<nav>` ja osiot — kullakin oma otsikko ja listat — yleiskatsaukselle, aiheille kappaleineen, teeseille, nimetyille entiteeteille tyypeittäin ja tärkeimmille avainsanoille. Rakenteelliset tekstit seuraavat `ui_lang`-asetusta; korpuksen katkelmat saavat `<span lang="…">`, NER-tunnisteet `<span lang="en">`.
-- `generate_md.py` — muuntaa `analysis_report.html`-tiedoston Markdown-muotoon (`notebooklm_report.md`) NotebookLM:ää varten. Saavutettavuus-spanit puretaan, koska NotebookLM ei käytä niitä.
+- `generate_md.py` — muuntaa `analysis_report.html`-tiedoston Markdown-muotoon (`gemini_notebook_report.md`) Gemini Notebookia (entinen NotebookLM) varten. Saavutettavuus-spanit puretaan, koska Gemini Notebook ei käytä niitä.
 - `shamanic_pipeline.py` *(valinnainen)* — ei-LLM-jälkikäsittelijä, joka muuntaa notebookin CSV/JSON-viennit rituaalisiksi tekstiartefakteiksi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` ja — kun valinnainen sentimenttianalyysi on käytössä — `emotional_undertow.txt`) ja on täysin lokalisoitu kaikille kuudelle tuetulle kielelle.
 - `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu OpenAI:ta neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Kun valinnainen `sentiment.csv` on saatavilla, Vieno rakentaa laulunsa tekstin tunnekaaren varaan raakalauseiden sijaan. Vaatii `OPENAI_API_KEY`:n tiedostossa `golden_key.env`.
 - `shamanic_voice.py` *(valinnainen, vaatii ElevenLabsin)* — itsenäinen, kertasuoritteinen dispatcher, joka syntetisoi `shamanic_ai.py`:n tuottamat neljä kerronnallista artefaktia `.mp3`-äänitiedostoiksi ElevenLabs-API:n kautta, kirjaa kunkin onnistumisen/epäonnistumisen konsoliin ja päättyy (ei bottia, ei palvelinta). Tarvitsee `ELEVENLABS_API_KEY`:n tiedostossa `golden_key.env` sekä `voices`-määrityksen asetuksissa.
@@ -42,6 +42,8 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 
 Islannille ei ole täyttä spaCy-mallia, joten tyhjään putkeen on liitetty kaksi Hugging Face -mallia. Ensimmäinen lataus vaatii ~700 MB levytilaa ja internetyhteyden; seuraavat ajot käyttävät HF-välimuistia.
 
+**Valinnainen suomen morfologian parannus (omorfi).** `fi_core_news_lg`:n tilastollinen lemmatisoija pärjää huonosti suomen agglutinatiiviselle morfologialle — se tuottaa säännöllisesti roskalemmoja kuten *kytköknen* tai *pisttää*. Kun puhtaasti pythonilainen `omorfi`-paketti on asennettu ja sen FST-automaatit ladattu (ks. Asennus, vaihe 5), notebook lisää komponentin `omorfi_lemmas`, joka korvaa lemmat ja UD-morfologiset piirteet sanakirja-analyyseilla aina, kun ne ovat yhtä mieltä spaCy-taggerin sanaluokan kanssa (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Ilman pakettia tai automaatteja putki jatkaa hiljaa spaCyn vakiokäyttäytymisellä.
+
 ## Kielentunnistus
 
 Tunnistus toimii kolmella tasolla:
@@ -70,6 +72,7 @@ Heuristiikasta selviytyneet poikkeamat listataan `cell_para`:n ulostulossa manua
 - Python 3.10 tai uudempi.
 - ~1,5 GB vapaata levytilaa spaCyn `_lg`-malleja varten (yksi per kieli). Lisää ~700 MB, jos otat käyttöön islanninkielisen tuen (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Lisää ~700 MB, jos otat käyttöön OCR-tuen (`easyocr` lataa `torch`:n sekä omat tunnistus- ja luonnistusmallinsa ensimmäisellä OCR-kutsulla). Jos otit käyttöön myös islanninkielen, `torch`:n kustannus jaetaan näiden välillä.
+- Lisää ~130 MB, jos otat käyttöön suomen morfologian parannuksen (`omorfi`:n FST-automaatit, jotka ladataan komennolla `omorfi-download`).
 - Internet-yhteys ensimmäisellä ajolla (mallien lataus).
 
 ## Ympäristön asennus
@@ -140,6 +143,12 @@ python -m spacy download fi_core_news_lg
 # `pip install` uudelleen ja aseta "enable_sentiment": true tiedostossa config.json. Malli
 # (~1,1 GB) ladataan Hugging Facelta ensimmäisellä ajolla ja tallennetaan välimuistiin sen jälkeen.
 # Kaikki viisi pakettia tarvitaan yhdessä XLM-RoBERTa-tokenisaattorin rakentamiseen.
+
+# 5. (Valinnainen) Suomen morfologian parannus — poista kommenttimerkki `omorfi`:n
+# edestä tiedostossa requirements.txt, aja asennus uudelleen ja lataa sitten
+# FST-automaatit (~130 MB *.hfst-tiedostoja, jotka puretaan repon juureen;
+# ne ovat .gitignore:ssa). Aja repon juuresta:
+omorfi-download
 ```
 
 ## Asetukset
@@ -229,14 +238,14 @@ python generate_diagnostic.py
 
 `generate_diagnostic.py` lukee vain viedyt CSV/JSON-tiedostot, joten — toisin kuin `generate_report.py` — se ei tarvitse juuri suoritettua notebookia, vaan ainoastaan notebookin kirjoittamat viennit. Tuloksena on navigoitava asiakirja (sisällysluettelo, otsikot, listat), joka kattaa aiheet, teesit, entiteetit tyypeittäin ja tärkeimmät avainsanat.
 
-### 3. NotebookLM-ystävällinen Markdown (valinnainen)
+### 3. Gemini Notebook -ystävällinen Markdown (valinnainen)
 
 ```bash
 python generate_md.py
-# → export_results/<project>/notebooklm_report.md
+# → export_results/<project>/gemini_notebook_report.md
 ```
 
-Tämä muuntaa HTML-raportin Markdown-tiedostoksi, jossa saavutettavuus-spanit on purettu (NotebookLM ei käytä `<span lang="…">`). Aja tämä vain, jos haluat syöttää raportin NotebookLM:ään.
+Tämä muuntaa HTML-raportin Markdown-tiedostoksi, jossa saavutettavuus-spanit on purettu (Gemini Notebook — entinen NotebookLM — ei käytä `<span lang="…">`). Aja tämä vain, jos haluat syöttää raportin Gemini Notebookiin.
 
 ### 4. Shamanistinen ei-LLM-jälkikäsittelijä (valinnainen)
 
@@ -311,7 +320,7 @@ Jokainen alihakemisto sisältää:
 | `accessible_text.docx`          | notebook          | sama sisältö `<w:lang>`:lla asetettuna per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word ja SAPI käyttävät sitä offline-tilassa ilman online-tunnistinta |
 | `analysis_report.html`           | `generate_report.py` | globaali saavutettava HTML-raportti            |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | jäsennelty diagnostiikkaraportti (aiheet, teesit, entiteetit tyypeittäin, avainsanat) CSV/JSON-vienneistä |
-| `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-valmis Markdown                     |
+| `gemini_notebook_report.md` | `generate_md.py`     | Gemini Notebook -valmis Markdown (entinen NotebookLM) |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | rituaaliset / kerronnalliset tekstiartefaktit |
 | `audio_scripts/*.mp3`           | `shamanic_voice.py` *(valinnainen)* | neljä kerronnallista ääntä syntetisoituna äänitiedostoiksi ElevenLabsin kautta |
 
@@ -341,7 +350,7 @@ accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # pääputki (42 solua)
 ├── generate_report.py              # HTML-raportin generaattori (lukijanäkymä)
 ├── generate_diagnostic.py          # diagnostiikka-HTML-raportti CSV/JSON-vienneistä
-├── generate_md.py                  # NotebookLM-Markdown-muunnin
+├── generate_md.py                  # Gemini Notebook -Markdown-muunnin
 ├── shamanic_pipeline.py            # valinnainen: ei-LLM rituaalinen jälkikäsittelijä
 ├── shamanic_ai.py                  # valinnainen: LLM-vetoiset rituaaliset kertojat
 ├── shamanic_voice.py               # valinnainen: ElevenLabs-äänidispatcher (kertasuoritteinen)
@@ -365,7 +374,7 @@ accessible_text_analyst/
         ├── accessible_text.docx
         ├── analysis_report.html
         ├── diagnostic_report.html
-        ├── notebooklm_report.md
+        ├── gemini_notebook_report.md
         └── audio_scripts/…
 ```
 

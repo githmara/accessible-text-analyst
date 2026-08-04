@@ -11,7 +11,7 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 - `accessible_text_analyst.ipynb` — a Jupyter notebook with the complete analysis pipeline (42 cells: 21 code + 21 markdown; the in-notebook narrative is in Russian). It writes two accessibility artefacts (`accessible_text.html`, `accessible_text.docx`) where every paragraph and every foreign-language sentence carries its own `lang` attribute so screen readers and TTS engines switch voice automatically — even offline.
 - `generate_report.py` — a post-processing script that turns the executed notebook into a single accessible HTML file (`analysis_report.html`). It wraps foreign-corpus fragments in `<span lang="target_lang">` and, regardless of corpus language, hardcodes `<span lang="en">` around technical English content (POS tags, NER labels, spaCy/Hugging Face model identifiers, ASCII filenames). Inline code and code blocks in the narrative are blanket-tagged `lang="en"`. In reader mode (`remove_noise: true`) it truncates the notebook's per-document diagnostic loops to the first few documents instead of dumping hundreds of them.
 - `generate_diagnostic.py` — an independent generator of a full **diagnostic** report (`diagnostic_report.html`) built directly from the notebook's CSV/JSON exports (not from `generate_report.py`'s output). A navigable, screen-reader-first structure: a `<nav>` table of contents plus sections — each with its own heading and lists — for an overview, topics with their paragraphs, theses, named entities grouped by type, and top keywords. Structural labels follow `ui_lang`; corpus fragments get `<span lang="…">`, NER labels `<span lang="en">`.
-- `generate_md.py` — converts the generated `analysis_report.html` into `notebooklm_report.md` for NotebookLM ingestion. The accessibility spans are unwrapped since NotebookLM does not consume them.
+- `generate_md.py` — converts the generated `analysis_report.html` into `gemini_notebook_report.md` for ingestion into Gemini Notebook (formerly NotebookLM). The accessibility spans are unwrapped since Gemini Notebook does not consume them.
 - `shamanic_pipeline.py` *(optional)* — a non-LLM post-processor that turns the notebook's CSV/JSON exports into ritual text artefacts (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, and — when the optional sentiment analysis is enabled — `emotional_undertow.txt`), all fully localized across the six supported languages.
 - `shamanic_ai.py` *(optional, LLM-driven)* — calls OpenAI to generate four narrative voices (`Katla`, `Vieno`, `Lumi`, `Sami`) on top of the same exports. When the optional `sentiment.csv` is present, Vieno builds her chant on the text's emotional arc instead of raw sentences. Requires `OPENAI_API_KEY` in `golden_key.env`.
 - `shamanic_voice.py` *(optional, requires ElevenLabs)* — a standalone, run-once dispatcher that synthesizes the four narrative artefacts produced by `shamanic_ai.py` into `.mp3` audio via the ElevenLabs API, logs each success/failure to the console, and exits (no bot, no server). Needs `ELEVENLABS_API_KEY` in `golden_key.env` and a `voices` mapping in the config.
@@ -42,6 +42,8 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 
 There is no full spaCy model for Icelandic, so two Hugging Face models are wired into a blank pipeline. The first download requires ~700 MB of disk space and an internet connection; subsequent runs reuse the HF cache.
 
+**Optional Finnish morphology upgrade (omorfi).** The statistical lemmatizer in `fi_core_news_lg` struggles with Finnish agglutinative morphology — it routinely produces garbage lemmas such as *kytköknen* or *pisttää*. When the pure-Python `omorfi` package is installed and its FST automata downloaded (see Installation step 5), the notebook appends an `omorfi_lemmas` component that overrides lemmas and UD morphological features with dictionary analyses wherever they agree with the spaCy tagger's part of speech (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Without the package or the automata the pipeline silently keeps the stock spaCy behaviour.
+
 ## Language detection
 
 Detection runs at three levels:
@@ -70,6 +72,7 @@ Outliers that survive the heuristic are listed in the `cell_para` output for man
 - Python 3.10 or newer.
 - ~1.5 GB of free disk space for spaCy `_lg` models (one per language you install). Add ~700 MB if you opt into Icelandic support (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Add ~700 MB if you opt into OCR support (`easyocr` pulls `torch` plus its detection and recognition models on the first OCR call). If you also enabled Icelandic, the `torch` cost is shared between the two.
+- Add ~130 MB if you opt into the Finnish morphology upgrade (the `omorfi` FST automata downloaded by `omorfi-download`).
 - An internet connection on the first run (model downloads).
 
 ## Environment setup
@@ -140,6 +143,12 @@ python -m spacy download fi_core_news_lg
 # install, and set "enable_sentiment": true in config.json. The model
 # (~1.1 GB) is pulled from Hugging Face on first run and cached afterwards.
 # All five packages are needed together to build the XLM-RoBERTa tokenizer.
+
+# 5. (Optional) Finnish morphology upgrade — uncomment `omorfi` in
+# requirements.txt, re-run the install, then download the FST automata
+# (~130 MB of *.hfst files unpacked into the repo root; they are gitignored).
+# Run it from the repo root:
+omorfi-download
 ```
 
 ## Configuration
@@ -229,14 +238,14 @@ python generate_diagnostic.py
 
 `generate_diagnostic.py` reads only the exported CSV/JSON, so — unlike `generate_report.py` — it does not need a freshly-executed notebook in memory, only the exports the notebook wrote. The result is a navigable document (table of contents, headings, lists) covering topics, theses, entities grouped by type, and top keywords.
 
-### 3. NotebookLM-friendly Markdown (optional)
+### 3. Gemini Notebook-friendly Markdown (optional)
 
 ```bash
 python generate_md.py
-# → export_results/<project>/notebooklm_report.md
+# → export_results/<project>/gemini_notebook_report.md
 ```
 
-This converts the HTML report into a Markdown file with the accessibility spans unwrapped (NotebookLM does not consume `<span lang="…">`). Run this only if you want to feed the report into NotebookLM.
+This converts the HTML report into a Markdown file with the accessibility spans unwrapped (Gemini Notebook — formerly NotebookLM — does not consume `<span lang="…">`). Run this only if you want to feed the report into Gemini Notebook.
 
 ### 4. Shamanic non-LLM post-processor (optional)
 
@@ -311,7 +320,7 @@ Each subdirectory contains:
 | `accessible_text.docx`          | notebook    | the same content with `<w:lang>` set per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word and SAPI use it offline, no online detector required |
 | `analysis_report.html`           | `generate_report.py` | global accessible HTML report                  |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | structured diagnostic report (topics, theses, entities by type, keywords) from the CSV/JSON exports |
-| `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-ready Markdown                      |
+| `gemini_notebook_report.md` | `generate_md.py`     | Gemini Notebook-ready Markdown (formerly NotebookLM) |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | ritual / narrative text artefacts |
 | `audio_scripts/*.mp3`           | `shamanic_voice.py` *(optional)* | the four narrative voices synthesized to audio via ElevenLabs |
 
@@ -341,7 +350,7 @@ accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # main pipeline (42 cells)
 ├── generate_report.py              # HTML report generator (reader view)
 ├── generate_diagnostic.py          # diagnostic HTML report from CSV/JSON exports
-├── generate_md.py                  # NotebookLM Markdown converter
+├── generate_md.py                  # Gemini Notebook Markdown converter
 ├── shamanic_pipeline.py            # optional: non-LLM ritual post-processor
 ├── shamanic_ai.py                  # optional: LLM-driven ritual narrators
 ├── shamanic_voice.py               # optional: ElevenLabs audio dispatcher (run-once)
@@ -365,7 +374,7 @@ accessible_text_analyst/
         ├── accessible_text.docx
         ├── analysis_report.html
         ├── diagnostic_report.html
-        ├── notebooklm_report.md
+        ├── gemini_notebook_report.md
         └── audio_scripts/…
 ```
 

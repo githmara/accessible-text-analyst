@@ -11,7 +11,7 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 - `accessible_text_analyst.ipynb` — notatnik Jupyter z kompletnym potokiem analizy (42 komórki: 21 kodu + 21 markdown; narracja w środku notatnika jest po rosyjsku). Zapisuje dwa artefakty dostępnościowe (`accessible_text.html`, `accessible_text.docx`), w których każdy akapit i każde zdanie obcojęzyczne ma własny atrybut `lang` — czytniki ekranu i syntezatory TTS przełączają głos automatycznie, nawet offline.
 - `generate_report.py` — skrypt post-procesujący, który zamienia wykonany notatnik w jeden dostępny plik HTML (`analysis_report.html`). Fragmenty obcojęzyczne owija w `<span lang="target_lang">`, a — niezależnie od języka korpusu — twardo oznacza `<span lang="en">` przy treściach technicznie angielskich (tagi POS, etykiety NER, identyfikatory modeli spaCy/Hugging Face, ścieżki ASCII). Kod inline i bloki kodu w narracji dostają hurtem `lang="en"`. W trybie czytelnika (`remove_noise: true`) skraca diagnostyczne pętle „per dokument" do pierwszych kilku dokumentów, zamiast wypisywać setki.
 - `generate_diagnostic.py` — niezależny generator pełnego raportu **diagnostycznego** (`diagnostic_report.html`) budowanego wprost z eksportów CSV/JSON notatnika (nie z wyjścia `generate_report.py`). Nawigowalna, dostępna dla czytników ekranu struktura: spis treści `<nav>` plus sekcje — każda z własnym nagłówkiem i listami — dla przeglądu, tematów z akapitami, tez, nazwanych encji wg typu i najważniejszych słów kluczowych. Etykiety strukturalne podążają za `ui_lang`; fragmenty korpusu dostają `<span lang="…">`, etykiety NER — `<span lang="en">`.
-- `generate_md.py` — konwertuje `analysis_report.html` na `notebooklm_report.md` do NotebookLM. Spany dostępnościowe są rozpakowywane, bo NotebookLM ich nie konsumuje.
+- `generate_md.py` — konwertuje `analysis_report.html` na `gemini_notebook_report.md` do Gemini Notebook (dawniej NotebookLM). Spany dostępnościowe są rozpakowywane, bo Gemini Notebook ich nie konsumuje.
 - `shamanic_pipeline.py` *(opcjonalny)* — post-procesor bez LLM, który zamienia eksportowane przez notatnik pliki CSV/JSON w rytualne artefakty tekstowe (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, a — gdy włączona jest opcjonalna analiza sentymentu — także `emotional_undertow.txt`), w pełni zlokalizowane we wszystkich sześciu wspieranych językach.
 - `shamanic_ai.py` *(opcjonalny, oparty na LLM)* — wywołuje OpenAI, by wygenerować cztery głosy narracyjne (`Katla`, `Vieno`, `Lumi`, `Sami`) na tych samych eksportach. Gdy obecny jest opcjonalny `sentiment.csv`, Vieno buduje swoją pieśń na łuku emocjonalnym tekstu zamiast na surowych zdaniach. Wymaga `OPENAI_API_KEY` w pliku `golden_key.env`.
 - `shamanic_voice.py` *(opcjonalny, wymaga ElevenLabs)* — samodzielny skrypt jednorazowy, który syntetyzuje cztery artefakty narracyjne wytworzone przez `shamanic_ai.py` do plików audio `.mp3` przez API ElevenLabs, loguje każdy sukces/błąd do konsoli i kończy działanie (bez bota, bez serwera). Wymaga `ELEVENLABS_API_KEY` w `golden_key.env` oraz mapowania `voices` w konfiguracji.
@@ -42,6 +42,8 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 
 Dla islandzkiego nie ma pełnego modelu spaCy, więc do pustego potoku wpięte są dwa modele Hugging Face. Pierwsze pobranie zajmuje ~700 MB na dysku i wymaga połączenia z Internetem; kolejne uruchomienia korzystają z cache HF.
 
+**Opcjonalne ulepszenie fińskiej morfologii (omorfi).** Statystyczny lematyzator w `fi_core_news_lg` słabo radzi sobie z fińską morfologią aglutynacyjną — regularnie produkuje śmieciowe lematy w rodzaju *kytköknen* czy *pisttää*. Jeśli zainstalowany jest czysto pythonowy pakiet `omorfi`, a jego automaty FST zostały pobrane (patrz Instalacja, krok 5), notatnik dokłada komponent `omorfi_lemmas`, który nadpisuje lematy i cechy morfologiczne UD analizami słownikowymi wszędzie tam, gdzie zgadzają się one z częścią mowy z taggera spaCy (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Bez pakietu lub automatów potok po cichu zostaje przy standardowym zachowaniu spaCy.
+
 ## Detekcja języka
 
 Detekcja działa na trzech poziomach:
@@ -70,6 +72,7 @@ Outliery, które przetrwały heurystykę, są wypisywane w wyjściu `cell_para` 
 - Python 3.10 lub nowszy.
 - ~1,5 GB wolnego miejsca na dysku na modele `_lg` spaCy (po jednym na język). Dodaj ~700 MB, jeśli włączasz wsparcie dla islandzkiego (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Dodaj ~700 MB, jeśli włączasz wsparcie OCR (`easyocr` pobiera `torch` oraz własne modele detekcji i rozpoznawania przy pierwszym wywołaniu OCR). Jeśli włączyłeś też islandzki, koszt `torch` jest dzielony między oba.
+- Dodaj ~130 MB, jeśli włączasz ulepszenie fińskiej morfologii (automaty FST `omorfi` pobierane poleceniem `omorfi-download`).
 - Połączenie z Internetem przy pierwszym uruchomieniu (pobieranie modeli).
 
 ## Konfiguracja środowiska
@@ -140,6 +143,12 @@ python -m spacy download fi_core_news_lg
 # instalację i ustaw "enable_sentiment": true w config.json. Model
 # (~1,1 GB) jest pobierany z Hugging Face przy pierwszym uruchomieniu i potem cache'owany.
 # Wszystkie pięć pakietów jest potrzebnych razem do zbudowania tokenizatora XLM-RoBERTa.
+
+# 5. (Opcjonalnie) Ulepszenie fińskiej morfologii — odkomentuj `omorfi`
+# w requirements.txt, ponownie uruchom instalację, a następnie pobierz automaty
+# FST (~130 MB plików *.hfst rozpakowanych do korzenia repozytorium; są w .gitignore).
+# Uruchom z korzenia repozytorium:
+omorfi-download
 ```
 
 ## Konfiguracja
@@ -229,14 +238,14 @@ python generate_diagnostic.py
 
 `generate_diagnostic.py` czyta wyłącznie wyeksportowane CSV/JSON, więc — w odróżnieniu od `generate_report.py` — nie potrzebuje świeżo wykonanego notatnika, a jedynie eksportów, które notatnik zapisał. Wynik to nawigowalny dokument (spis treści, nagłówki, listy) obejmujący tematy, tezy, encje wg typu i najważniejsze słowa kluczowe.
 
-### 3. Markdown dla NotebookLM (opcjonalnie)
+### 3. Markdown dla Gemini Notebook (opcjonalnie)
 
 ```bash
 python generate_md.py
-# → export_results/<project>/notebooklm_report.md
+# → export_results/<project>/gemini_notebook_report.md
 ```
 
-Konwertuje raport HTML na Markdown z rozpakowanymi spanami dostępnościowymi (NotebookLM nie konsumuje `<span lang="…">`). Uruchom tylko jeśli chcesz wczytać raport do NotebookLM.
+Konwertuje raport HTML na Markdown z rozpakowanymi spanami dostępnościowymi (Gemini Notebook — dawniej NotebookLM — nie konsumuje `<span lang="…">`). Uruchom tylko jeśli chcesz wczytać raport do Gemini Notebook.
 
 ### 4. Szamański post-procesor bez LLM (opcjonalnie)
 
@@ -311,7 +320,7 @@ Każdy podkatalog zawiera:
 | `accessible_text.docx`          | notatnik          | ta sama treść z `<w:lang>` ustawionym per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word i SAPI używają tego offline, bez detektora online |
 | `analysis_report.html`           | `generate_report.py` | globalny dostępny raport HTML                  |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | ustrukturyzowany raport diagnostyczny (tematy, tezy, encje wg typu, słowa kluczowe) z eksportów CSV/JSON |
-| `notebooklm_report.md`      | `generate_md.py`     | Markdown gotowy dla NotebookLM                 |
+| `gemini_notebook_report.md` | `generate_md.py`     | Markdown gotowy dla Gemini Notebook (dawniej NotebookLM) |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | rytualne / narracyjne artefakty tekstowe |
 | `audio_scripts/*.mp3`           | `shamanic_voice.py` *(opcjonalnie)* | cztery głosy narracyjne zsyntetyzowane do audio przez ElevenLabs |
 
@@ -341,7 +350,7 @@ accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # główny potok (42 komórki)
 ├── generate_report.py              # generator raportu HTML (widok czytelnika)
 ├── generate_diagnostic.py          # diagnostyczny raport HTML z eksportów CSV/JSON
-├── generate_md.py                  # konwerter na Markdown dla NotebookLM
+├── generate_md.py                  # konwerter na Markdown dla Gemini Notebook
 ├── shamanic_pipeline.py            # opcjonalnie: rytualny post-procesor bez LLM
 ├── shamanic_ai.py                  # opcjonalnie: rytualni narratorzy LLM
 ├── shamanic_voice.py               # opcjonalnie: dyspozytor audio ElevenLabs (jednorazowy)
@@ -365,7 +374,7 @@ accessible_text_analyst/
         ├── accessible_text.docx
         ├── analysis_report.html
         ├── diagnostic_report.html
-        ├── notebooklm_report.md
+        ├── gemini_notebook_report.md
         └── audio_scripts/…
 ```
 

@@ -25,6 +25,15 @@ tqdm
 # Dla pozostałych języków (pl, ru, en, it, fi) te zależności nie są potrzebne.
 # transformers
 # torch
+# Opcjonalne doprecyzowanie fińskiej morfologii (komórka cell_model).
+# Odkomentuj linię poniżej, a po instalacji pobierz automaty poleceniem:
+#   omorfi-download
+# (~130 MB plików *.hfst rozpakowanych do bieżącego katalogu; są w .gitignore).
+# Pakiet od wersji 0.10 jest czysto pythonowy (zależność pyhfst), działa też na
+# Windowsie. Komponent omorfi_lemmas nadpisuje lematy i cechy morfologiczne
+# fińskich tokenów tam, gdzie analiza słownikowa zgadza się z UPOS taggera spaCy.
+# Brak pakietu lub automatów => cell_model zostaje przy lematyzatorze spaCy.
+# omorfi
 
 # Generowanie raportu
 markdown

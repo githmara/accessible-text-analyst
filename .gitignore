@@ -8,3 +8,5 @@ export_results/
 config.json
 config.ini
 *.env
+# automaty omorfi pobierane przez omorfi-download (opcjonalne wsparcie fińskiego)
+*.hfst

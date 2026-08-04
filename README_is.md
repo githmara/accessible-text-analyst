@@ -11,7 +11,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 - `accessible_text_analyst.ipynb` — Jupyter-minnisbók með heilli greiningarleiðslu (42 hólf: 21 kóða + 21 markdown; frásögnin innan minnisbókarinnar er á rússnesku). Hún skrifar tvö aðgengisgripi (`accessible_text.html`, `accessible_text.docx`), þar sem hver málsgrein og hver erlend setning ber sitt eigið `lang`-eiginleika — skjálesarar og TTS-vélar skipta um rödd sjálfkrafa, jafnvel án nets.
 - `generate_report.py` — eftirvinnsluforrit sem breytir framkvæmdri minnisbók í eina aðgengilega HTML-skrá (`analysis_report.html`). Það vefur erlend brot inn í `<span lang="target_lang">` og — óháð tungumáli safnsins — þvingar `<span lang="en">` utan um tæknilegt enskt innihald (POS-merki, NER-merki, auðkenni spaCy/Hugging Face líkana, ASCII-skráarnöfn). Inline-kóði og kóðablokkir í frásögn fá öll `lang="en"` í einu lagi. Í lesendaham (`remove_noise: true`) styttir það skjalkvíslar greiningarlykkjur minnisbókarinnar niður í fyrstu fáu skjölin í stað þess að prenta hundruð.
 - `generate_diagnostic.py` — sjálfstæður smiður á heildstæðri **greiningarskýrslu** (`diagnostic_report.html`) sem byggð er beint á CSV/JSON-útflutningi minnisbókarinnar (ekki á úttaki `generate_report.py`). Aðgengileg uppbygging fyrir skjálesara: efnisyfirlit `<nav>` ásamt köflum — hver með eigin fyrirsögn og listum — fyrir yfirlit, þemu með málsgreinum, tesur, nafngreinda nafnliði eftir tegund og helstu lykilorð. Byggingartextar fylgja `ui_lang`; brot úr safninu fá `<span lang="…">`, NER-merki `<span lang="en">`.
-- `generate_md.py` — breytir `analysis_report.html` í `notebooklm_report.md` fyrir NotebookLM. Aðgengis-spans eru afpökkuð því NotebookLM notar þau ekki.
+- `generate_md.py` — breytir `analysis_report.html` í `gemini_notebook_report.md` fyrir Gemini Notebook (áður NotebookLM). Aðgengis-spans eru afpökkuð því Gemini Notebook notar þau ekki.
 - `shamanic_pipeline.py` *(valfrjálst)* — eftirvinnsluforrit án LLM sem breytir CSV/JSON-útflutningi minnisbókarinnar í helgisiðatextagripi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` og — þegar valfrjáls tilfinningagreining er virk — `emotional_undertow.txt`), öll að fullu staðfærð fyrir sex studdu tungumálin.
 - `shamanic_ai.py` *(valfrjálst, byggt á LLM)* — kallar í OpenAI til að búa til fjórar frásagnarraddir (`Katla`, `Vieno`, `Lumi`, `Sami`) ofan á sömu útflutninga. Þegar valfrjálsa `sentiment.csv` er til staðar byggir Vieno söng sinn á tilfinningabogadrætti textans í stað hráu setninganna. Krefst `OPENAI_API_KEY` í `golden_key.env`.
 - `shamanic_voice.py` *(valfrjálst, krefst ElevenLabs)* — sjálfstæður afgreiðari sem keyrir einu sinni og myndgerir frásagnargripina fjóra sem `shamanic_ai.py` bjó til í `.mp3`-hljóð gegnum ElevenLabs API-ið, skráir hvern árangur/villu í skelina og hættir svo (enginn botni, enginn þjónn). Þarf `ELEVENLABS_API_KEY` í `golden_key.env` og `voices`-vörpun í stillingunum.
@@ -42,6 +42,8 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 
 Það er ekkert fullt spaCy-líkan fyrir íslensku, því eru tvö Hugging Face líkön tengd inn í auða leiðslu. Fyrsta niðurhal krefst ~700 MB á diski og nettenginga; síðari keyrslur nota HF-skyndiminni.
 
+**Valfrjáls endurbót á finnskri beygingarfræði (omorfi).** Tölfræðilega lemmunarvélin í `fi_core_news_lg` ræður illa við finnska viðskeytabeygingarfræði — hún framleiðir reglulega ruslmyndir eins og *kytköknen* eða *pisttää*. Þegar hreini Python-pakkinn `omorfi` er uppsettur og FST-stýrivélar hans sóttar (sjá Uppsetningu, skref 5), bætir minnisbókin við íhlutnum `omorfi_lemmas`, sem skiptir út lemmum og UD-beygingareinkennum fyrir orðabókargreiningar alls staðar þar sem þær eru sammála orðflokki spaCy-taggarans (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Án pakkans eða stýrivélanna heldur leiðslan hljóðlega venjulegri spaCy-hegðun.
+
 ## Tungumálagreining
 
 Greining vinnur á þremur stigum:
@@ -70,6 +72,7 @@ Hvati reglu 6 er hreint hljóðfræðilegur: ensk rödd sem les finnsk/pólsk/í
 - Python 3.10 eða nýrri.
 - ~1,5 GB af lausu plássi fyrir spaCy `_lg`-líkön (eitt per tungumál). Bættu við ~700 MB ef þú vilt íslenskustuðning (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Bættu við ~700 MB ef þú vilt OCR-stuðning (`easyocr` sækir `torch` ásamt sínum greiningar- og þekkingarlíkönum við fyrsta OCR-kall). Ef þú virkjaðir líka íslensku deilist kostnaður `torch` milli beggja.
+- Bættu við ~130 MB ef þú vilt endurbót á finnskri beygingarfræði (FST-stýrivélar `omorfi`, sóttar með `omorfi-download`).
 - Nettenging við fyrstu keyrslu (niðurhal líkana).
 
 ## Uppsetning umhverfis
@@ -140,6 +143,12 @@ python -m spacy download fi_core_news_lg
 # uppsetninguna og stilltu "enable_sentiment": true í config.json. Líkanið
 # (~1.1 GB) er sótt frá Hugging Face við fyrstu keyrslu og geymt í skyndiminni eftir það.
 # Alla fimm pakkana þarf saman til að byggja XLM-RoBERTa-tókarann.
+
+# 5. (Valfrjálst) Endurbót á finnskri beygingarfræði — afkommenta `omorfi`
+# í requirements.txt, keyrðu uppsetninguna aftur og sæktu síðan FST-stýrivélarnar
+# (~130 MB af *.hfst-skrám sem pakkast upp í rót verkefnisins; þær eru í .gitignore).
+# Keyrðu úr rót verkefnisins:
+omorfi-download
 ```
 
 ## Stillingar
@@ -229,14 +238,14 @@ python generate_diagnostic.py
 
 `generate_diagnostic.py` les aðeins útfluttu CSV/JSON-skrárnar, þannig að — ólíkt `generate_report.py` — þarf það ekki nýkeyrða minnisbók, aðeins útflutninginn sem minnisbókin skrifaði. Niðurstaðan er aðgengilegt skjal (efnisyfirlit, fyrirsagnir, listar) sem nær yfir þemu, tesur, nafnliði eftir tegund og helstu lykilorð.
 
-### 3. NotebookLM-vænt Markdown (valfrjálst)
+### 3. Gemini Notebook-vænt Markdown (valfrjálst)
 
 ```bash
 python generate_md.py
-# → export_results/<project>/notebooklm_report.md
+# → export_results/<project>/gemini_notebook_report.md
 ```
 
-Þetta breytir HTML-skýrslunni í Markdown-skrá þar sem aðgengis-spans hafa verið afpökkuð (NotebookLM notar ekki `<span lang="…">`). Keyrðu þetta aðeins ef þú vilt mata skýrsluna inn í NotebookLM.
+Þetta breytir HTML-skýrslunni í Markdown-skrá þar sem aðgengis-spans hafa verið afpökkuð (Gemini Notebook — áður NotebookLM — notar ekki `<span lang="…">`). Keyrðu þetta aðeins ef þú vilt mata skýrsluna inn í Gemini Notebook.
 
 ### 4. Shamanískt eftirvinnsluforrit án LLM (valfrjálst)
 
@@ -311,7 +320,7 @@ Hver undirmappa inniheldur:
 | `accessible_text.docx`          | minnisbók         | sama innihald með `<w:lang>` stilltu per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word og SAPI nota það án nets, án nettengs greinis |
 | `analysis_report.html`           | `generate_report.py` | heildar aðgengileg HTML-skýrsla                |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | uppbyggð greiningarskýrsla (þemu, tesur, nafnliðir eftir tegund, lykilorð) úr CSV/JSON-útflutningi |
-| `notebooklm_report.md`      | `generate_md.py`     | NotebookLM-tilbúið Markdown                    |
+| `gemini_notebook_report.md` | `generate_md.py`     | Gemini Notebook-tilbúið Markdown (áður NotebookLM) |
 | `audio_scripts/*.txt`           | `shamanic_pipeline.py`, `shamanic_ai.py` | helgisiða- / frásagnartextagripi |
 | `audio_scripts/*.mp3`           | `shamanic_voice.py` *(valfrjálst)* | frásagnarraddirnar fjórar myndgerðar í hljóð gegnum ElevenLabs |
 
@@ -341,7 +350,7 @@ accessible_text_analyst/
 ├── accessible_text_analyst.ipynb   # aðalleiðsla (42 hólf)
 ├── generate_report.py              # HTML-skýrslu-myndari (lesendasýn)
 ├── generate_diagnostic.py          # greiningar-HTML-skýrsla úr CSV/JSON-útflutningi
-├── generate_md.py                  # NotebookLM-Markdown-breytari
+├── generate_md.py                  # Gemini Notebook-Markdown-breytari
 ├── shamanic_pipeline.py            # valfrjálst: helgisiða-eftirvinnsluforrit án LLM
 ├── shamanic_ai.py                  # valfrjálst: LLM-drifnir helgisiðafrásagnamenn
 ├── shamanic_voice.py               # valfrjálst: ElevenLabs hljóðafgreiðari (keyrir einu sinni)
@@ -365,7 +374,7 @@ accessible_text_analyst/
         ├── accessible_text.docx
         ├── analysis_report.html
         ├── diagnostic_report.html
-        ├── notebooklm_report.md
+        ├── gemini_notebook_report.md
         └── audio_scripts/…
 ```
 

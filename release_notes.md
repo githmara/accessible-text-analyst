@@ -4,6 +4,26 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.5.0 — omorfi dictionary morphology for Finnish (and the Gemini Notebook rename)
+
+**Theme.** An optional quality upgrade for Finnish corpora: the notebook can now plug the [omorfi](https://github.com/flammie/omorfi) morphological analyser into `fi_core_news_lg`, replacing the statistical lemmatizer's frequent garbage lemmas (and the near-silent morphologizer) with dictionary analyses. Plus a naming refresh: Google renamed NotebookLM to Gemini Notebook (announced 2026-07-16), and the Markdown artefact follows. Notebook + docs change; the analysis pipeline for the other five languages is untouched. Minor bump.
+
+### New: `omorfi_lemmas` component (optional, Finnish only)
+
+- **What it fixes.** The statistical edit-tree lemmatizer in `fi_core_news_lg` is weak against Finnish agglutinative morphology. Measured on a real Whisper transcript: `kytköksistä` → *kytköknen*, `pistät` → *pisttää*, `trollitehtaat` → *trollitehtas*, `haukut` → *haukua* — all garbage. With omorfi the same tokens lemmatize to `kytkös`, `pistää`, `trollitehdas`, `haukkua`, and every token additionally gets full UD morphological features (`Case`, `Mood`, `Person`, `Tense`, …) via `token.set_morph`. Better lemmas flow into everything lemma-fed: BoW, TF-IDF, keywords, theses, KMeans topics, and the shamanic raw-roots chant.
+- **How to enable.** Uncomment `omorfi` in `requirements.txt` (pure Python since omorfi 0.10 — its only dependency is `pyhfst`, so it installs on Windows too), re-install, then run `omorfi-download` from the repo root (~130 MB of `*.hfst` automata, unpacked into the CWD and gitignored). `cell_model` probes `omorfi_recased.describe.hfst` first (handles sentence-initial capitals: `Mitä` → `mikä`), then `omorfi.describe.hfst`.
+- **Hybrid disambiguation.** The pip omorfi ships no contextual disambiguation, so the component filters the analysis set by the spaCy tagger's UPOS and takes the lowest-weight match; **when no analysis agrees with the tagger, the token is left untouched** (dictionary and tagger disagree → trust spaCy). Compound lemmas arrive in parts and are joined, dropping inner hyphens unless the surface form itself is hyphenated (`trolli`+`tehdas` → `trollitehdas`, `Itä-Suomi` keeps its hyphen).
+- **Soft degradation.** Missing package, missing automata, or a load failure → one info line and the stock spaCy behaviour. The multilingual diagnostic pass benefits automatically (it goes through the same `get_nlp()` cache), so Finnish paragraphs inside a non-Finnish corpus get the upgrade too.
+- **Measured cost & coverage.** 100% lexicon coverage on the test transcript (colloquial spoken Finnish), ~1 ms/token before the per-surface-form `lru_cache`; automaton load ~2 s once per model load.
+- **Known limits.** Same-UPOS homonyms resolve by dictionary weight, which can pick the wrong reading (`sinä` → the essive-of-`se` reading — harmless in practice, pronouns are stopwords); colloquial pronouns lemmatize to colloquial stems (`sun` → `sä`, where spaCy normalizes to `sinä`). The Finnish prophecy templates in the shamanic layer intentionally **keep** their nominal-prefix workarounds (`paikan {loc}`): proper names are exactly where omorfi's lexicon coverage is weakest, and a wrong nominative in a prophecy reads worse than a safe prefix form.
+- `generate_report.py` extended to match: the pipeline-components pattern gained `omorfi_lemmas` / `omorfi-download` / `omorfi` / `pyhfst`, and the ASCII-filename pattern now accepts the `.hfst` extension and multi-dot stems (`omorfi_recased.describe.hfst`), so NVDA does not read them with the document-default Russian voice.
+
+### Renamed: `notebooklm_report.md` → `gemini_notebook_report.md`
+
+Google renamed NotebookLM to Gemini Notebook (2026-07-16); `generate_md.py`'s output artefact and all README references follow. Re-run `generate_md.py` to produce the new filename — existing copies on disk under the old name are neither read nor deleted.
+
+---
+
 ## v1.4.0 — ElevenLabs audio dispatcher (and a documented detection gap)
 
 **Theme.** A new optional script, `shamanic_voice.py`, turns the four `shamanic_ai.py` narrative artefacts into spoken `.mp3` audio via ElevenLabs. It replaces an untracked Discord-bot skeleton (`lumi_dispatcher.py`) with a plain run-once script in the same shape as the other shamanic modules. This release also documents — and deliberately declines to build — a loanword-origin detection layer. Optional-layer plus documentation change: the notebook, the analysis pipeline, and the HTML/Markdown/diagnostic reports are untouched. Minor bump.

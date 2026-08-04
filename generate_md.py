@@ -26,7 +26,7 @@ except ImportError:
 CONFIG_CANDIDATES = ("config.json", "config.ini")
 EXPORT_ROOT = Path("export_results")
 INPUT_HTML_NAME = "analysis_report.html"
-OUTPUT_MD_NAME = "notebooklm_report.md"
+OUTPUT_MD_NAME = "gemini_notebook_report.md"
 
 
 def _locate_config():
@@ -72,8 +72,8 @@ OUTPUT_MD = str(PROJECT_DIR / OUTPUT_MD_NAME)
 
 def clean_html_for_notebook(html_content):
     """
-    Czyści HTML z tagów dostępnościowych (span lang), 
-    które w Markdownie byłyby tylko szumem dla NotebookLM.
+    Czyści HTML z tagów dostępnościowych (span lang), które w Markdownie
+    byłyby tylko szumem dla Gemini Notebook (dawniej NotebookLM).
     """
     soup = BeautifulSoup(html_content, 'html.parser')
     
@@ -102,7 +102,7 @@ def convert_to_markdown():
         code_language="text"
     )
 
-    # 3. Dodatkowy post-processing dla lepszej czytelności w NotebookLM
+    # 3. Dodatkowy post-processing dla lepszej czytelności w Gemini Notebook
     # Usuwamy nadmiarowe puste linie
     md_content = re.sub(r'\n{3,}', '\n\n', md_content)
 

@@ -782,6 +782,8 @@ print(f"\n[РЕЗУЛЬТАТ] Выбран язык: {LANG_NAMES.get(LANG, LANG
 # | Icelandic | `is` | `spacy.blank("is")` + IceBERT (векторы) + MIM-GOLD-22 (NER) |
 #
 # Если модель не установлена, ноутбук использует базовый токенизатор (`spacy.blank`) и сообщает команду для установки.
+#
+# **Опционально для финского:** если установлен пакет `omorfi` (чистый Python, зависимость `pyhfst`) и скачаны автоматы (`omorfi-download`), к модели добавляется компонент `omorfi_lemmas` — словарные леммы и UD-морфология существенно точнее статистического лемматизатора `fi_core_news_lg`. Кандидаты фильтруются по UPOS от теггера spaCy. Без пакета или автоматов поведение прежнее.
 
 # %% id="cell_model" tags=["cell_model"]
 import spacy
@@ -916,6 +918,102 @@ def _build_icelandic_pipeline(blank_nlp):
     return blank_nlp
 
 
+# --- Опциональное уточнение финской морфологии через omorfi ---
+# Пакет omorfi (с версии 0.10 — чистый Python, зависимость pyhfst) даёт
+# словарную морфологию заметно точнее статистического лемматизатора
+# fi_core_news_lg (kytköksistä -> kytkös, а не *kytköknen; pistät -> pistää,
+# а не *pisttää). Автоматы скачиваются отдельно командой omorfi-download
+# (файлы *.hfst в корне проекта; они в .gitignore). Отсутствие пакета или
+# автоматов = мягкая деградация к стандартному поведению spaCy.
+OMORFI_MODEL_CANDIDATES = [
+    "omorfi_recased.describe.hfst",  # с анализом регистра: Mitä -> mikä
+    "omorfi.describe.hfst",
+]
+
+
+def _build_finnish_omorfi(fi_nlp):
+    """Добавляет к финской модели компонент omorfi_lemmas: леммы и UD-морфология
+    из словарного анализатора omorfi. В pip-версии omorfi нет контекстной
+    дизамбигуации, поэтому кандидаты фильтруются по UPOS от теггера spaCy;
+    если ни один анализ не совпал по UPOS, токен не трогаем — остаётся
+    значение spaCy. Любая проблема (нет пакета, нет автоматов, ошибка
+    загрузки) — возврат модели без изменений.
+    """
+    from pathlib import Path
+    try:
+        from omorfi.omorfi import Omorfi
+        from omorfi.token import Token as _OmorfiToken
+    except ImportError:
+        print("[ИНФО] Пакет omorfi не установлен — леммы финского остаются от spaCy.")
+        print("  Для повышения качества: pip install omorfi, затем omorfi-download")
+        return fi_nlp
+
+    _model_path = next((p for p in OMORFI_MODEL_CANDIDATES if Path(p).exists()), None)
+    if _model_path is None:
+        print("[ИНФО] Автоматы omorfi (*.hfst) не найдены — леммы финского остаются от spaCy.")
+        print("  Скачайте их командой: omorfi-download")
+        return fi_nlp
+
+    try:
+        _om = Omorfi()
+        _om.load_analyser(_model_path)
+    except Exception as _e:
+        print(f"[ВНИМАНИЕ] Не удалось загрузить {_model_path}: {_e}")
+        print("  Леммы финского остаются от spaCy.")
+        return fi_nlp
+
+    from spacy.language import Language
+
+    @lru_cache(maxsize=65536)
+    def _om_lookup(surf):
+        """Анализы поверхностной формы: кортежи (UPOS, лемма, UD-feats, вес)."""
+        tok = _OmorfiToken.fromsurf(surf)
+        _om.analyse(tok)
+        out = []
+        for a in tok.analyses:
+            parts = a.get_lemmas()
+            if not parts:
+                continue
+            lemma = "".join(parts)
+            # Сложные слова приходят по частям (trolli+tehdas,
+            # epä-+järjestelmällisyys); внутренний дефис убираем, только
+            # если его нет в самой поверхностной форме (Itä-Suomi остаётся).
+            if "-" in lemma and "-" not in surf:
+                lemma = lemma.replace("-", "")
+            feats = a.get_ufeats() or {}
+            out.append((a.get_upos(), lemma,
+                        "|".join(f"{k}={v}" for k, v in sorted(feats.items())),
+                        a.weight))
+        return tuple(out)
+
+    def _omorfi_lemmas_pipe(doc):
+        for tok in doc:
+            if not tok.is_alpha:
+                continue
+            matching = [a for a in _om_lookup(tok.text) if a[0] == tok.pos_]
+            if not matching:
+                continue  # словарь и теггер разошлись — доверяем spaCy
+            _upos, lemma, feats, _w = min(matching, key=lambda a: a[3])
+            tok.lemma_ = lemma
+            if feats:
+                try:
+                    tok.set_morph(feats)
+                except Exception:
+                    pass  # экзотическая фича вне схемы UD — лемму уже записали
+        return doc
+
+    # Повторный запуск ячейки: spaCy сверяет исходники дубликата через
+    # inspect.getsource и вне IPython может упасть с OSError («could not
+    # get source code»), поэтому проверяем реестр заранее, а не через except.
+    if not Language.has_factory("omorfi_lemmas"):
+        Language.component("omorfi_lemmas", func=_omorfi_lemmas_pipe)
+
+    if "omorfi_lemmas" not in fi_nlp.pipe_names:
+        fi_nlp.add_pipe("omorfi_lemmas", last=True)
+    print(f"  [OK] Подключён omorfi: {_model_path} — леммы и морфология финского уточняются.")
+    return fi_nlp
+
+
 def _load_nlp_model_uncached(lang):
     """Внутренняя загрузка модели без кэша. Используется через get_nlp()."""
     if lang == "is":
@@ -929,6 +1027,8 @@ def _load_nlp_model_uncached(lang):
     try:
         nlp_ = spacy.load(model_name)
         print(f"[OK] Загружена модель spaCy: {model_name}")
+        if lang == "fi":
+            nlp_ = _build_finnish_omorfi(nlp_)
         print(f"     Компоненты конвейера: {nlp_.pipe_names}")
         return nlp_
     except OSError:
