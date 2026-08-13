@@ -4,6 +4,21 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.5.1 — critical fix: `cell_theses` crashed on empty sequence
+
+**Severity.** A crash in `cell_theses` ("attempt to get argmax of an empty sequence"). Upgrade is recommended if you process texts where re-segmentation differs from the original chunking (especially Finnish corpora using the omorfi dictionary).
+
+**The bug.** The `cell_theses` block used `nlp(para).sents` to re-split paragraphs into sentences for extractive summarization. However, this re-segmentation occasionally produced a different sentence count than the original segmentation performed in `cell_para`. As a result, the `sent_cursor` pointer advanced out of bounds relative to the `sent_scores` array, yielding an empty slice `seg` and crashing on `seg.argmax()`.
+
+**The fix.** The loop now iterates over the already segmented `para_sentences` generated during paragraph construction. This ensures the sentence count per paragraph remains perfectly synchronized with the global `sent_scores` array.
+
+**Upgrade.** Pull the new tag, sync via jupytext, and re-execute the notebook. No config or dependency change is required.
+
+### Distribution
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.5.0 — omorfi dictionary morphology for Finnish (and the Gemini Notebook rename)
 
 **Theme.** An optional quality upgrade for Finnish corpora: the notebook can now plug the [omorfi](https://github.com/flammie/omorfi) morphological analyser into `fi_core_news_lg`, replacing the statistical lemmatizer's frequent garbage lemmas (and the near-silent morphologizer) with dictionary analyses. Plus a naming refresh: Google renamed NotebookLM to Gemini Notebook (announced 2026-07-16), and the Markdown artefact follows. Notebook + docs change; the analysis pipeline for the other five languages is untouched. Minor bump.

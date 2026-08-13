@@ -2318,8 +2318,8 @@ except Exception:
 # Для каждого абзаца: найти лучшее предложение
 theses_rows = []
 sent_cursor = 0
-for pid, para in enumerate(paragraphs, 1):
-    para_sents = [s.text.strip() for s in nlp(para).sents if len(s.text.strip()) > 10]
+for pid, (para, p_sents) in enumerate(zip(paragraphs, para_sentences), 1):
+    para_sents = [s for s in p_sents if len(s) > 10]
     n = len(para_sents)
     if n == 0:
         continue
