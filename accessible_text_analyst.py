@@ -2315,21 +2315,58 @@ try:
 except Exception:
     sent_scores = np.ones(len(df_sent))
 
-# Для каждого абзаца: найти лучшее предложение
+# Для каждого абзаца: найти лучшее предложение.
+#
+# ВАЖНО: абзацы здесь НЕ пересегментируются заново. Прежняя версия делала
+# nlp(para).sents и получала иногда иное число предложений, чем cell_para
+# (модель доминирующего языка иначе делит уже склеенный абзац — на реальном
+# финском корпусе один абзац из 6 предложений превращался в 7). Из-за этого
+# sent_cursor уезжал за границу sent_scores, срез seg оказывался пустым
+# и .argmax() падал: "attempt to get argmax of an empty sequence"
+# (см. release_notes.md, v1.5.1).
+#
+# Единственный источник границ — para_sentences, синхронизированный
+# с all_sents / df_sent / sent_scores в cell_para и перестраиваемый
+# вместе с ними в cell_foreign_resegment. Инвариант:
+#   sum(len(p) for p in para_sentences) == len(df_sent) == len(sent_scores)
+# Ниже он проверяется явно, а срезы дополнительно ограничены по границе
+# массива — рассинхронизация приведёт к предупреждению и пропуску абзацев,
+# но не к падению ячейки.
+_n_scores = len(sent_scores)
+if len(paragraphs) != len(para_sentences):
+    print(f"[ВНИМАНИЕ] Рассинхронизация абзацев: {len(paragraphs)} абзацев, "
+          f"{len(para_sentences)} списков предложений. Тезисы строятся "
+          f"только по первым {min(len(paragraphs), len(para_sentences))}.")
+_n_para_sents = sum(len(p) for p in para_sentences)
+if _n_para_sents != _n_scores:
+    print(f"[ВНИМАНИЕ] Предложений в абзацах: {_n_para_sents}, "
+          f"оценок TF-IDF: {_n_scores}. Абзацы за границей оценок будут "
+          f"пропущены (ожидалось равенство — проверьте cell_para / "
+          f"cell_foreign_resegment).")
+
 theses_rows = []
 sent_cursor = 0
+_skipped_paras = 0
 for pid, (para, p_sents) in enumerate(zip(paragraphs, para_sentences), 1):
-    para_sents = [s for s in p_sents if len(s) > 10]
-    n = len(para_sents)
-    if n == 0:
+    lo = sent_cursor
+    # Курсор двигаем на ПОЛНУЮ длину абзаца (до фильтра по длине),
+    # иначе отброшенное короткое предложение сдвинуло бы все следующие
+    # абзацы относительно sent_scores.
+    sent_cursor += len(p_sents)
+    n_avail = max(0, min(sent_cursor, _n_scores) - lo)
+    # Кандидаты: (глобальный индекс предложения, текст)
+    cand = [(i, s) for i, s in enumerate(p_sents[:n_avail], start=lo)
+            if len(s) > 10]
+    if not cand:
+        _skipped_paras += 1
         continue
-    seg = sent_scores[sent_cursor:sent_cursor + n]
-    best_i = int(seg.argmax())
-    best_sent = para_sents[best_i]
+    best_i, best_sent = max(cand, key=lambda pair: sent_scores[pair[0]])
     if len(best_sent) >= 40:
         theses_rows.append({"para_id": pid, "sentence": best_sent,
-                             "score": float(seg[best_i])})
-    sent_cursor += n
+                             "score": float(sent_scores[best_i])})
+if _skipped_paras:
+    print(f"[ВНИМАНИЕ] Абзацев без оценённых предложений: {_skipped_paras} "
+          f"(пропущены).")
 
 df_theses = pd.DataFrame(theses_rows)
 print(f"Сформировано тезисов: {len(df_theses)}")

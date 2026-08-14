@@ -4,6 +4,28 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.5.2 — `cell_theses`: the v1.5.1 fix, now bullet-proof
+
+**Why.** v1.5.1 was shipped fast, under pressure from a corpus that crashed the notebook. The fix itself was correct — this release validates it and closes the remaining ways the same crash could come back.
+
+**Validation of v1.5.1 (on the corpus that triggered it).** Re-splitting a joined paragraph with the dominant model produced 7 sentences where `cell_para` had produced 6 in exactly one paragraph out of 51 (301 sentences total). That single +1 pushed `sent_cursor` to 301 with 301 scores available, so the last paragraph got an empty slice and `.argmax()` raised. Iterating over `para_sentences` keeps the cursor at exactly 301 — the diagnosis and the fix both hold, and re-running the new loop against the old one over 200 randomized score vectors gives byte-identical theses.
+
+**What was still fragile.** The loop's arithmetic silently depended on a filter that happens to be a no-op today:
+
+- `sent_cursor` advanced by the *filtered* sentence count while `sent_scores` indexes the *unfiltered* one, so a single sentence shorter than 11 characters inside a paragraph would desynchronize every following paragraph — silently mis-scoring theses, and eventually re-raising the same argmax crash. (Today `cell_para` and `cell_foreign_resegment` both drop such sentences before they reach `para_sentences`, so the filter never fires — but nothing enforced that.)
+- `if n == 0: continue` skipped the cursor advance entirely, i.e. the same desynchronization with a stronger effect.
+- Slices were never bounded by `len(sent_scores)`, so any future mismatch went straight to an empty-sequence `argmax` instead of a diagnosable message.
+- `zip(paragraphs, para_sentences)` truncated to the shorter list without a word.
+
+**What changed.** The cursor now advances by the full paragraph length; candidate sentences carry their *global* index, so the score always belongs to the sentence it is reported for; slices are clipped to the score array; and the best sentence is picked with `max()` over a non-empty candidate list, which makes an empty-sequence `argmax` unreachable. The invariant `sum(len(p) for p in para_sentences) == len(df_sent) == len(sent_scores)` is now checked explicitly and any violation prints a Russian `[ВНИМАНИЕ]` line naming the two cells to inspect, plus a count of skipped paragraphs — the cell degrades to a partial result instead of aborting the run. On a healthy pipeline the output is unchanged.
+
+**Upgrade.** Pull, `jupytext --sync`, re-execute the notebook. No config or dependency change.
+
+### Distribution
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.5.1 — critical fix: `cell_theses` crashed on empty sequence
 
 **Severity.** A crash in `cell_theses` ("attempt to get argmax of an empty sequence"). Upgrade is recommended if you process texts where re-segmentation differs from the original chunking (especially Finnish corpora using the omorfi dictionary).
