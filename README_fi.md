@@ -16,6 +16,7 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 - `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu OpenAI:ta neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Kun valinnainen `sentiment.csv` on saatavilla, Vieno rakentaa laulunsa tekstin tunnekaaren varaan raakalauseiden sijaan. Vaatii `OPENAI_API_KEY`:n tiedostossa `golden_key.env`.
 - `shamanic_voice.py` *(valinnainen, vaatii ElevenLabsin)* — itsenäinen, kertasuoritteinen dispatcher, joka syntetisoi `shamanic_ai.py`:n tuottamat neljä kerronnallista artefaktia `.mp3`-äänitiedostoiksi ElevenLabs-API:n kautta, kirjaa kunkin onnistumisen/epäonnistumisen konsoliin ja päättyy (ei bottia, ei palvelinta). Tarvitsee `ELEVENLABS_API_KEY`:n tiedostossa `golden_key.env` sekä `voices`-määrityksen asetuksissa.
 - `shamanic_locale.py` — molempien shamanististen skriptien lokalisointipaketti (mallit, otsikot ja Lumin fallback-merkkijonot kaikilla kuudella kielellä).
+- `ksiega_niedomowien.py` *(valinnainen, vain suomi, agentin avulla)* — Sanomattomien kirja (*Księga Niedomówień*): muuttaa `raw_roots_chant.txt`-tiedoston vähitellen kasvavaksi salakirjoitetuksi päiväkirjaksi, jonka aukkoja sokea malli ei pystynyt arvaamaan. Se on deterministinen apuri tiedoston `skills/ksiega-niedomowien/SKILL.md` skillille; konsolitulosteet noudattavat `ui_lang`-asetusta.
 
 ## Mitä putki tekee
 
@@ -175,6 +176,8 @@ Sisältö:
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null,
+  "kirja_filler_model": "",
+  "kirja_filler_base_url": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -195,10 +198,12 @@ Sisältö:
 | `lumi_katla_lines` | integer tai null | Valinnainen koristerajoitus `shamanic_ai.py`:n Lumin loppuraportille: kuinka monta ei-tyhjää riviä Katlan monologista Lumi näkee. `null` tai puuttuva avain = koko sisältö; integer N > 0 = ensimmäiset N riviä. |
 | `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
 | `voices`           | object          | Yhdistää jokaisen shamanistisen äänen (`katla` / `vieno` / `lumi` / `sami`) ElevenLabs-äänen tunnisteeseen; käyttää `shamanic_voice.py`. Ääni, jonka tunniste on tyhjä tai puuttuu, ohitetaan. Tarvitaan vain, jos ajat äänidispatcherin. |
+| `kirja_filler_model` | string | Malli komennolle `ksiega_niedomowien.py fill` (Kirjan sokea aukkojen täyttäjä). Tyhjä = `gpt-4o`. |
+| `kirja_filler_base_url` | string | OpenAI-yhteensopiva osoite samalle täyttäjälle (esim. `https://openrouter.ai/api/v1`). Tyhjä = OpenAI. Avain on aina `OPENAI_API_KEY` tiedostosta `golden_key.env` — omaa osoitetta käytettäessä sen pitää olla kyseisen palveluntarjoajan avain. |
 
 > **Sentimenttianalyysi — CPU-kuorma.** Kun `enable_sentiment: true`, kappalekohtainen ajo on laskennallisesti raskas CPU:lla — suunnilleen verrattavissa paikallisen Whisper-puheentunnistuksen ajamiseen CPU:lla. Vanhemmilla tai lämmöllisesti rajoitetuilla koneilla tämä jatkuva kuorma voi todella rasittaa prosessoria; ota se käyttöön harkiten, mieluiten koneella jossa on GPU tai pelivaraa pitkäkestoiseen täyskuormatyöhön.
 
-> **`ui_lang` — lokalisoinnin laajuus.** Itsenäisten skriptien (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) konsolituloste lokalisoidaan `ui_lang`-asetuksen kautta. Itse **notebookin stdout ei ole** lokalisoitu — se on kovakoodattu venäjäksi (vain teesien tiedostonimi seuraa tunnistettua korpuksen kieltä). Lukutila-artefakti `analysis_report.html` säilyttää notebookin venäjänkielisen kerronnan (sen juuri on `<html lang="ru">`); täysin `ui_lang`-lokalisoitu, käyttäjälle näkyvä artefakti on **`diagnostic_report.html`**, jonka tuottaa `generate_diagnostic.py`. Käännökset `fi` / `is` / `it` ovat luonnoksia eivätkä tarkistettuja — ilmoita epätarkkuuksista GitHubissa.
+> **`ui_lang` — lokalisoinnin laajuus.** Itsenäisten skriptien (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) konsolituloste lokalisoidaan `ui_lang`-asetuksen kautta. Itse **notebookin stdout ei ole** lokalisoitu — se on kovakoodattu venäjäksi (vain teesien tiedostonimi seuraa tunnistettua korpuksen kieltä). Lukutila-artefakti `analysis_report.html` säilyttää notebookin venäjänkielisen kerronnan (sen juuri on `<html lang="ru">`); täysin `ui_lang`-lokalisoitu, käyttäjälle näkyvä artefakti on **`diagnostic_report.html`**, jonka tuottaa `generate_diagnostic.py`. Käännökset `fi` / `is` / `it` ovat luonnoksia eivätkä tarkistettuja — ilmoita epätarkkuuksista GitHubissa.
 
 > **Windows-polut ja regexit — tärkeää.** Asetussisältö on JSON, eikä JSONissa ole raw-string-syntaksia. Yksittäinen kenoviiva escapeaa seuraavan merkin (`\U`, `\d`, `\n` ovat erikoismerkkejä), joten Windows-polku kirjoitettuna `"C:\Users\marek\doc.pdf"` aiheuttaa JSON-jäsennysvirheen. Kaksi oikeaa tapaa kirjoittaa se:
 >
@@ -300,6 +305,36 @@ Itsenäinen, kertasuoritteinen skripti, joka lukee `shamanic_ai.py`:n tuottamat 
 
 > **Yksityisyys ja kustannukset.** Kuten `shamanic_ai.py` OpenAI:n kanssa, tämä skripti lähettää artefaktitekstin kolmannen osapuolen palveluun (ElevenLabs) syntetisoitavaksi, ja ElevenLabs on **maksullinen** API. Sisältö poistuu koneeltasi — älä aja sitä materiaalilla, jota et voi jakaa ulkopuolelle.
 
+### 7. Sanomattomien kirja (valinnainen, vain suomi, agentin avulla)
+
+```bash
+python ksiega_niedomowien.py scan              # mitkä export_results/-kansiot kelpaavat
+python ksiega_niedomowien.py prepare --folder <name> --limit 3
+#   → export_results/_kirja_tyotila/<id>/packet.json
+python ksiega_niedomowien.py seal <packet>     # tarkistaa draft.json-tiedoston, kirjoittaa blind.json-tiedoston
+python ksiega_niedomowien.py fill <packet>     # valinnainen: sokeat arvaukset OpenAI-yhteensopivan API:n kautta
+python ksiega_niedomowien.py judge <packet>    # → export_results/Sanomattomien_kirja.md
+```
+
+Peli, joka rakentuu `raw_roots_chant.txt`-tiedoston päälle. Jokaisesta 3–6 peräkkäisen juuren lohkosta LLM kirjoittaa sumuisen suomenkielisen päiväkirjamerkinnän, jossa on aukkoja; aukkojen vastaukset ovat sanatarkkoja katkelmia lähdetekstistä, ja niiden on löydyttävä **sekä** `accessible_text.html`- että `accessible_text.docx`-tiedostosta eli totuuden lähteen kummastakin versiosta. Sen jälkeen erillinen, sokea malli yrittää täyttää aukot pelkän merkinnän perusteella; jokainen arvattu aukko katsotaan ilmeiseksi, ja sen katkelma poistetaan. Jäljelle jäävä — juuret lukeva KATLA (varoitusjärjestelmä) ja sanomattomat aukot sisältävä VIENO (shamaanikertoja) — lisätään tiedostoon `export_results/Sanomattomien_kirja.md`. Vastausavain menee tiedostoon `Sanomattomien_kirja.avain.json` ja tila tiedostoon `Sanomattomien_kirja.tila.json`; uudelleenajo ei koskaan monista merkintöjä.
+
+Skripti on deterministinen puolikas (suodattimet, lohkot, totuuden lähde, tarkistus, arviointi, Kirja). Luovan puolikkaan — `draft.json`-tiedoston kirjoittamisen — tekee agentti ohjeen `skills/ksiega-niedomowien/SKILL.md` mukaan.
+
+**Syötteen suodattimet.** Kelpaavat vain ne `export_results/`-alikansiot, joilla on suomenkielinen nimi, `<html lang="fi">`, suomenkielinen loitsu eikä kielioppivuotoa; kaikki muu hylätään syyn kera. Rivi `roots.header` poistetaan, jos se on mukana. *Kielioppivuodon* tarkistus havaitsee korpukset, jotka on käsitelty ennen omorfin käyttöönottoa (v1.5.0): se laskee koko `keywords_tfidf.csv`-tiedostosta lemmatisoinnista selvinneet taivutusmuodot sekä spaCyn roskalemmat ja hylkää kansion, jos niitä on yli 1,0 sataa termiä kohden. Vaatii omorfin (asennuksen vaihe 5).
+
+**Miksi vain suomi.** Peli elää siitä, mitä lemmatisointi jättää sanomatta, joten se on mielekäs vain siellä, missä sanan palauttaminen perusmuotoon vie siltä todellista merkitystä. Suomi on agglutinoiva kieli: sen, minkä puola tai venäjä ilmaisevat osin erillisillä prepositioilla ja englanti enimmäkseen sanajärjestyksellä ja funktiosanoilla, suomi pakkaa itse sanaan — viisitoista sijamuotoa (`talossa`, `talosta`, `taloon`, `talolle`, `talotta`), possessiivisuffiksit (`taloni`, `talonsa`), liitepartikkelit (`-ko` kysymys, `-kin` ”myös”, `-han` korostus) ja verbimuodot, jotka kantavat yhtä aikaa persoonaa, aikamuotoa, tapaluokkaa ja passiivia (`tehtäisiinkö`). Loitsu supistaa kaiken tämän muotoihin `TALO` ja `TEHDÄ`: kuka, missä, mistä, mihin, kenen ja onko katoavat — juuri ne aukot, jotka kuulijan on täytettävä. Puolassa ja venäjässä perusmuoto menettää taivutuspäätteen, mutta suuri osa suhteesta on erillisessä sanassa (prepositiossa), joten perusmuoto ei koskaan kantanut sitä yksin; englanti menettää vain vähän luvun ja aikamuodon lisäksi. Islanti (neljä sijaa, joita prepositiot pitkälti hallitsevat) ja italia (prepositiot ja artikkelit, niukka nominitaivutus) ovat lähempänä vastaavasti puolan ja venäjän sekä englannin mallia. Teknisesti työkalu tarvitsee myös sanakirjapohjaisen analysaattorin todistaakseen, että loitsu on kieliopiton, ja yhdistääkseen juuret takaisin taivutettuun tekstiin; tässä putkessa sellainen on vain suomelle (omorfi), ja kynnysarvot on kalibroitu oikeilla suomenkielisillä korpuksilla.
+
+**Sokea täyttäjä (`fill`).** Käyttää samaa `golden_key.env`-tiedoston `OPENAI_API_KEY`-avainta kuin `shamanic_ai.py`. Asetusten `kirja_filler_model` (oletus `gpt-4o`) ja `kirja_filler_base_url` (tyhjä = OpenAI) — tai `--model` / `--base-url` — ohjaavat sen mihin tahansa OpenAI-yhteensopivaan Chat Completions -osoitteeseen, esim. `https://openrouter.ai/api/v1` mallilla `openai/gpt-4o-mini`; silloin `OPENAI_API_KEY`-muuttujassa pitää olla kyseisen palveluntarjoajan avain. Lähetetään vain `blind.json` — ei koskaan vastauksia eikä lähdetekstiä.
+
+**Skillin kytkeminen.**
+
+- *Claude Code:* kopioi `skills/ksiega-niedomowien/` kansioon `~/.claude/skills/` (henkilökohtainen) tai omaan repokopioosi kansioon `.claude/skills/`. Tämä repo jättää `.claude/`-kansion gitin ulkopuolelle, siksi skill toimitetaan kansiossa `skills/`.
+- *Claude-sovellukset:* pakkaa kansio `ksiega-niedomowien/` ZIP-tiedostoksi (kansion itsensä on oltava arkiston juuressa) ja lisää se kohdassa **Customize → Skills**; koodin suorituksen on oltava päällä, ja istunto tarvitsee pääsyn repokopioosi, koska omorfin automaatit ja `export_results/` ovat omalla levylläsi.
+- *Muut agentit:* `SKILL.md` on tavallinen Markdown-ohje YAML-otsakkeella; sitä voi noudattaa mikä tahansa agentti, joka pystyy ajamaan paikallisia komentoja repossa. Jos agentti ei pysty käynnistämään itsenäistä aliagenttia, käytä sokeaan vaiheeseen komentoa `fill`.
+- Pelkkä keskusteluavustaja ilman paikallista komentojen suoritusta (esim. custom GPT) ei pysty ajamaan tätä: omorfin ja sen noin 130 Mt:n automaattien on toimittava datasi vieressä.
+
+> **Yksityisyys ja kustannukset.** `fill` lähettää merkinnän sumuisen tekstin (ei lähdettä) määritettyyn osoitteeseen, ja luonnoksen kirjoittava agentti lukee otteita lähteestä. Käytä tätä vain aineistoon, jonka voit jakaa näille palveluntarjoajille.
+
 ## Tuloste
 
 Jokainen analysoitu korpus saa oman alihakemistonsa kohdassa `export_results/`, nimettynä lähdetiedoston mukaan (polku ja pääte poistettuna) tai `domain_slug`:n mukaan URL-osoitteille. Sisäänrakennettu esimerkkikorpus käyttää `export_results/_default/`.
@@ -355,6 +390,8 @@ accessible_text_analyst/
 ├── shamanic_ai.py                  # valinnainen: LLM-vetoiset rituaaliset kertojat
 ├── shamanic_voice.py               # valinnainen: ElevenLabs-äänidispatcher (kertasuoritteinen)
 ├── shamanic_locale.py              # lokalisointipaketti shamanistiselle kerrokselle
+├── ksiega_niedomowien.py           # valinnainen: Sanomattomien kirja (vain suomi)
+├── skills/ksiega-niedomowien/SKILL.md  # agentin skill ksiega_niedomowien.py:lle
 ├── config.example.json             # asetusmalli, JSON-pääte (versioidaan)
 ├── config.example.ini              # asetusmalli, INI-pääte (versioidaan)
 ├── config.json / config.ini        # paikalliset asetuksesi (gitignored)
@@ -365,6 +402,7 @@ accessible_text_analyst/
 ├── README_pl.md, README_ru.md, …   # käännökset (paluulinkki ylhäällä)
 ├── release_notes.md                # release notes käänteisessä aikajärjestyksessä
 └── export_results/                 # analyysin tulokset (gitignored)
+    ├── Sanomattomien_kirja.md      # Sanomattomien kirja, kasvaa merkintä kerrallaan
     └── <project_name>/
         ├── sentences.csv
         ├── paragraphs.csv

@@ -16,6 +16,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 - `shamanic_ai.py` *(valfrjálst, byggt á LLM)* — kallar í OpenAI til að búa til fjórar frásagnarraddir (`Katla`, `Vieno`, `Lumi`, `Sami`) ofan á sömu útflutninga. Þegar valfrjálsa `sentiment.csv` er til staðar byggir Vieno söng sinn á tilfinningabogadrætti textans í stað hráu setninganna. Krefst `OPENAI_API_KEY` í `golden_key.env`.
 - `shamanic_voice.py` *(valfrjálst, krefst ElevenLabs)* — sjálfstæður afgreiðari sem keyrir einu sinni og myndgerir frásagnargripina fjóra sem `shamanic_ai.py` bjó til í `.mp3`-hljóð gegnum ElevenLabs API-ið, skráir hvern árangur/villu í skelina og hættir svo (enginn botni, enginn þjónn). Þarf `ELEVENLABS_API_KEY` í `golden_key.env` og `voices`-vörpun í stillingunum.
 - `shamanic_locale.py` — staðfærsluböggull fyrir bæði shamanísku forritin (sniðmát, hausa og fallback-strengi Lumi á öllum sex tungumálum).
+- `ksiega_niedomowien.py` *(valfrjálst, aðeins finnska, með aðstoð gervigreindarþjóns)* — Bók hins ósagða (*Sanomattomien kirja*): breytir `raw_roots_chant.txt` í dulkóðaða dagbók sem vex smám saman, með eyðum sem blint líkan gat ekki giskað á. Þetta er ákveðinn (deterministic) hjálpari fyrir hæfnina í `skills/ksiega-niedomowien/SKILL.md`; skelúttakið fylgir `ui_lang`.
 
 ## Hvað gerir leiðslan
 
@@ -175,6 +176,8 @@ Innihald:
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null,
+  "kirja_filler_model": "",
+  "kirja_filler_base_url": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -195,10 +198,12 @@ Innihald:
 | `lumi_katla_lines` | heiltala eða null | Valfrjáls skrautmark fyrir lokaskýrslu Lumi úr `shamanic_ai.py`: hve margar ekki-tómar línur einræðu Kötlu Lumi sér. `null` eða vantandi lykill = allt innihald; heiltala N > 0 = fyrstu N línurnar. |
 | `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
 | `voices`           | hlutur          | Varpar hverri shamanískri rödd (`katla` / `vieno` / `lumi` / `sami`) yfir á ElevenLabs radd-auðkenni, notað af `shamanic_voice.py`. Rödd með tómu eða vantandi auðkenni er sleppt. Aðeins nauðsynlegt ef þú keyrir hljóðafgreiðarann. |
+| `kirja_filler_model` | strengur | Líkan fyrir `ksiega_niedomowien.py fill` (blindan eyðufyllanda Bókarinnar). Tómt = `gpt-4o`. |
+| `kirja_filler_base_url` | strengur | OpenAI-samhæfð slóð fyrir sama fyllanda (t.d. `https://openrouter.ai/api/v1`). Tómt = OpenAI. Lykillinn er alltaf `OPENAI_API_KEY` úr `golden_key.env` — með eigin slóð þarf hann að vera lykill þeirrar þjónustu. |
 
 > **Tilfinningagreining — álag á örgjörva.** Þegar `enable_sentiment: true` er virkt er greiningin per málsgrein reikniþung á CPU — nokkurn veginn sambærileg við að keyra staðbundna Whisper tal-í-texta á CPU. Á eldri eða hitatakmörkuðum vélum getur þetta viðvarandi álag verið raunverulegt erfiði fyrir örgjörvann; virkjaðu það meðvitað, helst á vél með GPU eða með svigrúm fyrir langvarandi vinnu á fullu álagi.
 
-> **`ui_lang` — umfang staðfærslu.** Skel-úttak sjálfstæðu skriptanna (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) er staðfært gegnum `ui_lang`. **Staðalúttak minnisbókarinnar er ekki** staðfært — það er harðkóðað á rússnesku (aðeins skráarnafn tesanna fylgir greinda tungumáli safnsins). Lesendaham-skýrslan `analysis_report.html` heldur rússnesku frásögn minnisbókarinnar (rót hennar er `<html lang="ru">`); að fullu `ui_lang`-staðfærði notendaskjár-artefaktinn er **`diagnostic_report.html`** sem `generate_diagnostic.py` býr til. Þýðingar í `fi` / `is` / `it` eru drög og óyfirfarnar — vinsamlegast tilkynntu ónákvæmni á GitHub.
+> **`ui_lang` — umfang staðfærslu.** Skel-úttak sjálfstæðu skriptanna (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) er staðfært gegnum `ui_lang`. **Staðalúttak minnisbókarinnar er ekki** staðfært — það er harðkóðað á rússnesku (aðeins skráarnafn tesanna fylgir greinda tungumáli safnsins). Lesendaham-skýrslan `analysis_report.html` heldur rússnesku frásögn minnisbókarinnar (rót hennar er `<html lang="ru">`); að fullu `ui_lang`-staðfærði notendaskjár-artefaktinn er **`diagnostic_report.html`** sem `generate_diagnostic.py` býr til. Þýðingar í `fi` / `is` / `it` eru drög og óyfirfarnar — vinsamlegast tilkynntu ónákvæmni á GitHub.
 
 > **Windows-slóðir og regex — mikilvægt.** Innihald stillinganna er JSON og JSON hefur enga raw-strengja-málskipan. Ein bakskáslína sleppir næsta staf (`\U`, `\d`, `\n` eru sérstakir), þannig að Windows-slóð skrifuð sem `"C:\Users\marek\doc.pdf"` veldur villu við JSON-túlkun. Tvær réttar leiðir til að skrifa hana:
 >
@@ -300,6 +305,36 @@ Sjálfstætt skript sem keyrir einu sinni, les frásagnargripina fjóra sem `sha
 
 > **Friðhelgi og kostnaður.** Eins og `shamanic_ai.py` með OpenAI sendir þetta skript texta gripanna til þriðja aðila (ElevenLabs) til myndgerðar, og ElevenLabs er **gjaldskyld** API. Innihaldið yfirgefur vél þína — ekki keyra það á efni sem þú mátt ekki deila út á við.
 
+### 7. Bók hins ósagða (valfrjálst, aðeins finnska, með aðstoð gervigreindarþjóns)
+
+```bash
+python ksiega_niedomowien.py scan              # hvaða export_results/-möppur uppfylla skilyrðin
+python ksiega_niedomowien.py prepare --folder <name> --limit 3
+#   → export_results/_kirja_tyotila/<id>/packet.json
+python ksiega_niedomowien.py seal <packet>     # sannreynir draft.json, skrifar blind.json
+python ksiega_niedomowien.py fill <packet>     # valfrjálst: blindar ágiskanir gegnum OpenAI-samhæft API
+python ksiega_niedomowien.py judge <packet>    # → export_results/Sanomattomien_kirja.md
+```
+
+Leikur sem byggir á `raw_roots_chant.txt`. Fyrir hverja blokk 3–6 samfelldra róta skrifar mállíkan þokukennda finnska dagbókarfærslu með eyðum; svörin eru orðrétt brot úr frumtextanum og verða að koma fyrir **bæði** í `accessible_text.html` og `accessible_text.docx`, þ.e. í báðum útgáfum sannleiksuppsprettunnar. Síðan reynir sérstakt, blint líkan að fylla eyðurnar út frá færslunni einni; hver eyða sem það giskar á telst augljós og brot hennar er fjarlægt. Það sem eftir stendur — KATLA (viðvörunarkerfið) sem les ræturnar og VIENO (shamaníski sögumaðurinn) með ósögðu eyðunum — er bætt aftan við `export_results/Sanomattomien_kirja.md`. Svarlykillinn fer í `Sanomattomien_kirja.avain.json` og staðan í `Sanomattomien_kirja.tila.json`; endurkeyrsla tvítekur aldrei færslur.
+
+Skriftan er ákveðni helmingurinn (síur, blokkir, sannleiksuppspretta, sannprófun, mat, Bókin). Skapandi helminginn — að skrifa `draft.json` — vinnur gervigreindarþjónn eftir `skills/ksiega-niedomowien/SKILL.md`.
+
+**Inntakssíur.** Aðeins undirmöppur `export_results/` með finnsku heiti, `<html lang="fi">`, finnskum söng og engum málfræðileka koma til greina; öllu öðru er hafnað með ástæðu. Línan `roots.header` er fjarlægð ef hún er til staðar. Prófið á *málfræðileka* finnur málheildir sem voru unnar áður en omorfi var virkjað (v1.5.0): yfir alla `keywords_tfidf.csv` telur það beygðar myndir sem lifðu lemmun af ásamt ruslmyndum spaCy og hafnar möppunni yfir 1,0 á hver 100 hugtök. Krefst omorfi (5. skref uppsetningar).
+
+**Hvers vegna aðeins finnska.** Leikurinn lifir á því sem lemmun lætur ósagt, svo hann er aðeins skynsamlegur þar sem það að færa orð í grunnmynd sviptir það raunverulegri merkingu. Finnska er viðskeytamál: það sem pólska eða rússneska tjá að hluta með sérstökum forsetningum, og enska aðallega með orðaröð og kerfisorðum, pakkar finnskan inn í orðið sjálft — fimmtán föll (`talossa` „í húsinu“, `talosta` „úr húsinu“, `taloon` „inn í húsið“, `talolle` „að húsinu“, `talotta` „án húss“), eignarviðskeyti (`taloni` „húsið mitt“, `talonsa` „húsið hans/hennar/þeirra“), smáorðsviðhengi (`-ko` spurning, `-kin` „líka“, `-han` áhersla) og sagnmyndir sem bera í senn persónu, tíð, hátt og þolmynd (`tehtäisiinkö` „yrði það gert?“). Söngurinn smættar allt þetta í `TALO` og `TEHDÄ`: hver, hvar, hvaðan, hvert, hvers og hvort hverfa — einmitt þær eyður sem hlustandinn þarf að fylla. Í pólsku og rússnesku missir grunnmyndin beygingarendinguna, en stór hluti venslanna býr í sérstöku orði (forsetningunni), svo grunnmyndin bar þau aldrei ein; enska tapar litlu umfram tölu og tíð. Íslenska (fjögur föll, sem forsetningar stýra að miklu leyti) og ítalska (forsetningar og greinar, lítil nafnorðabeyging) standa nær pólsk-rússneska og enska mynstrinu, hvort um sig. Tæknilega þarf tólið einnig orðabókargreini til að sanna að söngurinn sé laus við málfræði og til að tengja rætur aftur við beygðan texta; í þessari leiðslu er slíkur aðeins til fyrir finnsku (omorfi), og þröskuldarnir voru stilltir á raunverulegum finnskum málheildum.
+
+**Blindur fyllandi (`fill`).** Notar sama `OPENAI_API_KEY` úr `golden_key.env` og `shamanic_ai.py`. `kirja_filler_model` (sjálfgefið `gpt-4o`) og `kirja_filler_base_url` (tómt = OpenAI) í stillingunum — eða `--model` / `--base-url` — beina honum að hvaða OpenAI-samhæfðu Chat Completions-slóð sem er, t.d. `https://openrouter.ai/api/v1` með líkani á borð við `openai/gpt-4o-mini`; þá þarf `OPENAI_API_KEY` að innihalda lykil þeirrar þjónustu. Aðeins `blind.json` er sent — aldrei svörin né frumtextinn.
+
+**Hæfnin tengd.**
+
+- *Claude Code:* afritaðu `skills/ksiega-niedomowien/` í `~/.claude/skills/` (persónulegt) eða í `.claude/skills/` í þínu eintaki af geymslunni. Þessi geymsla hunsar `.claude/` í git, þess vegna fylgir hæfnin í `skills/`.
+- *Claude-forritin:* þjappaðu möppunni `ksiega-niedomowien/` í ZIP (mappan sjálf verður að vera rót safnsins) og bættu henni við undir **Customize → Skills**; kóðakeyrsla þarf að vera virk og lotan þarf aðgang að eintakinu þínu, því omorfi-sjálfvirkjarnir og `export_results/` eru á þínum diski.
+- *Aðrir gervigreindarþjónar:* `SKILL.md` er einfalt Markdown-ferli með YAML-haus; hver sá þjónn sem getur keyrt staðbundnar skipanir í geymslunni getur fylgt því. Ef hann getur ekki ræst óháðan undirþjón skaltu nota `fill` fyrir blinda skrefið.
+- Hreinn spjallþjónn án staðbundinnar skipanakeyrslu (t.d. custom GPT) getur ekki keyrt þetta: omorfi og um 130 MB sjálfvirkjar þess verða að keyra við hliðina á gögnunum þínum.
+
+> **Friðhelgi og kostnaður.** `fill` sendir þokukenndan texta færslunnar (ekki frumtextann) á stilltu slóðina, og þjónninn sem skrifar drögin les brot úr frumtextanum. Notaðu þetta aðeins á efni sem þú mátt deila með þessum þjónustum.
+
 ## Úttak
 
 Hver greint safn fær sína undirmöppu undir `export_results/`, nefnda eftir upprunaskránni (slóð og ending fjarlægð) eða eftir `domain_slug` fyrir URL. Innbyggða sýnishornssafnið notar `export_results/_default/`.
@@ -355,6 +390,8 @@ accessible_text_analyst/
 ├── shamanic_ai.py                  # valfrjálst: LLM-drifnir helgisiðafrásagnamenn
 ├── shamanic_voice.py               # valfrjálst: ElevenLabs hljóðafgreiðari (keyrir einu sinni)
 ├── shamanic_locale.py              # staðfærsluböggull fyrir shamanístíska lagið
+├── ksiega_niedomowien.py           # valfrjálst: Bók hins ósagða (aðeins finnska)
+├── skills/ksiega-niedomowien/SKILL.md  # hæfni gervigreindarþjóns fyrir ksiega_niedomowien.py
 ├── config.example.json             # stillingarsniðmát, JSON-ending (versjónað)
 ├── config.example.ini              # stillingarsniðmát, INI-ending (versjónað)
 ├── config.json / config.ini        # þínar staðbundnu stillingar (gitignored)
@@ -365,6 +402,7 @@ accessible_text_analyst/
 ├── README_pl.md, README_ru.md, …   # þýðingar (afturhlekkur efst)
 ├── release_notes.md                # release notes í öfugri tímaröð
 └── export_results/                 # greiningarútkomur (gitignored)
+    ├── Sanomattomien_kirja.md      # Bók hins ósagða, bætt við smám saman
     └── <project_name>/
         ├── sentences.csv
         ├── paragraphs.csv

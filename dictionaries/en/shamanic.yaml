@@ -98,3 +98,12 @@ ai:
   err_no_notebook_output: 'File {path} is missing even though topics exist — something went wrong with the notebook export.'
   warn_vieno_too_few_sentences: 'Vieno''s vision rests on fewer than 5 raw sentences ({count} found) — the chant would be too thin, so the ritual was aborted. Check that the notebook produced a full sentences.csv file.'
   fatal_error: '[FATAL] {error}'
+
+# Księga Niedomówień — treść artefaktu (korpus zawsze fi, pozostałe dla spójności)
+book:
+  title: 'The Book of the Unsaid'
+  intro: 'An encrypted diary from the far North. Every entry is an isolated stream of consciousness. The gaps {gap} are left for the listener to fill; obvious gaps have been removed.'
+  entry_heading: 'Entry {no} — {title}'
+  katla_label: '**KATLA** *(warning system)*'
+  vieno_label: '**VIENO:**'
+  gap_marker: '— … —'

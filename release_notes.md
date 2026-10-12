@@ -4,6 +4,37 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.6.0 — The Book of the Unsaid (*Sanomattomien kirja*), a Finnish agent skill
+
+**Theme.** A new optional layer on top of the raw-roots chant: `ksiega_niedomowien.py` plus an agent skill (`skills/ksiega-niedomowien/SKILL.md`) that turn `raw_roots_chant.txt` into an incrementally growing cryptic diary from the North. The notebook and the existing shamanic scripts are untouched. Minor bump.
+
+### How it works
+
+For each block of 3–6 consecutive roots an agent writes a misty Finnish entry with gaps whose answers are verbatim spans of the source; a **separate, blind model** tries to fill the gaps from the entry alone; every gap it guesses is judged obvious and its fragment is removed. The rest — KATLA (warning system) reading the roots, VIENO (shamanic narrator) with the unsaid gaps — is appended to `export_results/Sanomattomien_kirja.md`, with the answer key in `Sanomattomien_kirja.avain.json` and the state in `Sanomattomien_kirja.tila.json`. Re-running never duplicates entries.
+
+- **Script = the deterministic half:** `scan`, `prepare`, `seal`, `fill`, `judge`, `status`. Blocks are cut by dynamic programming so each block's truth sits in as few source places as possible; `seal` rejects drafts whose answers are not verbatim in **both** `accessible_text.html` and `accessible_text.docx`, are a root of the block, leak into the text, or copy 7+ consecutive source words; `judge` matches by omorfi lemmas, unknown-name prefixes, compound heads and spelling variants.
+- **Agent = the creative half:** writing `draft.json` per the skill. The skill ships under `skills/` because the repo gitignores `.claude/`; copy it into `~/.claude/skills/` or `.claude/skills/`, or zip the folder for the Claude apps (*Customize → Skills*). Any agent that can run local commands can follow the same `SKILL.md`.
+- **Blind filler `fill` (optional):** for platforms that cannot spawn an independent subagent, or to use a different model as the guesser. Sends only the answer-free `blind.json` to an OpenAI-compatible Chat Completions endpoint. The key is the same `OPENAI_API_KEY` from `golden_key.env` as in `shamanic_ai.py`; new config keys `kirja_filler_model` (default `gpt-4o`) and `kirja_filler_base_url` (empty = OpenAI; e.g. `https://openrouter.ai/api/v1`, in which case the variable holds that provider's key), overridable with `--model` / `--base-url`.
+
+### Input filters (hard refusal)
+
+Only `export_results/` subfolders with a Finnish name, `<html lang="fi">`, a Finnish chant and **no grammar leak** qualify; anything else (a thesis, Polish documents, pasted text) is refused with a reason, and the skill forbids working around the verdict. The `roots.header` line in any of the six languages is stripped. The grammar-leak score counts, over the full `keywords_tfidf.csv`, Finnish inflected forms that survived lemmatization plus spaCy garbage lemmas (`(B + 2·G)` per 100 terms, threshold 1.0). Calibrated on ~30 real corpora, it rejects exactly the folders produced before omorfi was wired in (v1.5.0) and gives the same verdict with either omorfi automaton.
+
+### Why Finnish only
+
+The game lives on what lemmatization leaves unsaid. Finnish is agglutinative: case endings, possessive suffixes, clitics and verb categories carry *who, where, from where, to where, whose* and *whether* inside the word (`talossa`, `talosta`, `taloon`, `taloni`, `tehtäisiinkö`), so reducing the chant to `TALO`, `TEHDÄ` strips the relations themselves — exactly the gaps a listener fills. In Polish and Russian the lemma loses the ending, but much of the relation sits in a separate preposition; English loses little beyond number and tense; Icelandic and Italian sit closer to the Polish/Russian and English patterns respectively. Technically, proving that a chant is grammar-free and matching roots back to inflected text needs a dictionary analyser, which only Finnish has in this pipeline (omorfi).
+
+### Localization
+
+Console output is fully localized via `ui_lang` (`kirja.*` in all six `reports.yaml`); the Book's own strings are `book.*` in all six `shamanic.yaml` (the Book itself is always Finnish).
+
+**Upgrade.** Pull. For the Book: enable omorfi (Installation step 5), copy the skill as described in README §7, optionally set `kirja_filler_model` / `kirja_filler_base_url`. No notebook re-run required; folders produced before v1.5.0 need a re-run with omorfi to qualify.
+
+### Distribution
+Source-only minor release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.5.2 — `cell_theses`: the v1.5.1 fix, now bullet-proof
 
 **Why.** v1.5.1 was shipped fast, under pressure from a corpus that crashed the notebook. The fix itself was correct — this release validates it and closes the remaining ways the same crash could come back.

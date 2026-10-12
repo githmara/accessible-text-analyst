@@ -98,3 +98,12 @@ ai:
   err_no_notebook_output: 'Skrána {path} vantar þótt umfjöllunarefni séu til — eitthvað fór úrskeiðis við útflutning minnisbókarinnar.'
   warn_vieno_too_few_sentences: 'Sýn Vieno byggir á færri en 5 hráum setningum ({count} fundust) — söngurinn yrði of þunnur, svo helgisiðnum var hætt. Athugaðu hvort minnisbókin bjó til fulla sentences.csv-skrá.'
   fatal_error: '[ALVARLEG VILLA] {error}'
+
+# Księga Niedomówień — treść artefaktu (korpus zawsze fi, pozostałe dla spójności)
+book:
+  title: 'Bók hins ósagða'
+  intro: 'Dulkóðuð dagbók úr fjarlægu norðri. Hver færsla er einangrað hugsanaflæði. Eyðurnar {gap} eru skildar eftir handa hlustandanum; augljósar eyður hafa verið fjarlægðar.'
+  entry_heading: 'Færsla {no} — {title}'
+  katla_label: '**KATLA** *(viðvörunarkerfi)*'
+  vieno_label: '**VIENO:**'
+  gap_marker: '— … —'

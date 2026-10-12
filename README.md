@@ -16,6 +16,7 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 - `shamanic_ai.py` *(optional, LLM-driven)* — calls OpenAI to generate four narrative voices (`Katla`, `Vieno`, `Lumi`, `Sami`) on top of the same exports. When the optional `sentiment.csv` is present, Vieno builds her chant on the text's emotional arc instead of raw sentences. Requires `OPENAI_API_KEY` in `golden_key.env`.
 - `shamanic_voice.py` *(optional, requires ElevenLabs)* — a standalone, run-once dispatcher that synthesizes the four narrative artefacts produced by `shamanic_ai.py` into `.mp3` audio via the ElevenLabs API, logs each success/failure to the console, and exits (no bot, no server). Needs `ELEVENLABS_API_KEY` in `golden_key.env` and a `voices` mapping in the config.
 - `shamanic_locale.py` — the localization bundle for both shamanic scripts (templates, headers, and Lumi's fallback strings in all six supported languages).
+- `ksiega_niedomowien.py` *(optional, Finnish only, agent-assisted)* — the Book of the Unsaid (*Sanomattomien kirja*): turns `raw_roots_chant.txt` into an incrementally growing cryptic diary whose gaps a blind model could not guess. It is the deterministic helper for the skill in `skills/ksiega-niedomowien/SKILL.md`; its console output follows `ui_lang`.
 
 ## What the pipeline does
 
@@ -175,6 +176,8 @@ Contents:
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null,
+  "kirja_filler_model": "",
+  "kirja_filler_base_url": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -195,10 +198,12 @@ Contents:
 | `lumi_katla_lines` | integer or null | Optional ornament cap for `shamanic_ai.py`'s Lumi dispatch: how many non-empty lines of Katla's monologue Lumi sees. `null` or missing key = full content; integer N > 0 = first N lines. |
 | `lumi_vieno_lines` | integer or null | Same as `lumi_katla_lines`, but for Vieno's echo chant. |
 | `voices`           | object          | Maps each shamanic voice (`katla` / `vieno` / `lumi` / `sami`) to an ElevenLabs voice ID, consumed by `shamanic_voice.py`. A voice with an empty or missing ID is skipped. Only needed if you run the audio dispatcher. |
+| `kirja_filler_model` | string | Model for `ksiega_niedomowien.py fill` (the Book's blind gap-filler). Empty = `gpt-4o`. |
+| `kirja_filler_base_url` | string | OpenAI-compatible endpoint for the same filler (e.g. `https://openrouter.ai/api/v1`). Empty = OpenAI. The key is always `OPENAI_API_KEY` from `golden_key.env` — with a custom endpoint it must be that provider's key. |
 
 > **Sentiment analysis — CPU cost.** With `enable_sentiment: true`, the per-paragraph pass is computationally heavy on CPU — roughly comparable to running local Whisper speech-to-text on CPU. On older or thermally-constrained machines this sustained load can be a real strain on the processor; enable it deliberately, ideally on a machine with a GPU or with headroom for prolonged full-load work.
 
-> **`ui_lang` — scope of localization.** The console output of the standalone scripts (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`) is localized via `ui_lang`. The **notebook stdout is not** localized — it is hardcoded Russian (only the theses filename follows the detected corpus language). The reader-mode `analysis_report.html` keeps the notebook's Russian narrative (its root is `<html lang="ru">`); the fully `ui_lang`-localized, user-facing artefact is **`diagnostic_report.html`** produced by `generate_diagnostic.py`. Translations in `fi` / `is` / `it` are drafted but unreviewed — please report rough edges on GitHub.
+> **`ui_lang` — scope of localization.** The console output of the standalone scripts (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) is localized via `ui_lang`. The **notebook stdout is not** localized — it is hardcoded Russian (only the theses filename follows the detected corpus language). The reader-mode `analysis_report.html` keeps the notebook's Russian narrative (its root is `<html lang="ru">`); the fully `ui_lang`-localized, user-facing artefact is **`diagnostic_report.html`** produced by `generate_diagnostic.py`. Translations in `fi` / `is` / `it` are drafted but unreviewed — please report rough edges on GitHub.
 
 > **Windows paths and regex — important.** The config content is JSON, and JSON has no raw-string syntax. A single backslash escapes the next character (`\U`, `\d`, `\n` are special), so a Windows path written `"C:\Users\marek\doc.pdf"` will produce a JSON parse error. Two ways to write it correctly:
 >
@@ -300,6 +305,36 @@ A standalone, run-once script that reads the four narrative artefacts produced b
 
 > **Privacy & cost.** Like `shamanic_ai.py` with OpenAI, this script sends artefact text to a third-party service (ElevenLabs) for synthesis, and ElevenLabs is a **paid** API. The content leaves your machine — do not run it on material you cannot share externally.
 
+### 7. The Book of the Unsaid (optional, Finnish only, agent-assisted)
+
+```bash
+python ksiega_niedomowien.py scan              # which export_results/ folders qualify
+python ksiega_niedomowien.py prepare --folder <name> --limit 3
+#   → export_results/_kirja_tyotila/<id>/packet.json
+python ksiega_niedomowien.py seal <packet>     # validates draft.json, writes blind.json
+python ksiega_niedomowien.py fill <packet>     # optional: blind guesses via an OpenAI-compatible API
+python ksiega_niedomowien.py judge <packet>    # → export_results/Sanomattomien_kirja.md
+```
+
+A game built on `raw_roots_chant.txt`. For each block of 3–6 consecutive roots an LLM writes a misty Finnish diary entry with gaps whose answers are verbatim spans of the source text — they must occur in **both** `accessible_text.html` and `accessible_text.docx`, the two versions of the source of truth. A separate, blind model then tries to fill the gaps from the entry alone; every gap it guesses counts as obvious and its fragment is removed. What remains — KATLA (the warning system) reading the roots and VIENO (the shamanic narrator) with the unsaid gaps — is appended to `export_results/Sanomattomien_kirja.md`. The answer key goes to `Sanomattomien_kirja.avain.json` and the state to `Sanomattomien_kirja.tila.json`; re-running never duplicates entries.
+
+The script is the deterministic half (filters, blocks, source of truth, validation, judging, the Book). The creative half — writing `draft.json` — is done by an agent following `skills/ksiega-niedomowien/SKILL.md`.
+
+**Input filters.** Only `export_results/` subfolders with a Finnish name, `<html lang="fi">`, a Finnish chant and no grammar leak qualify; anything else is refused with a reason. The `roots.header` line is stripped when present. The *grammar leak* check catches corpora processed before omorfi was enabled (v1.5.0): over the full `keywords_tfidf.csv` it counts inflected forms that survived lemmatization plus spaCy's garbage lemmas, and rejects the folder above 1.0 per 100 terms. Requires omorfi (Installation step 5).
+
+**Why Finnish only.** The game lives on what lemmatization leaves unsaid, so it only makes sense where reducing a word to its lemma removes real meaning. Finnish is agglutinative: what Polish or Russian express partly with separate prepositions, and English mostly with word order and function words, Finnish packs into the word itself — fifteen cases (`talossa` "in the house", `talosta` "out of the house", `taloon` "into the house", `talolle` "to the house", `talotta` "without a house"), possessive suffixes (`taloni` "my house", `talonsa` "his/her/their house"), clitics (`-ko` question, `-kin` "also", `-han` emphasis) and verb forms carrying person, tense, mood and the passive at once (`tehtäisiinkö` "would it be done?"). The chant reduces all of that to `TALO` and `TEHDÄ`: who, where, from where, to where, whose and whether all vanish — exactly the gaps a listener has to fill. In Polish and Russian the lemma drops the inflectional ending, but much of the relation sits in a separate word (the preposition), so the lemma never carried it alone; English loses little beyond number and tense. Icelandic (four cases, largely governed by prepositions) and Italian (prepositions and articles, little nominal inflection) sit closer to the Polish/Russian and the English patterns respectively. Technically the tool also needs a dictionary analyser to prove that a chant is grammar-free and to match roots back to inflected text; in this pipeline only Finnish has one (omorfi), and the thresholds were calibrated on real Finnish corpora.
+
+**Blind filler (`fill`).** Uses the same `OPENAI_API_KEY` from `golden_key.env` as `shamanic_ai.py`. `kirja_filler_model` (default `gpt-4o`) and `kirja_filler_base_url` (empty = OpenAI) in the config — or `--model` / `--base-url` — point it at any OpenAI-compatible Chat Completions endpoint, e.g. `https://openrouter.ai/api/v1` with a model such as `openai/gpt-4o-mini`; `OPENAI_API_KEY` must then hold that provider's key. Only `blind.json` is sent — never the answers or the source.
+
+**Connecting the skill.**
+
+- *Claude Code:* copy `skills/ksiega-niedomowien/` to `~/.claude/skills/` (personal) or to `.claude/skills/` in your checkout. This repo gitignores `.claude/`, which is why the skill ships under `skills/`.
+- *Claude apps:* zip the `ksiega-niedomowien/` folder (the folder itself must be the archive root) and add it under **Customize → Skills**; code execution must be enabled, and the session needs access to your checkout, because the omorfi automata and `export_results/` live on your disk.
+- *Other agents:* `SKILL.md` is a plain Markdown procedure with YAML front matter; any agent that can run local commands in the repo can follow it. If it cannot spawn an independent subagent, use `fill` for the blind step.
+- A chat-only assistant without local command execution (e.g. a custom GPT) cannot run it: omorfi and its ~130 MB of automata have to run next to your data.
+
+> **Privacy & cost.** `fill` sends the entry's misty text (not the source) to the configured endpoint, and the drafting agent reads excerpts of the source. Use it only on material you can share with those providers.
+
 ## Output
 
 Every analyzed corpus gets its own subdirectory under `export_results/`, named after the source file (path and extension stripped) or after a `domain_slug` for URLs. The built-in example corpus uses `export_results/_default/`.
@@ -355,6 +390,8 @@ accessible_text_analyst/
 ├── shamanic_ai.py                  # optional: LLM-driven ritual narrators
 ├── shamanic_voice.py               # optional: ElevenLabs audio dispatcher (run-once)
 ├── shamanic_locale.py              # localization bundle for the shamanic layer
+├── ksiega_niedomowien.py           # optional: the Book of the Unsaid (Finnish only)
+├── skills/ksiega-niedomowien/SKILL.md  # agent skill for ksiega_niedomowien.py
 ├── config.example.json             # config template, JSON extension (versioned)
 ├── config.example.ini              # config template, INI extension (versioned)
 ├── config.json / config.ini        # your local configuration (gitignored)
@@ -365,6 +402,7 @@ accessible_text_analyst/
 ├── README_pl.md, README_ru.md, …   # translations (link back at the top)
 ├── release_notes.md                # release notes appended in reverse-chrono order
 └── export_results/                 # analysis outputs (gitignored)
+    ├── Sanomattomien_kirja.md      # the Book of the Unsaid, appended incrementally
     └── <project_name>/
         ├── sentences.csv
         ├── paragraphs.csv

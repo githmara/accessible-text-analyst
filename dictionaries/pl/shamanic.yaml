@@ -98,3 +98,12 @@ ai:
   err_no_notebook_output: 'Brak pliku {path}, choć tematy istnieją — coś poszło nie tak z eksportem notebooka.'
   warn_vieno_too_few_sentences: 'Wizja Vieno opiera się na mniej niż 5 surowych zdaniach (znaleziono {count}) — pieśń wyszłaby uboga, więc rytuał przerwano. Sprawdź, czy notebook wygenerował pełny plik sentences.csv.'
   fatal_error: '[BŁĄD KRYTYCZNY] {error}'
+
+# Księga Niedomówień — treść artefaktu (korpus zawsze fi, pozostałe dla spójności)
+book:
+  title: 'Księga Niedomówień'
+  intro: 'Zaszyfrowany dziennik z dalekiej Północy. Każdy wpis to odizolowany strumień świadomości. Luki {gap} zostają do wypełnienia słuchaczowi; luki oczywiste usunięto.'
+  entry_heading: 'Wpis {no} — {title}'
+  katla_label: '**KATLA** *(system ostrzegania)*'
+  vieno_label: '**VIENO:**'
+  gap_marker: '— … —'

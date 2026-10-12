@@ -98,3 +98,12 @@ ai:
   err_no_notebook_output: 'Il file {path} è mancante anche se i temi esistono — qualcosa è andato storto con l''esportazione del notebook.'
   warn_vieno_too_few_sentences: 'La visione di Vieno si basa su meno di 5 frasi grezze ({count} trovate) — il canto risulterebbe troppo esile, quindi il rituale è stato interrotto. Verifica che il notebook abbia prodotto un file sentences.csv completo.'
   fatal_error: '[ERRORE CRITICO] {error}'
+
+# Księga Niedomówień — treść artefaktu (korpus zawsze fi, pozostałe dla spójności)
+book:
+  title: 'Il libro del non detto'
+  intro: 'Un diario cifrato dal lontano Nord. Ogni voce è un flusso di coscienza isolato. Le lacune {gap} sono lasciate all''ascoltatore; quelle ovvie sono state rimosse.'
+  entry_heading: 'Voce {no} — {title}'
+  katla_label: '**KATLA** *(sistema di allerta)*'
+  vieno_label: '**VIENO:**'
+  gap_marker: '— … —'

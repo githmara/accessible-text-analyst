@@ -98,3 +98,12 @@ ai:
   err_no_notebook_output: 'Tiedosto {path} puuttuu, vaikka aiheita on — notebookin viennissä meni jokin pieleen.'
   warn_vieno_too_few_sentences: 'Vienon näky perustuu alle viiteen raakalauseeseen (löytyi {count}) — laulusta tulisi ohut, joten rituaali keskeytettiin. Tarkista, että notebook tuotti täyden sentences.csv-tiedoston.'
   fatal_error: '[KRIITTINEN VIRHE] {error}'
+
+# Księga Niedomówień — treść artefaktu (korpus zawsze fi, pozostałe dla spójności)
+book:
+  title: 'Sanomattomien kirja'
+  intro: 'Salattu päiväkirja kaukaa pohjoisesta. Jokainen merkintä on irrallinen tajunnanvirta. Aukot {gap} jätetään kuulijan täytettäviksi; ilmeiset aukot on poistettu.'
+  entry_heading: 'Merkintä {no} — {title}'
+  katla_label: '**KATLA** *(varoitusjärjestelmä)*'
+  vieno_label: '**VIENO:**'
+  gap_marker: '— … —'
