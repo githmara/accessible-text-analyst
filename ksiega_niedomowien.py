@@ -7,11 +7,14 @@ twórcza (mglisty kontekst z lukami) i ślepe wypełnianie luk robi LLM.
 Przepływ jednego bloku:
     scan     -> które foldery z export_results/ się kwalifikują (i dlaczego nie)
     prepare  -> pakiet roboczy: korzenie bloku + fragment źródła prawdy
+    draft    -> (opcjonalnie) szkic przez API (draft.json) + seal; po odrzuceniu
+                do 2 powtórek z zarzutami walidatora — zamiast agenta ze skillem
     seal     -> walidacja szkicu LLM (draft.json) i zapis ślepej wersji (blind.json)
-    fill     -> (opcjonalnie) ślepe zgadywanie przez API zgodne z OpenAI
-                (guesses.json) — zamiast osobnego agenta platformy
+    fill     -> (opcjonalnie) ślepe zgadywanie przez API (guesses.json) i od razu
+                judge — zamiast osobnego agenta platformy
     judge    -> porównanie zgadywań (guesses.json) z prawdą; odgadnięte fragmenty
-                znikają, reszta trafia przyrostowo do księgi
+                znikają, reszta trafia przyrostowo do księgi (samodzielnie: po
+                ślepym subagencie)
     status   -> stan księgi i otwartych pakietów
 
 Lokalizacja (konwencja repo): komunikaty konsoli = tr(UI_LANG, "kirja.*")
@@ -28,7 +31,8 @@ musi występować w obu).
 Zależności: omorfi (+ automaty *.hfst w katalogu repo) — wymagane, bo bez
 analizatora nie da się sprawdzić, czy dane są pozbawione gramatyki. PyYAML
 (twarda zależność repo od v1.1). HTML i DOCX czytane biblioteką standardową.
-`fill` dodatkowo: openai + python-dotenv (już w requirements.txt).
+`draft` / `fill` dodatkowo: openai + python-dotenv (już w requirements.txt);
+provider i klucz wybiera llm_klient.py (kirja_llm_provider / llm_provider).
 """
 
 import argparse
@@ -45,6 +49,7 @@ from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path
 
+import llm_klient
 # `t` jest tu często nazwą zmiennej pętli (tokeny), więc alias `tr`.
 from shamanic_locale import get_ui_lang, t as tr
 
@@ -71,6 +76,9 @@ WINDOW_PARAS = 2           # korzenie bloku muszą współwystępować w ≤ 2 s
 TRUTH_MAX_CHARS = 1600
 GAPS_MIN, FRAGMENTS_MIN, FRAGMENTS_MAX = 3, 4, 9
 COPY_NGRAM = 7             # tyle kolejnych słów wspólnych ze źródłem = kopiowanie
+DRAFT_RETRIES = 2          # powtórki `draft` z zarzutami po odrzuceniu (łącznie 3 próby)
+FILL_RETRIES = 2           # powtórki `fill` po nieużytecznej odpowiedzi (łącznie 3 próby)
+MODEL_LANG = "en"          # zarzuty dla modelu: angielskie instrukcje są wykonywane rzetelniej
 
 CONTENT_UPOS = {"NOUN", "PROPN", "VERB", "ADJ", "NUM"}
 GAP_RE = re.compile(r"\{\{(\d+)\}\}")
@@ -651,11 +659,69 @@ def cmd_prepare(args):
     for d in created[: args.limit]:
         p = load_json(d / "packet.json", {})
         print(tr(UI_LANG, "kirja.packet_line", path=d, folder=p["folder"], block=p["block_no"], chant=p["chant"]))
+    print(tr(UI_LANG, "kirja.next_hint", id=created[0].name))
     return 0
 
 
 def _ngrams(words, n):
     return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+
+def validate_draft(packet, draft, truth):
+    """Błędy szkicu jako [(klucz kirja.*, kwargs)] — renderowane osobno dla operatora i modelu."""
+    errors = []
+    frags = draft.get("fragments") if isinstance(draft, dict) else None
+    if not isinstance(frags, list) or not all(isinstance(f, dict) for f in frags):
+        frags = []
+    if not (FRAGMENTS_MIN <= len(frags) <= FRAGMENTS_MAX):
+        errors.append(("err_fragment_count", dict(count=len(frags), min=FRAGMENTS_MIN, max=FRAGMENTS_MAX)))
+    root_lemmas = {fold(p) for r in packet["roots"] for p in r.lower().split()}
+    all_text = " ".join(str(f.get("text", "")) for f in frags).lower()
+    src_words = tokens_of(" ".join(truth.paras))
+    src_ngrams = _ngrams(src_words, COPY_NGRAM)
+    gaps, seen_nums = 0, set()
+    for k, f in enumerate(frags, 1):
+        text, ans = str(f.get("text", "")), str(f.get("answer") or "").strip()
+        nums = GAP_RE.findall(text)
+        if len(nums) > 1:
+            errors.append(("err_multi_gap", dict(k=k)))
+        if nums and not ans:
+            errors.append(("err_gap_no_answer", dict(k=k)))
+        if ans and not nums:
+            errors.append(("err_answer_no_gap", dict(k=k)))
+        if nums:
+            gaps += 1
+            if nums[0] in seen_nums:
+                errors.append(("err_dup_gap", dict(k=k, gap=nums[0])))
+            seen_nums.add(nums[0])
+            if not truth.contains(ans):
+                errors.append(("err_answer_not_in_truth", dict(k=k, answer=ans)))
+            ans_l = {fold(l) for w in tokens_of(ans) for l in (lemmas(w) or {w})}
+            if ans_l and ans_l <= root_lemmas:
+                errors.append(("err_answer_is_root", dict(k=k, answer=ans)))
+            if ans.lower() in GAP_RE.sub("", all_text):
+                errors.append(("err_answer_in_text", dict(k=k, answer=ans)))
+        copied = _ngrams(tokens_of(GAP_RE.sub(" ", text)), COPY_NGRAM) & src_ngrams
+        if copied:
+            errors.append(("err_copied", dict(k=k, ngram=sorted(copied)[0])))
+    if gaps < GAPS_MIN:
+        errors.append(("err_too_few_gaps", dict(gaps=gaps, min=GAPS_MIN)))
+    return errors, gaps
+
+
+def _render(lang, errors):
+    return [tr(lang, f"kirja.{k}", **kw) for k, kw in errors]
+
+
+def _write_blind(d, packet, draft, gaps):
+    blind = {"id": packet["id"], "chant": packet["chant"],
+             "fragments": [{"text": GAP_RE.sub(lambda m: f"____({m.group(1)})", f["text"])}
+                           for f in draft["fragments"]]}
+    save_json(d / "blind.json", blind)
+    # nowa ślepa wersja = stare zgadywania nieaktualne
+    (d / "guesses.json").unlink(missing_ok=True)
+    print(tr(UI_LANG, "kirja.ok_sealed", gaps=gaps, path=d / "blind.json"))
+    return blind
 
 
 def cmd_seal(args):
@@ -667,51 +733,13 @@ def cmd_seal(args):
         return 1
     exp = export_dir(args)
     folder, _ = resolve_folder(exp, packet["folder"])
-    truth = Truth(folder)
-    errors = []
-    frags = draft.get("fragments") or []
-    if not (FRAGMENTS_MIN <= len(frags) <= FRAGMENTS_MAX):
-        errors.append(tr(UI_LANG, "kirja.err_fragment_count", count=len(frags), min=FRAGMENTS_MIN, max=FRAGMENTS_MAX))
-    root_lemmas = {fold(p) for r in packet["roots"] for p in r.lower().split()}
-    all_text = " ".join(f.get("text", "") for f in frags).lower()
-    src_words = tokens_of(" ".join(truth.paras))
-    src_ngrams = _ngrams(src_words, COPY_NGRAM)
-    gaps, seen_nums = 0, set()
-    for k, f in enumerate(frags, 1):
-        text, ans = f.get("text", ""), (f.get("answer") or "").strip()
-        nums = GAP_RE.findall(text)
-        if len(nums) > 1:
-            errors.append(tr(UI_LANG, "kirja.err_multi_gap", k=k))
-        if nums and not ans:
-            errors.append(tr(UI_LANG, "kirja.err_gap_no_answer", k=k))
-        if ans and not nums:
-            errors.append(tr(UI_LANG, "kirja.err_answer_no_gap", k=k))
-        if nums:
-            gaps += 1
-            if nums[0] in seen_nums:
-                errors.append(tr(UI_LANG, "kirja.err_dup_gap", k=k, gap=nums[0]))
-            seen_nums.add(nums[0])
-            if not truth.contains(ans):
-                errors.append(tr(UI_LANG, "kirja.err_answer_not_in_truth", k=k, answer=ans))
-            ans_l = {fold(l) for w in tokens_of(ans) for l in (lemmas(w) or {w})}
-            if ans_l and ans_l <= root_lemmas:
-                errors.append(tr(UI_LANG, "kirja.err_answer_is_root", k=k, answer=ans))
-            if ans.lower() in GAP_RE.sub("", all_text):
-                errors.append(tr(UI_LANG, "kirja.err_answer_in_text", k=k, answer=ans))
-        copied = _ngrams(tokens_of(GAP_RE.sub(" ", text)), COPY_NGRAM) & src_ngrams
-        if copied:
-            errors.append(tr(UI_LANG, "kirja.err_copied", k=k, ngram=sorted(copied)[0]))
-    if gaps < GAPS_MIN:
-        errors.append(tr(UI_LANG, "kirja.err_too_few_gaps", gaps=gaps, min=GAPS_MIN))
+    errors, gaps = validate_draft(packet, draft, Truth(folder))
     if errors:
         print(tr(UI_LANG, "kirja.draft_rejected"))
-        for e in errors:
+        for e in _render(UI_LANG, errors):
             print(f"  - {e}")
         return 4
-    blind = {"id": packet["id"], "chant": packet["chant"],
-             "fragments": [{"text": GAP_RE.sub(lambda m: f"____({m.group(1)})", f["text"])} for f in frags]}
-    save_json(d / "blind.json", blind)
-    print(tr(UI_LANG, "kirja.ok_sealed", gaps=gaps, path=d / "blind.json"))
+    blind = _write_blind(d, packet, draft, gaps)
     print(json.dumps(blind, ensure_ascii=False, indent=2))
     return 0
 
@@ -805,59 +833,237 @@ def _parse_guesses(text):
     return {str(k): str(v) for k, v in g.items()}
 
 
-def cmd_fill(args):
-    """Ślepe wypełnienie przez API zgodne z OpenAI. Czyta WYŁĄCZNIE blind.json.
+DRAFTER_PROMPT = """You write one entry of "Sanomattomien kirja" (The Book of the Unsaid), a cryptic \
+diary from the far North built from a chant of Finnish root words. KATLA, an automated warning system, \
+reads the roots; VIENO, a shamanic narrator, weaves a misty Finnish text around them, with gaps. A separate \
+blind model will later try to guess every gap from your text alone; guessed gaps are removed as obvious, \
+only the genuinely unsaid ones stay in the Book.
 
-    Klucz: zawsze OPENAI_API_KEY z golden_key.env (ten sam parametr co
-    shamanic_ai.py). Po przekierowaniu base URL na innego dostawcę zgodnego z
-    OpenAI (np. OpenRouter) ta sama zmienna ma zawierać klucz tego dostawcy.
+INPUT (JSON): the chant, the block's roots, and the source sentences ("truth") in which those roots occur.
+<<PACKET>>
+
+RULES:
+- Write in Finnish, in the rhythm of a ritual, broken diary from the North: short sentences, images of \
+snow, wind, aurora, machines. A stream of consciousness, not a summary. The roots may surface in any form.
+- {fmin}-{fmax} fragments, at least {gmin} gaps, at most one gap per fragment. A gap is written {{{{n}}}} \
+with a unique number n (1, 2, 3, ...).
+- Every fragment with a gap has an "answer": a span copied verbatim (exactly that form and spelling) \
+from one of the truth sentences. The sentence around the gap must take that form grammatically. A gap \
+hides something concrete: who, what, where, how much, which word the source used.
+- The answer must not be one of the block's roots and must not appear anywhere else in the entry.
+- Do not copy the source: never reuse {ngram} or more consecutive words from the truth sentences.
+- Do not attribute to real people (e.g. politicians named in the source) facts or accusations that are \
+not in the truth sentences. The mist obscures what the source says; it never invents new allegations.
+- Optionally one ElevenLabs audio tag at the start of a fragment ([whispers], [slowly], [sighs]), sparingly.
+- Aim for gaps that are hard but fair: ideally some get guessed and some stay unsaid.
+<<PROBLEMS>>
+Reply with ONLY a JSON object, no prose, in exactly this shape:
+{{"fragments": [{{"text": "... {{{{1}}}} ...", "answer": "..."}}, {{"text": "a fragment without a gap"}}]}}
+""".format(fmin=FRAGMENTS_MIN, fmax=FRAGMENTS_MAX, gmin=GAPS_MIN, ngram=COPY_NGRAM)
+
+DRAFT_PROBLEMS = """
+YOUR PREVIOUS ATTEMPT WAS REJECTED by the validator. Fix exactly these problems and keep the rest of \
+the entry as it was:
+<<LIST>>
+
+Previous attempt:
+<<DRAFT>>
+"""
+
+BAD_JSON_PROBLEM = 'the reply was not a JSON object with a "fragments" list'
+
+
+def _llm(args, role):
+    """(settings, client) dla roli "filler" / "drafter" albo komunikat błędu i None."""
+    cfg = _read_config()
+    try:
+        llm = llm_klient.resolve(cfg, UI_LANG, provider_key="kirja_llm_provider",
+                                 provider=args.provider,
+                                 model=args.model or cfg.get(f"kirja_{role}_model"),
+                                 legacy_keys=llm_klient.LEGACY_KEYS)
+        return llm, llm_klient.build_client(llm, UI_LANG)
+    except llm_klient.LLMConfigError as e:
+        print(e)
+        return None
+
+
+# Schematy kanoniczne. Do API idzie llm_klient.schema_for_api(...) (bez limitów,
+# additionalProperties: false); po naszej stronie i tak waliduje _parse_* + seal.
+DRAFT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "fragments": {
+            "type": "array", "minItems": FRAGMENTS_MIN, "maxItems": FRAGMENTS_MAX,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "minLength": 1,
+                             "description": "One misty Finnish fragment; at most one gap written {{n}}."},
+                    "answer": {"type": "string",
+                               "description": "Verbatim span from the truth sentences that fills this "
+                                              "fragment's gap; empty string when the fragment has no gap."},
+                },
+                "required": ["text", "answer"],
+            },
+        },
+    },
+    "required": ["fragments"],
+}
+
+
+def guesses_schema(nums):
+    return {
+        "type": "object",
+        "properties": {"guesses": {
+            "type": "object",
+            "properties": {n: {"type": "string", "description": f"Finnish guess for gap ____({n})."} for n in nums},
+            "required": list(nums),
+        }},
+        "required": ["guesses"],
+    }
+
+
+FILL_PROBLEM = """
+
+YOUR PREVIOUS REPLY WAS UNUSABLE: {reason}. Reply again with ONLY the JSON object in the shape above."""
+
+
+def _parse_draft(text):
+    """{"fragments": [...]} z odpowiedzi modelu (toleruje ```json i prozę wokół) albo None."""
+    m = re.search(r"\{.*\}", text or "", flags=re.S)
+    if not m:
+        return None
+    try:
+        data = json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("fragments"), list):
+        return None
+    frags = []
+    for f in data["fragments"]:
+        if not isinstance(f, dict) or not isinstance(f.get("text"), str):
+            return None
+        item = {"text": f["text"]}
+        if str(f.get("answer") or "").strip():
+            item["answer"] = str(f["answer"]).strip()
+        frags.append(item)
+    return {"fragments": frags}
+
+
+def cmd_draft(args):
+    """Szkic przez API + seal; po odrzuceniu do DRAFT_RETRIES powtórek z zarzutami.
+
+    Wysyła packet (chant, korzenie, truth.sentences = dosłowne zdania źródła) —
+    to więcej niż `fill`, który widzi tylko blind.json.
     """
+    d = Path(args.packet)
+    packet = load_json(d / "packet.json", None)
+    if not packet:
+        print(tr(UI_LANG, "kirja.err_no_packet"))
+        return 1
+    if (d / "draft.json").exists() and not args.force:
+        print(tr(UI_LANG, "kirja.err_draft_exists", path=d / "draft.json"))
+        return 1
+    exp = export_dir(args)
+    folder, _ = resolve_folder(exp, packet["folder"])
+    truth = Truth(folder)
+    got = _llm(args, "drafter")
+    if got is None:
+        return 1
+    llm, client = got
+    sents = packet["truth"]["sentences"]
+    print(tr(UI_LANG, "kirja.draft_privacy", count=len(sents), endpoint=llm.endpoint))
+    base = DRAFTER_PROMPT.replace("<<PACKET>>", json.dumps(
+        {"chant": packet["chant"], "roots": packet["roots"], "truth": sents}, ensure_ascii=False, indent=1))
+    problems, draft = "", None
+    attempts = DRAFT_RETRIES + 1
+    for n in range(1, attempts + 1):
+        print(tr(UI_LANG, "kirja.llm_drafter", model=llm.model, endpoint=llm.endpoint, n=n, max=attempts))
+        try:
+            reply = llm_klient.chat_json(client, llm, base.replace("<<PROBLEMS>>", problems),
+                                         DRAFT_SCHEMA, "kirja_draft", UI_LANG)
+        except Exception as e:  # sieć, klucz, model, kontekst — bez powtórek
+            print(tr(UI_LANG, "kirja.err_call", error=e))
+            return 1
+        parsed = _parse_draft(reply.text)
+        if parsed is None:
+            print(tr(UI_LANG, "kirja.warn_bad_reply"))
+            llm_klient.save_diagnostics(d / f"draft_reply_{n}.txt", reply, UI_LANG)
+            objections, prev = [BAD_JSON_PROBLEM], reply.text[:4000]
+        else:
+            draft = parsed
+            save_json(d / "draft.json", draft)
+            errors, gaps = validate_draft(packet, draft, truth)
+            if not errors:
+                _write_blind(d, packet, draft, gaps)
+                return 0
+            print(tr(UI_LANG, "kirja.draft_rejected"))
+            for e in _render(UI_LANG, errors):
+                print(f"  - {e}")
+            objections, prev = _render(MODEL_LANG, errors), json.dumps(draft, ensure_ascii=False, indent=1)
+        if n < attempts:
+            print(tr(UI_LANG, "kirja.draft_retry", count=len(objections)))
+            problems = (DRAFT_PROBLEMS.replace("<<LIST>>", "\n".join(f"- {o}" for o in objections))
+                        .replace("<<DRAFT>>", prev))
+    if draft is None:
+        print(tr(UI_LANG, "kirja.draft_gave_up_no_draft", attempts=attempts))
+    else:
+        print(tr(UI_LANG, "kirja.draft_gave_up", attempts=attempts, path=d / "draft.json"))
+    return 4
+
+
+def cmd_fill(args):
+    """Ślepe wypełnienie przez API i od razu judge. Wysyła WYŁĄCZNIE blind.json."""
     d = Path(args.packet)
     blind = load_json(d / "blind.json", None)
     if not blind:
         print(tr(UI_LANG, "kirja.err_no_blind"))
         return 1
-    try:
-        from dotenv import load_dotenv
-        from openai import OpenAI
-    except ImportError:
-        print(tr(UI_LANG, "kirja.err_no_openai"))
+    got = _llm(args, "filler")
+    if got is None:
         return 1
-    load_dotenv(ROOT / "golden_key.env")
-    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
-    if not key:
-        print(tr(UI_LANG, "kirja.err_no_key"))
-        return 1
-    cfg = _read_config()
-    model = args.model or (cfg.get("kirja_filler_model") or "").strip() or "gpt-4o"
-    base_url = args.base_url or (cfg.get("kirja_filler_base_url") or "").strip() or None
+    llm, client = got
 
     nums = sorted({n for f in blind["fragments"] for n in re.findall(r"____\((\d+)\)", f["text"])}, key=int)
     entry = json.dumps({"chant": blind["chant"], "fragments": [f["text"] for f in blind["fragments"]]},
                        ensure_ascii=False, indent=1)
     shape = json.dumps({"guesses": {n: "..." for n in nums}}, ensure_ascii=False)
-    print(tr(UI_LANG, "kirja.llm_filler", model=model,
-             endpoint=base_url or tr(UI_LANG, "kirja.default_endpoint")))
-    try:
-        client = OpenAI(api_key=key, base_url=base_url)
-        # bez temperature: część nowszych modeli odrzuca wartości niedomyślne
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": FILLER_PROMPT.format(entry=entry, shape=shape)}])
-        reply = resp.choices[0].message.content or ""
-    except Exception as e:  # sieć, klucz, model — jeden czytelny komunikat
-        print(tr(UI_LANG, "kirja.err_call", error=e))
-        return 1
-    guesses = _parse_guesses(reply)
+    print(tr(UI_LANG, "kirja.llm_filler", model=llm.model, endpoint=llm.endpoint))
+    base = FILLER_PROMPT.format(entry=entry, shape=shape)
+    schema = guesses_schema(nums)
+    attempts = FILL_RETRIES + 1
+    guesses, missing, problem = None, list(nums), ""
+    for n in range(1, attempts + 1):
+        if n > 1:
+            print(tr(UI_LANG, "kirja.fill_retry", n=n, max=attempts))
+        try:
+            reply = llm_klient.chat_json(client, llm, base + problem, schema, "kirja_guesses", UI_LANG)
+        except Exception as e:  # sieć, klucz, model, kontekst — bez powtórek
+            print(tr(UI_LANG, "kirja.err_call", error=e))
+            return 1
+        got_now = _parse_guesses(reply.text)
+        if got_now is None:
+            print(tr(UI_LANG, "kirja.warn_bad_reply"))
+            llm_klient.save_diagnostics(d / f"fill_reply_{n}.txt", reply, UI_LANG)
+            reason = ("it was empty" if not reply.text.strip()
+                      else 'it was not a JSON object with a "guesses" object')
+        else:
+            # zachowujemy najlepszy dotychczasowy wynik (najmniej brakujących luk)
+            now_missing = [g for g in nums if not got_now.get(g, "").strip()]
+            if guesses is None or len(now_missing) < len(missing):
+                guesses, missing = got_now, now_missing
+            if not missing:
+                break
+            print(tr(UI_LANG, "kirja.warn_missing_guess", gaps=", ".join(missing)))
+            reason = "it had no guess for gap(s) " + ", ".join(missing)
+        problem = FILL_PROBLEM.format(reason=reason)
     if guesses is None:
-        print(tr(UI_LANG, "kirja.err_bad_reply", reply=reply[:300]))
+        print(tr(UI_LANG, "kirja.err_fill_gave_up", attempts=attempts, path=d))
         return 1
-    missing = [n for n in nums if not guesses.get(n, "").strip()]
-    if missing:
-        print(tr(UI_LANG, "kirja.warn_missing_guess", gaps=", ".join(missing)))
-    save_json(d / "guesses.json", {"guesses": guesses, "filler": {"model": model, "base_url": base_url}})
+    save_json(d / "guesses.json", {"guesses": guesses,
+                                   "filler": {"provider": llm.provider, "model": llm.model}})
     print(tr(UI_LANG, "kirja.ok_guesses", path=d / "guesses.json", count=len(nums)))
-    return 0
+    return cmd_judge(args)
 
 
 def cmd_judge(args):
@@ -944,22 +1150,117 @@ def cmd_status(args):
     return 0
 
 
+# ==========================================
+# Wskazanie pakietu z linii poleceń
+# ==========================================
+
+# Etap, na który czeka komenda — używany tylko przy wskazaniu nazwą folderu,
+# żeby `draft <folder>` wziął następny blok bez szkicu, `fill <folder>` następny
+# zapieczętowany itd. Jawne id/ścieżka wybiera pakiet bez filtra (komenda sama
+# zgłosi, czego brakuje).
+_STAGE = {
+    "draft": lambda d: not (d / "blind.json").exists(),
+    "seal": lambda d: (d / "draft.json").exists() and not (d / "blind.json").exists(),
+    "fill": lambda d: (d / "blind.json").exists(),
+    "judge": lambda d: (d / "guesses.json").exists(),
+}
+
+
+def _open_packets(exp):
+    """[(katalog, packet)] pakietów, których bloku nie ma jeszcze w Księdze, w kolejności bloków."""
+    work = book_paths(exp)[3]
+    if not work.exists():
+        return []
+    done = done_ids(exp)
+    out = []
+    for d in sorted(work.iterdir()):
+        pk = load_json(d / "packet.json", None) if d.is_dir() else None
+        if pk and d.name not in done:
+            out.append((d, pk))
+    return sorted(out, key=lambda x: (x[1].get("folder", ""), x[1].get("block_no", 0)))
+
+
+def _packet_files(d):
+    have = [n for n in ("draft.json", "blind.json", "guesses.json") if (d / n).exists()]
+    return ", ".join(have) or tr(UI_LANG, "kirja.status_only_packet")
+
+
+def resolve_packet(args):
+    """Pakiet z argumentu: ścieżka, id (lub jego początek) albo nazwa folderu (lub jej początek).
+
+    Toleruje dosłowne słowo "packet" przepisane z dokumentacji (`draft packet <id>`,
+    `draft "packet <id>"`). Zwraca katalog pakietu albo None po wypisaniu listy otwartych.
+    """
+    words = " ".join(args.packet).split(None, 1) if args.packet else []
+    if len(words) == 2 and words[0].lower() == "packet":
+        words = [words[1]]
+    raw = unicodedata.normalize("NFC", (words[0] if words else "").strip().strip("\"'"))
+    exp = export_dir(args)
+    packets = _open_packets(exp)
+    if raw:
+        cand = Path(raw)
+        if (cand / "packet.json").is_file():
+            return cand
+        work = book_paths(exp)[3]
+        if (work / raw / "packet.json").is_file():
+            return work / raw
+        low = raw.lower()
+        by_id = [d for d, _ in packets if len(low) >= 4 and d.name.startswith(low)]
+        if len(by_id) == 1:
+            return by_id[0]
+        by_folder = [(d, pk) for d, pk in packets
+                     if unicodedata.normalize("NFC", pk.get("folder", "")).lower().startswith(low)]
+        if len({pk["folder"] for _, pk in by_folder}) == 1:
+            ready = [(d, pk) for d, pk in by_folder if _STAGE[args.cmd](d)]
+            if args.cmd == "draft":  # najpierw bloki bez szkicu, potem do poprawki
+                ready.sort(key=lambda x: (x[0] / "draft.json").exists())
+            if ready:
+                d, pk = ready[0]
+                print(tr(UI_LANG, "kirja.info_packet_chosen", id=d.name, folder=pk["folder"],
+                         block=pk["block_no"]))
+                return d
+        print(tr(UI_LANG, "kirja.err_packet_not_found", arg=raw, cmd=args.cmd))
+    else:
+        print(tr(UI_LANG, "kirja.err_packet_not_given", cmd=args.cmd))
+    if not packets:
+        print(tr(UI_LANG, "kirja.info_no_open_packets"))
+        return None
+    print(tr(UI_LANG, "kirja.open_packets_header"))
+    for d, pk in packets:
+        print(tr(UI_LANG, "kirja.open_packet_line", id=d.name, folder=pk["folder"], block=pk["block_no"],
+                 files=_packet_files(d)))
+    print(tr(UI_LANG, "kirja.packet_usage", cmd=args.cmd, id=packets[0][0].name))
+    return None
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Księga Niedomówień / Sanomattomien kirja")
     ap.add_argument("--root", help=argparse.SUPPRESS)  # testy: inny katalog z export_results/
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("scan"); s.add_argument("--folder"); s.add_argument("--json", action="store_true")
+    s.add_argument("folder_pos", nargs="?", metavar="FOLDER")
     s = sub.add_parser("prepare"); s.add_argument("--folder"); s.add_argument("--limit", type=int, default=1)
+    s.add_argument("folder_pos", nargs="?", metavar="FOLDER")
     s.add_argument("--verbose", action="store_true")
-    s = sub.add_parser("seal"); s.add_argument("packet")
-    s = sub.add_parser("fill"); s.add_argument("packet"); s.add_argument("--model"); s.add_argument("--base-url")
-    s = sub.add_parser("judge"); s.add_argument("packet")
+    s = sub.add_parser("draft"); s.add_argument("packet", nargs="*", metavar="ID"); s.add_argument("--force", action="store_true")
+    s.add_argument("--provider", choices=sorted(llm_klient.PROVIDERS)); s.add_argument("--model")
+    s = sub.add_parser("seal"); s.add_argument("packet", nargs="*", metavar="ID")
+    s = sub.add_parser("fill"); s.add_argument("packet", nargs="*", metavar="ID")
+    s.add_argument("--provider", choices=sorted(llm_klient.PROVIDERS)); s.add_argument("--model")
+    s = sub.add_parser("judge"); s.add_argument("packet", nargs="*", metavar="ID")
     sub.add_parser("status")
     args = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if getattr(args, "folder_pos", None) and not args.folder:  # `prepare <folder>` bez --folder
+        args.folder = args.folder_pos
+    if args.cmd in _STAGE:
+        found = resolve_packet(args)
+        if found is None:
+            return 1
+        args.packet = str(found)
     try:
-        return {"scan": cmd_scan, "prepare": cmd_prepare, "seal": cmd_seal, "fill": cmd_fill,
+        return {"scan": cmd_scan, "prepare": cmd_prepare, "draft": cmd_draft, "seal": cmd_seal, "fill": cmd_fill,
                 "judge": cmd_judge, "status": cmd_status}[args.cmd](args)
     except Refusal as e:
         print(tr(UI_LANG, "kirja.refusal", message=e))

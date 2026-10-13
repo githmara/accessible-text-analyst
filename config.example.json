@@ -7,8 +7,12 @@
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null,
+  "llm_provider": "",
+  "llm_model": "",
+  "llm_base_url": "",
+  "kirja_llm_provider": "",
+  "kirja_drafter_model": "",
   "kirja_filler_model": "",
-  "kirja_filler_base_url": "",
   "voices": {
     "katla": "",
     "vieno": "",

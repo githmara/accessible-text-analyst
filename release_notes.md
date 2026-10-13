@@ -4,6 +4,43 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.7.0 — LLM providers bound to their keys, API drafter for the Book
+
+**Theme.** Two things. First, an API key can no longer reach a host it was not issued for: until now `fill` and `shamanic_ai.py` shared `OPENAI_API_KEY`, and `kirja_filler_base_url` / `--base-url` decided where it went. Putting an OpenRouter key into that variable broke `shamanic_ai.py`, and forgetting to swap it sent the OpenAI key to a third party. Second, the Book of the Unsaid gets an API drafter, so you no longer need an agent to use it. Minor bump: there is a new command, and one config key is removed.
+
+### LLM providers (`llm_klient.py`, shared)
+
+| `llm_provider` | key in `golden_key.env` | address |
+|---|---|---|
+| `openai` (default) | `OPENAI_API_KEY` | `api.openai.com`, passed explicitly (the SDK would otherwise honour `OPENAI_BASE_URL` from the environment) |
+| `openrouter` | `OPENROUTER_API_KEY` | `openrouter.ai`, fixed; `llm_base_url` is ignored |
+| `openai_compat` | `LLM_COMPAT_API_KEY` | `llm_base_url` (required), with `llm_model` (required) |
+
+- New config keys: `llm_provider`, `llm_model`, `llm_base_url`, and for the Book `kirja_llm_provider` (empty = `llm_provider`) and `kirja_drafter_model`. `kirja_filler_model` stays.
+- `shamanic_ai.py` uses the same client. With an empty config it behaves exactly as before (OpenAI, `gpt-4o`).
+- **Removed:** `kirja_filler_base_url` and `fill --base-url`. A config that still has `kirja_filler_base_url` is refused with a migration message instead of being mapped silently, because a silent mapping would send `OPENAI_API_KEY` to OpenRouter, which is exactly the leak this release closes.
+
+### The Book of the Unsaid
+
+- **Packets are easy to point at.** `draft` / `seal` / `fill` / `judge` take the packet id printed by `prepare` (or its first characters), the start of the corpus folder name (the next packet of that folder that is ready for the command is taken), or the packet folder path. When nothing matches, the script lists the open packets and prints a ready-to-run command. `prepare` prints the next command to run. `prepare` and `scan` also take the folder name without `--folder`.
+- **`draft <id>`** — the API writes `draft.json`, which is then validated exactly as `seal` does it. If it is rejected, the model gets the draft back with the validator's concrete objections (in English, while the operator sees them in `ui_lang`). It retries up to 2 times, so 3 attempts in total. Exit codes: 0 = sealed, 4 = still rejected (the last draft stays in the packet for repair by hand or with the skill), 1 = API error. An existing `draft.json` is never overwritten without `--force`. It sends verbatim source sentences (`truth.sentences`) and prints how many before the call. The skill is still the stronger mode: unlimited retries, with the agent reading the objections as it goes.
+- **Structured outputs, retries and diagnostics.** `draft` and `fill` first ask for a strict JSON schema. If the endpoint rejects it (400/422), they fall back to `json_object`, then to the prompt alone; the pattern is copied from the director's `core_llm.py`. Rate limits, timeouts and context overflow are never degraded. `fill` retries twice when the reply is unusable or a gap is missing. Every unusable reply is saved in the packet (`draft_reply_N.txt` / `fill_reply_N.txt`, with `finish_reason` and any refusal), and the console prints one diagnostic line. Until now `fill` printed a truncated reply and stopped, so a failure gave no hint of its cause.
+- **`fill` now runs `judge` itself** once the guesses are saved. Run `judge` on its own only after a blind subagent.
+- `seal` deletes a stale `guesses.json` when it writes a new `blind.json`.
+- One rule cannot be checked deterministically: *do not attribute to real people facts or accusations that are not in the source sentences*. The drafter prompt, the skill and the README all state it, but nothing verifies it.
+- README §7 now lists three privacy levels (`fill` < `draft` < the agent). It also says to run the skill in the **Code** tab with a **local** session: in plain chat mode or in a cloud session, the files the agent reads are copied to the cloud.
+
+### Localization
+
+New keys: `llm.*` and the `draft` part of `kirja.*`, in all six `reports.yaml`. Removed keys: `kirja.err_no_openai`, `kirja.err_no_key`, `kirja.default_endpoint`.
+
+**Upgrade.** Pull. If your config has `kirja_filler_base_url`, delete it and set `kirja_llm_provider` (or `llm_provider`): use `openrouter` with `OPENROUTER_API_KEY`, or `openai_compat` with `LLM_COMPAT_API_KEY` + `llm_base_url` + `llm_model`. If you put a non-OpenAI key into `OPENAI_API_KEY`, move it to its own variable. You don't need to re-run the notebook.
+
+### Distribution
+Source-only minor release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.6.0 — The Book of the Unsaid (*Sanomattomien kirja*), a Finnish agent skill
 
 **Theme.** A new optional layer on top of the raw-roots chant: `ksiega_niedomowien.py` plus an agent skill (`skills/ksiega-niedomowien/SKILL.md`) that turn `raw_roots_chant.txt` into an incrementally growing cryptic diary from the North. The notebook and the existing shamanic scripts are untouched. Minor bump.

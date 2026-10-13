@@ -1,13 +1,11 @@
-import os
 import json
 import csv
 import re
 from collections import Counter
 from pathlib import Path
 from urllib.parse import urlparse
-from openai import OpenAI
-from dotenv import load_dotenv
 
+import llm_klient
 from shamanic_locale import detect_corpus_lang, get_ui_lang, t, LANGUAGE_NAMES
 
 # Język UI (printy w konsoli) — niezależny od języka korpusu. Pobierany
@@ -16,9 +14,10 @@ from shamanic_locale import detect_corpus_lang, get_ui_lang, t, LANGUAGE_NAMES
 # w mowie korpusu.
 UI_LANG = get_ui_lang()
 
-# Ładowanie klucza z pliku golden_key.env
-load_dotenv("golden_key.env")
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# Klient i model ustala llm_klient w __main__ (provider z configu: llm_provider,
+# llm_model, llm_base_url; klucz z golden_key.env przypisany do providera).
+client = None
+LLM_MODEL = None
 
 # Cytat z polskiej piosenki ludowej "Mój cygan" — używany w obu promptach jako
 # kotwica obrazu szamana. Angielską glossę dorzucamy w nawiasie, żeby model rozumiał
@@ -139,7 +138,7 @@ CRITICAL OUTPUT RULES:
 
     print(t(UI_LANG, 'ai.llm_katla'))
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=LLM_MODEL,
         messages=[{"role": "system", "content": system_message},
                   {"role": "user", "content": prompt}],
         temperature=0.7
@@ -296,7 +295,7 @@ CRITICAL OUTPUT RULES:
 
     print(t(UI_LANG, 'ai.llm_vieno'))
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=LLM_MODEL,
         messages=[{"role": "system", "content": system_message},
                   {"role": "user", "content": prompt}],
         temperature=0.8
@@ -409,7 +408,7 @@ CRITICAL OUTPUT RULES:
 
     print(t(UI_LANG, 'ai.llm_lumi'))
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=LLM_MODEL,
         messages=[{"role": "system", "content": system_message},
                   {"role": "user", "content": prompt}],
         temperature=0.65
@@ -450,7 +449,7 @@ def ritual_sami_spark(export_dir, output_dir, lang):
     )
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=LLM_MODEL,
         messages=[
             {"role": "system", "content": SAMI_SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
@@ -477,6 +476,17 @@ if __name__ == "__main__":
         if not export_directory.exists():
             raise RuntimeError(t(UI_LANG, 'ai.err_no_export_dir',
                                  path=export_directory))
+
+        try:
+            llm = llm_klient.resolve(_load_config(), UI_LANG)
+            client = llm_klient.build_client(llm, UI_LANG)
+        except llm_klient.LLMConfigError as e:
+            # komunikat ma już własny prefiks — bez opakowania w ai.fatal_error
+            print(e)
+            raise SystemExit(1)
+        LLM_MODEL = llm.model
+        print(t(UI_LANG, 'llm.info_provider', provider=llm.provider, model=llm.model,
+                endpoint=llm.endpoint))
 
         corpus_lang = detect_corpus_lang(export_directory)
         print(t(UI_LANG, 'ai.info_detected_lang', language=corpus_lang))

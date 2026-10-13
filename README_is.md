@@ -13,7 +13,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 - `generate_diagnostic.py` — sjálfstæður smiður á heildstæðri **greiningarskýrslu** (`diagnostic_report.html`) sem byggð er beint á CSV/JSON-útflutningi minnisbókarinnar (ekki á úttaki `generate_report.py`). Aðgengileg uppbygging fyrir skjálesara: efnisyfirlit `<nav>` ásamt köflum — hver með eigin fyrirsögn og listum — fyrir yfirlit, þemu með málsgreinum, tesur, nafngreinda nafnliði eftir tegund og helstu lykilorð. Byggingartextar fylgja `ui_lang`; brot úr safninu fá `<span lang="…">`, NER-merki `<span lang="en">`.
 - `generate_md.py` — breytir `analysis_report.html` í `gemini_notebook_report.md` fyrir Gemini Notebook (áður NotebookLM). Aðgengis-spans eru afpökkuð því Gemini Notebook notar þau ekki.
 - `shamanic_pipeline.py` *(valfrjálst)* — eftirvinnsluforrit án LLM sem breytir CSV/JSON-útflutningi minnisbókarinnar í helgisiðatextagripi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` og — þegar valfrjáls tilfinningagreining er virk — `emotional_undertow.txt`), öll að fullu staðfærð fyrir sex studdu tungumálin.
-- `shamanic_ai.py` *(valfrjálst, byggt á LLM)* — kallar í OpenAI til að búa til fjórar frásagnarraddir (`Katla`, `Vieno`, `Lumi`, `Sami`) ofan á sömu útflutninga. Þegar valfrjálsa `sentiment.csv` er til staðar byggir Vieno söng sinn á tilfinningabogadrætti textans í stað hráu setninganna. Krefst `OPENAI_API_KEY` í `golden_key.env`.
+- `shamanic_ai.py` *(valfrjálst, byggt á LLM)* — kallar í LLM (sjálfgefið OpenAI; OpenRouter eða hvaða OpenAI-samhæfða slóð sem er gegnum `llm_provider`) til að búa til fjórar frásagnarraddir (`Katla`, `Vieno`, `Lumi`, `Sami`) ofan á sömu útflutninga. Þegar valfrjálsa `sentiment.csv` er til staðar byggir Vieno söng sinn á tilfinningabogadrætti textans í stað hráu setninganna. Krefst lykils valinnar þjónustu í `golden_key.env`.
 - `shamanic_voice.py` *(valfrjálst, krefst ElevenLabs)* — sjálfstæður afgreiðari sem keyrir einu sinni og myndgerir frásagnargripina fjóra sem `shamanic_ai.py` bjó til í `.mp3`-hljóð gegnum ElevenLabs API-ið, skráir hvern árangur/villu í skelina og hættir svo (enginn botni, enginn þjónn). Þarf `ELEVENLABS_API_KEY` í `golden_key.env` og `voices`-vörpun í stillingunum.
 - `shamanic_locale.py` — staðfærsluböggull fyrir bæði shamanísku forritin (sniðmát, hausa og fallback-strengi Lumi á öllum sex tungumálum).
 - `ksiega_niedomowien.py` *(valfrjálst, aðeins finnska, með aðstoð gervigreindarþjóns)* — Bók hins ósagða (*Sanomattomien kirja*): breytir `raw_roots_chant.txt` í dulkóðaða dagbók sem vex smám saman, með eyðum sem blint líkan gat ekki giskað á. Þetta er ákveðinn (deterministic) hjálpari fyrir hæfnina í `skills/ksiega-niedomowien/SKILL.md`; skelúttakið fylgir `ui_lang`.
@@ -176,8 +176,12 @@ Innihald:
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null,
+  "llm_provider": "",
+  "llm_model": "",
+  "llm_base_url": "",
+  "kirja_llm_provider": "",
+  "kirja_drafter_model": "",
   "kirja_filler_model": "",
-  "kirja_filler_base_url": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -198,8 +202,14 @@ Innihald:
 | `lumi_katla_lines` | heiltala eða null | Valfrjáls skrautmark fyrir lokaskýrslu Lumi úr `shamanic_ai.py`: hve margar ekki-tómar línur einræðu Kötlu Lumi sér. `null` eða vantandi lykill = allt innihald; heiltala N > 0 = fyrstu N línurnar. |
 | `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
 | `voices`           | hlutur          | Varpar hverri shamanískri rödd (`katla` / `vieno` / `lumi` / `sami`) yfir á ElevenLabs radd-auðkenni, notað af `shamanic_voice.py`. Rödd með tómu eða vantandi auðkenni er sleppt. Aðeins nauðsynlegt ef þú keyrir hljóðafgreiðarann. |
-| `kirja_filler_model` | strengur | Líkan fyrir `ksiega_niedomowien.py fill` (blindan eyðufyllanda Bókarinnar). Tómt = `gpt-4o`. |
-| `kirja_filler_base_url` | strengur | OpenAI-samhæfð slóð fyrir sama fyllanda (t.d. `https://openrouter.ai/api/v1`). Tómt = OpenAI. Lykillinn er alltaf `OPENAI_API_KEY` úr `golden_key.env` — með eigin slóð þarf hann að vera lykill þeirrar þjónustu. |
+| `llm_provider` | strengur | LLM-þjónusta fyrir `shamanic_ai.py` og Bókina: `openai` (sjálfgefið), `openrouter` eða `openai_compat`. Hver þjónusta les aðeins sinn eigin lykil úr `golden_key.env` — sjá *LLM-þjónustur og lyklar* hér fyrir neðan. |
+| `llm_model` | strengur | Líkan fyrir þá þjónustu. Tómt = sjálfgefið líkan þjónustunnar (`gpt-4o` / `openai/gpt-4o`); skylda fyrir `openai_compat`. |
+| `llm_base_url` | strengur | Slóð sem **aðeins** `openai_compat` les (t.d. `http://localhost:1234/v1`). `openai` og `openrouter` hunsa hana, því slóðir þeirra eru fastar. |
+| `kirja_llm_provider` | strengur | Valfrjáls yfirskrift þjónustu fyrir Bókina (`ksiega_niedomowien.py draft` / `fill`). Tómt = `llm_provider`. |
+| `kirja_drafter_model` | strengur | Líkan fyrir `draft` (höfund draga Bókarinnar gegnum API). Tómt = sjálfgefið líkan þjónustunnar, eða `llm_model` þegar Bókin notar almennu þjónustuna. |
+| `kirja_filler_model` | strengur | Líkan fyrir `fill` (blindan eyðufyllanda Bókarinnar). Sama varaleið og `kirja_drafter_model`. |
+
+> **LLM-þjónustur og lyklar.** Lykill er bundinn einum hýsli og er aldrei sendur annað: `openai` → `OPENAI_API_KEY` → `api.openai.com`; `openrouter` → `OPENROUTER_API_KEY` → `openrouter.ai`; `openai_compat` → `LLM_COMPAT_API_KEY` → `llm_base_url`. Þjónustan er valin sérstaklega og aldrei ráðin af slóð, svo að það að beina einni skriftu að annarri þjónustu getur hvorki lekið lykli fyrri þjónustunnar né brotið hina skriftuna. Lykillinn `kirja_filler_base_url` frá því fyrir v1.7.0 (hann sendi `OPENAI_API_KEY` á hvaða slóð sem var) er hafnað með leiðbeiningum um flutning. Á OpenRouter bera auðkenni líkana forskeyti framleiðanda (`openai/gpt-4o`, `anthropic/claude-sonnet-5.5`), og persónuverndarstillingar aðgangsins leyfa að útiloka þjónustur sem kunna að þjálfa á fyrirmælum þínum.
 
 > **Tilfinningagreining — álag á örgjörva.** Þegar `enable_sentiment: true` er virkt er greiningin per málsgrein reikniþung á CPU — nokkurn veginn sambærileg við að keyra staðbundna Whisper tal-í-texta á CPU. Á eldri eða hitatakmörkuðum vélum getur þetta viðvarandi álag verið raunverulegt erfiði fyrir örgjörvann; virkjaðu það meðvitað, helst á vél með GPU eða með svigrúm fyrir langvarandi vinnu á fullu álagi.
 
@@ -265,7 +275,7 @@ python shamanic_pipeline.py
 
 Býr til helgisiðatextagripi beint úr CSV/JSON-útflutningi minnisbókarinnar — engin LLM-köll, ekkert net. Allir strengir koma úr `shamanic_locale.py` og eru að fullu staðfærðir á öll sex studdu tungumálin. Þegar valfrjálsa `sentiment.csv` er til staðar býr það einnig til `emotional_undertow.txt` — „tilfinningaflóð" per málsgrein ásamt jafnvægissamantekt; án hennar er þeim eina helgisiða einfaldlega sleppt.
 
-### 5. Shamanískt LLM eftirvinnsluforrit (valfrjálst, krefst OpenAI lykils)
+### 5. Shamanískt LLM eftirvinnsluforrit (valfrjálst, krefst LLM API-lykils)
 
 ```bash
 python shamanic_ai.py
@@ -275,10 +285,12 @@ python shamanic_ai.py
 #                                          /sami_energetic_spark.txt
 ```
 
-Krefst OpenAI API-lykils. Búðu til `golden_key.env` í rót verkefnisins:
+Krefst lykils valinnar þjónustu (`llm_provider`, sjálfgefið `openai`). Búðu til `golden_key.env` í rót verkefnisins með lyklinum sem þú þarft:
 
 ```
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=sk-...          # llm_provider: openai (default)
+OPENROUTER_API_KEY=sk-or-...   # llm_provider: openrouter
+LLM_COMPAT_API_KEY=...         # llm_provider: openai_compat (llm_base_url)
 ```
 
 `golden_key.env` passar við `*.env` í `.gitignore`, því verður það ekki committað. Raddirnar fjórar keyra í röð:
@@ -300,7 +312,7 @@ python shamanic_voice.py
 
 Sjálfstætt skript sem keyrir einu sinni, les frásagnargripina fjóra sem `shamanic_ai.py` bjó til og myndgerir hvern þeirra í `.mp3` gegnum ElevenLabs-líkanið `eleven_multilingual_v2` (sem greinir sjálfkrafa talaða tungumálið, svo enginn tungumálastiki er sendur). Það skráir hvern árangur eða villu í skelina og hættir svo — enginn botni, enginn þjónn, engin gagnvirk lota. Það þarf tvennt:
 
-- `ELEVENLABS_API_KEY` í `golden_key.env` (sömu skrá og geymir `OPENAI_API_KEY`).
+- `ELEVENLABS_API_KEY` í `golden_key.env` (sömu skrá og geymir LLM-lyklana).
 - `voices`-vörpun í `config.json` / `config.ini` sem úthlutar ElevenLabs radd-auðkenni á hvert af `katla`, `vieno`, `lumi`, `sami`. Rödd með tómu auðkenni eða þeirri sem vantar gripinn fyrir er sleppt (keyrðu `shamanic_ai.py` fyrst); ein rödd sem mistekst stöðvar ekki hinar.
 
 > **Friðhelgi og kostnaður.** Eins og `shamanic_ai.py` með OpenAI sendir þetta skript texta gripanna til þriðja aðila (ElevenLabs) til myndgerðar, og ElevenLabs er **gjaldskyld** API. Innihaldið yfirgefur vél þína — ekki keyra það á efni sem þú mátt ekki deila út á við.
@@ -311,29 +323,33 @@ Sjálfstætt skript sem keyrir einu sinni, les frásagnargripina fjóra sem `sha
 python ksiega_niedomowien.py scan              # hvaða export_results/-möppur uppfylla skilyrðin
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
-python ksiega_niedomowien.py seal <packet>     # sannreynir draft.json, skrifar blind.json
-python ksiega_niedomowien.py fill <packet>     # valfrjálst: blindar ágiskanir gegnum OpenAI-samhæft API
-python ksiega_niedomowien.py judge <packet>    # → export_results/Sanomattomien_kirja.md
+python ksiega_niedomowien.py draft <id>        # valfrjálst: drög gegnum API + seal, allt að 2 endurtekningar
+python ksiega_niedomowien.py seal <id>         # sannreynir draft.json, skrifar blind.json
+python ksiega_niedomowien.py fill <id>         # valfrjálst: blindar ágiskanir gegnum API, síðan judge
+python ksiega_niedomowien.py judge <id>        # → export_results/Sanomattomien_kirja.md
+# <id> = auðkenni pakkans sem prepare prentar, upphaf möppunafns eða slóð að pakkamöppunni
 ```
 
 Leikur sem byggir á `raw_roots_chant.txt`. Fyrir hverja blokk 3–6 samfelldra róta skrifar mállíkan þokukennda finnska dagbókarfærslu með eyðum; svörin eru orðrétt brot úr frumtextanum og verða að koma fyrir **bæði** í `accessible_text.html` og `accessible_text.docx`, þ.e. í báðum útgáfum sannleiksuppsprettunnar. Síðan reynir sérstakt, blint líkan að fylla eyðurnar út frá færslunni einni; hver eyða sem það giskar á telst augljós og brot hennar er fjarlægt. Það sem eftir stendur — KATLA (viðvörunarkerfið) sem les ræturnar og VIENO (shamaníski sögumaðurinn) með ósögðu eyðunum — er bætt aftan við `export_results/Sanomattomien_kirja.md`. Svarlykillinn fer í `Sanomattomien_kirja.avain.json` og staðan í `Sanomattomien_kirja.tila.json`; endurkeyrsla tvítekur aldrei færslur.
 
-Skriftan er ákveðni helmingurinn (síur, blokkir, sannleiksuppspretta, sannprófun, mat, Bókin). Skapandi helminginn — að skrifa `draft.json` — vinnur gervigreindarþjónn eftir `skills/ksiega-niedomowien/SKILL.md`.
+Skriftan er ákveðni helmingurinn (síur, blokkir, sannleiksuppspretta, sannprófun, mat, Bókin). Skapandi helminginn — að skrifa `draft.json` — vinnur annaðhvort gervigreindarþjónn eftir `skills/ksiega-niedomowien/SKILL.md` eða líkan gegnum API með `draft`.
 
 **Inntakssíur.** Aðeins undirmöppur `export_results/` með finnsku heiti, `<html lang="fi">`, finnskum söng og engum málfræðileka koma til greina; öllu öðru er hafnað með ástæðu. Línan `roots.header` er fjarlægð ef hún er til staðar. Prófið á *málfræðileka* finnur málheildir sem voru unnar áður en omorfi var virkjað (v1.5.0): yfir alla `keywords_tfidf.csv` telur það beygðar myndir sem lifðu lemmun af ásamt ruslmyndum spaCy og hafnar möppunni yfir 1,0 á hver 100 hugtök. Krefst omorfi (5. skref uppsetningar).
 
 **Hvers vegna aðeins finnska.** Leikurinn lifir á því sem lemmun lætur ósagt, svo hann er aðeins skynsamlegur þar sem það að færa orð í grunnmynd sviptir það raunverulegri merkingu. Finnska er viðskeytamál: það sem pólska eða rússneska tjá að hluta með sérstökum forsetningum, og enska aðallega með orðaröð og kerfisorðum, pakkar finnskan inn í orðið sjálft — fimmtán föll (`talossa` „í húsinu“, `talosta` „úr húsinu“, `taloon` „inn í húsið“, `talolle` „að húsinu“, `talotta` „án húss“), eignarviðskeyti (`taloni` „húsið mitt“, `talonsa` „húsið hans/hennar/þeirra“), smáorðsviðhengi (`-ko` spurning, `-kin` „líka“, `-han` áhersla) og sagnmyndir sem bera í senn persónu, tíð, hátt og þolmynd (`tehtäisiinkö` „yrði það gert?“). Söngurinn smættar allt þetta í `TALO` og `TEHDÄ`: hver, hvar, hvaðan, hvert, hvers og hvort hverfa — einmitt þær eyður sem hlustandinn þarf að fylla. Í pólsku og rússnesku missir grunnmyndin beygingarendinguna, en stór hluti venslanna býr í sérstöku orði (forsetningunni), svo grunnmyndin bar þau aldrei ein; enska tapar litlu umfram tölu og tíð. Íslenska (fjögur föll, sem forsetningar stýra að miklu leyti) og ítalska (forsetningar og greinar, lítil nafnorðabeyging) standa nær pólsk-rússneska og enska mynstrinu, hvort um sig. Tæknilega þarf tólið einnig orðabókargreini til að sanna að söngurinn sé laus við málfræði og til að tengja rætur aftur við beygðan texta; í þessari leiðslu er slíkur aðeins til fyrir finnsku (omorfi), og þröskuldarnir voru stilltir á raunverulegum finnskum málheildum.
 
-**Blindur fyllandi (`fill`).** Notar sama `OPENAI_API_KEY` úr `golden_key.env` og `shamanic_ai.py`. `kirja_filler_model` (sjálfgefið `gpt-4o`) og `kirja_filler_base_url` (tómt = OpenAI) í stillingunum — eða `--model` / `--base-url` — beina honum að hvaða OpenAI-samhæfðu Chat Completions-slóð sem er, t.d. `https://openrouter.ai/api/v1` með líkani á borð við `openai/gpt-4o-mini`; þá þarf `OPENAI_API_KEY` að innihalda lykil þeirrar þjónustu. Aðeins `blind.json` er sent — aldrei svörin né frumtextinn.
+**Höfundur draga gegnum API (`draft`).** Lækkar þröskuldinn: enginn þjónn er nauðsynlegur. Skriftan sendir pakkann (chant, rætur og setningar úr frumtextanum úr `truth.sentences`) til stilltrar þjónustu, skrifar `draft.json` og innsiglar það; þegar `seal` hafnar drögunum fær líkanið þau aftur ásamt áþreifanlegum athugasemdum sannprófandans, í mesta lagi 2 endurtekningar (3 tilraunir). Úttakskóðar eru þeir sömu og hjá `seal` (0 innsiglað, 4 enn hafnað — lagaðu síðasta `draft.json` handvirkt eða með skillinu). Fyrirliggjandi `draft.json` er aldrei skrifað yfir án `--force`. Skillið er áfram öflugri hátturinn: ótakmarkaðar endurtekningar, og þjónninn les athugasemdirnar jafnóðum. Eina reglu er ekki hægt að sannprófa með ákveðnum hætti í hvorugum hættinum: *eignaðu ekki raunverulegu fólki staðreyndir eða ásakanir sem ekki eru í setningum frumtextans*. Bæði fyrirmæli höfundar draga og skillið nefna hana, en ekkert athugar hana — lestu færslur um raunverulegt fólk áður en þú deilir þeim.
+
+**Blindur fyllandi (`fill`).** Sendir aðeins `blind.json` — aldrei svörin né frumtextann — til stilltrar þjónustu, vistar `guesses.json` og keyrir `judge` strax. Þjónusta: `kirja_llm_provider` (tómt = `llm_provider`); líkan: `kirja_filler_model`; `--provider` / `--model` yfirskrifa hvort tveggja. `judge` eitt og sér er ætlað fyrir ágiskanir blinds undirþjóns. Bæði `draft` og `fill` biðja fyrst um JSON-skema (structured outputs); ef slóðin hafnar því fara þau í venjulegan JSON-hátt og svo í fyrirmælin ein. `fill` reynir tvisvar aftur þegar svarið er ónothæft eða vantar eyðu. Hvert ónothæft svar er vistað í pakkamöppunni (`draft_reply_N.txt` / `fill_reply_N.txt`, með `finish_reason` og hugsanlegri synjun), og stjórnborðið segir hvar.
 
 **Hæfnin tengd.**
 
 - *Claude Code:* afritaðu `skills/ksiega-niedomowien/` í `~/.claude/skills/` (persónulegt) eða í `.claude/skills/` í þínu eintaki af geymslunni. Þessi geymsla hunsar `.claude/` í git, þess vegna fylgir hæfnin í `skills/`.
-- *Claude-forritin:* þjappaðu möppunni `ksiega-niedomowien/` í ZIP (mappan sjálf verður að vera rót safnsins) og bættu henni við undir **Customize → Skills**; kóðakeyrsla þarf að vera virk og lotan þarf aðgang að eintakinu þínu, því omorfi-sjálfvirkjarnir og `export_results/` eru á þínum diski.
+- *Claude-forritin:* þjappaðu möppunni `ksiega-niedomowien/` í ZIP (mappan sjálf verður að vera rót safnsins) og bættu henni við undir **Customize → Skills**; kóðakeyrsla þarf að vera virk og lotan þarf aðgang að eintakinu þínu, því omorfi-sjálfvirkjarnir og `export_results/` eru á þínum diski. Notaðu **Code**-flipann með **staðbundinni** lotu: í venjulegum spjallham eða í skýjalotu eru skrárnar sem þjónninn les — brot úr frumtextanum meðtalin — afritaðar í skýjaumhverfi.
 - *Aðrir gervigreindarþjónar:* `SKILL.md` er einfalt Markdown-ferli með YAML-haus; hver sá þjónn sem getur keyrt staðbundnar skipanir í geymslunni getur fylgt því. Ef hann getur ekki ræst óháðan undirþjón skaltu nota `fill` fyrir blinda skrefið.
 - Hreinn spjallþjónn án staðbundinnar skipanakeyrslu (t.d. custom GPT) getur ekki keyrt þetta: omorfi og um 130 MB sjálfvirkjar þess verða að keyra við hliðina á gögnunum þínum.
 
-> **Friðhelgi og kostnaður.** `fill` sendir þokukenndan texta færslunnar (ekki frumtextann) á stilltu slóðina, og þjónninn sem skrifar drögin les brot úr frumtextanum. Notaðu þetta aðeins á efni sem þú mátt deila með þessum þjónustum.
+> **Friðhelgi og kostnaður.** Þrjú stig, frá minnstu til mestu gagna: `fill` sendir aðeins þokukenndan texta færslunnar (ekki frumtextann); `draft` sendir orðréttar setningar úr frumtextanum (`truth.sentences`) og segir fyrir kallið hve margar þær eru; þjónn sem fylgir skillinu les brot úr frumtextanum og sendir þau til eigin líkanaþjónustu — og í skýjalotu vinnur hann á skýjaafriti skránna. Öll API-köll kosta. Notaðu þau aðeins á efni sem þú mátt deila með þessum þjónustum.
 
 ## Úttak
 
@@ -388,6 +404,7 @@ accessible_text_analyst/
 ├── generate_md.py                  # Gemini Notebook-Markdown-breytari
 ├── shamanic_pipeline.py            # valfrjálst: helgisiða-eftirvinnsluforrit án LLM
 ├── shamanic_ai.py                  # valfrjálst: LLM-drifnir helgisiðafrásagnamenn
+├── llm_klient.py                   # val LLM-þjónustu og lykils (sameiginlegt)
 ├── shamanic_voice.py               # valfrjálst: ElevenLabs hljóðafgreiðari (keyrir einu sinni)
 ├── shamanic_locale.py              # staðfærsluböggull fyrir shamanístíska lagið
 ├── ksiega_niedomowien.py           # valfrjálst: Bók hins ósagða (aðeins finnska)
@@ -395,7 +412,7 @@ accessible_text_analyst/
 ├── config.example.json             # stillingarsniðmát, JSON-ending (versjónað)
 ├── config.example.ini              # stillingarsniðmát, INI-ending (versjónað)
 ├── config.json / config.ini        # þínar staðbundnu stillingar (gitignored)
-├── golden_key.env                  # OpenAI-lykill fyrir shamanic_ai.py (gitignored)
+├── golden_key.env                  # LLM- og ElevenLabs-lyklar (gitignored)
 ├── requirements.txt                # pip-pakkar
 ├── CLAUDE.md                       # leiðbeiningar fyrir Claude Code
 ├── README.md                       # kanónískt README (á ensku)

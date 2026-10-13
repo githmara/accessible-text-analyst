@@ -13,7 +13,7 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 - `generate_diagnostic.py` — riippumaton täyden **diagnostiikkaraportin** (`diagnostic_report.html`) luoja, joka rakennetaan suoraan notebookin CSV/JSON-vienneistä (ei `generate_report.py`:n ulostulosta). Navigoitava, ruudunlukijoille suunniteltu rakenne: sisällysluettelo `<nav>` ja osiot — kullakin oma otsikko ja listat — yleiskatsaukselle, aiheille kappaleineen, teeseille, nimetyille entiteeteille tyypeittäin ja tärkeimmille avainsanoille. Rakenteelliset tekstit seuraavat `ui_lang`-asetusta; korpuksen katkelmat saavat `<span lang="…">`, NER-tunnisteet `<span lang="en">`.
 - `generate_md.py` — muuntaa `analysis_report.html`-tiedoston Markdown-muotoon (`gemini_notebook_report.md`) Gemini Notebookia (entinen NotebookLM) varten. Saavutettavuus-spanit puretaan, koska Gemini Notebook ei käytä niitä.
 - `shamanic_pipeline.py` *(valinnainen)* — ei-LLM-jälkikäsittelijä, joka muuntaa notebookin CSV/JSON-viennit rituaalisiksi tekstiartefakteiksi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` ja — kun valinnainen sentimenttianalyysi on käytössä — `emotional_undertow.txt`) ja on täysin lokalisoitu kaikille kuudelle tuetulle kielelle.
-- `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu OpenAI:ta neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Kun valinnainen `sentiment.csv` on saatavilla, Vieno rakentaa laulunsa tekstin tunnekaaren varaan raakalauseiden sijaan. Vaatii `OPENAI_API_KEY`:n tiedostossa `golden_key.env`.
+- `shamanic_ai.py` *(valinnainen, LLM-pohjainen)* — kutsuu LLM:ää (oletuksena OpenAI; OpenRouter tai mikä tahansa OpenAI-yhteensopiva osoite asetuksella `llm_provider`) neljän kerronnallisen äänen (`Katla`, `Vieno`, `Lumi`, `Sami`) tuottamiseen samojen vientien päälle. Kun valinnainen `sentiment.csv` on saatavilla, Vieno rakentaa laulunsa tekstin tunnekaaren varaan raakalauseiden sijaan. Vaatii valitun palveluntarjoajan avaimen tiedostossa `golden_key.env`.
 - `shamanic_voice.py` *(valinnainen, vaatii ElevenLabsin)* — itsenäinen, kertasuoritteinen dispatcher, joka syntetisoi `shamanic_ai.py`:n tuottamat neljä kerronnallista artefaktia `.mp3`-äänitiedostoiksi ElevenLabs-API:n kautta, kirjaa kunkin onnistumisen/epäonnistumisen konsoliin ja päättyy (ei bottia, ei palvelinta). Tarvitsee `ELEVENLABS_API_KEY`:n tiedostossa `golden_key.env` sekä `voices`-määrityksen asetuksissa.
 - `shamanic_locale.py` — molempien shamanististen skriptien lokalisointipaketti (mallit, otsikot ja Lumin fallback-merkkijonot kaikilla kuudella kielellä).
 - `ksiega_niedomowien.py` *(valinnainen, vain suomi, agentin avulla)* — Sanomattomien kirja (*Księga Niedomówień*): muuttaa `raw_roots_chant.txt`-tiedoston vähitellen kasvavaksi salakirjoitetuksi päiväkirjaksi, jonka aukkoja sokea malli ei pystynyt arvaamaan. Se on deterministinen apuri tiedoston `skills/ksiega-niedomowien/SKILL.md` skillille; konsolitulosteet noudattavat `ui_lang`-asetusta.
@@ -176,8 +176,12 @@ Sisältö:
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null,
+  "llm_provider": "",
+  "llm_model": "",
+  "llm_base_url": "",
+  "kirja_llm_provider": "",
+  "kirja_drafter_model": "",
   "kirja_filler_model": "",
-  "kirja_filler_base_url": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -198,8 +202,14 @@ Sisältö:
 | `lumi_katla_lines` | integer tai null | Valinnainen koristerajoitus `shamanic_ai.py`:n Lumin loppuraportille: kuinka monta ei-tyhjää riviä Katlan monologista Lumi näkee. `null` tai puuttuva avain = koko sisältö; integer N > 0 = ensimmäiset N riviä. |
 | `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
 | `voices`           | object          | Yhdistää jokaisen shamanistisen äänen (`katla` / `vieno` / `lumi` / `sami`) ElevenLabs-äänen tunnisteeseen; käyttää `shamanic_voice.py`. Ääni, jonka tunniste on tyhjä tai puuttuu, ohitetaan. Tarvitaan vain, jos ajat äänidispatcherin. |
-| `kirja_filler_model` | string | Malli komennolle `ksiega_niedomowien.py fill` (Kirjan sokea aukkojen täyttäjä). Tyhjä = `gpt-4o`. |
-| `kirja_filler_base_url` | string | OpenAI-yhteensopiva osoite samalle täyttäjälle (esim. `https://openrouter.ai/api/v1`). Tyhjä = OpenAI. Avain on aina `OPENAI_API_KEY` tiedostosta `golden_key.env` — omaa osoitetta käytettäessä sen pitää olla kyseisen palveluntarjoajan avain. |
+| `llm_provider` | string | LLM-palveluntarjoaja skriptille `shamanic_ai.py` ja Kirjalle: `openai` (oletus), `openrouter` tai `openai_compat`. Jokainen palveluntarjoaja lukee tiedostosta `golden_key.env` vain oman avaimensa — ks. *LLM-palveluntarjoajat ja avaimet* alla. |
+| `llm_model` | string | Malli tälle palveluntarjoajalle. Tyhjä = palveluntarjoajan oletus (`gpt-4o` / `openai/gpt-4o`); pakollinen `openai_compat`-tilassa. |
+| `llm_base_url` | string | Osoite, jonka lukee **vain** `openai_compat` (esim. `http://localhost:1234/v1`). `openai` ja `openrouter` ohittavat sen, koska niiden osoitteet ovat kiinteät. |
+| `kirja_llm_provider` | string | Valinnainen palveluntarjoajan ohitus Kirjalle (`ksiega_niedomowien.py draft` / `fill`). Tyhjä = `llm_provider`. |
+| `kirja_drafter_model` | string | Malli komennolle `draft` (Kirjan luonnosten kirjoittaja API:n kautta). Tyhjä = palveluntarjoajan oletus tai `llm_model`, kun Kirja käyttää yleistä palveluntarjoajaa. |
+| `kirja_filler_model` | string | Malli komennolle `fill` (Kirjan sokea aukkojen täyttäjä). Sama varavaihtoehto kuin `kirja_drafter_model`. |
+
+> **LLM-palveluntarjoajat ja avaimet.** Avain on sidottu yhteen palvelimeen, eikä sitä koskaan lähetetä muualle: `openai` → `OPENAI_API_KEY` → `api.openai.com`; `openrouter` → `OPENROUTER_API_KEY` → `openrouter.ai`; `openai_compat` → `LLM_COMPAT_API_KEY` → `llm_base_url`. Palveluntarjoaja valitaan erikseen eikä sitä koskaan päätellä osoitteesta, joten yhden skriptin ohjaaminen toiseen palveluun ei voi vuotaa ensimmäisen palvelun avainta eikä rikkoa toista skriptiä. Ennen v1.7.0:aa käytetty avain `kirja_filler_base_url` (se lähetti `OPENAI_API_KEY`-avaimen mihin tahansa osoitteeseen) hylätään siirto-ohjeen kanssa. OpenRouterissa mallitunnuksissa on toimittajan etuliite (`openai/gpt-4o`, `anthropic/claude-sonnet-5.5`), ja tilin yksityisyysasetuksilla voi sulkea pois toimittajat, jotka saattavat kouluttaa malleja kehotteillasi.
 
 > **Sentimenttianalyysi — CPU-kuorma.** Kun `enable_sentiment: true`, kappalekohtainen ajo on laskennallisesti raskas CPU:lla — suunnilleen verrattavissa paikallisen Whisper-puheentunnistuksen ajamiseen CPU:lla. Vanhemmilla tai lämmöllisesti rajoitetuilla koneilla tämä jatkuva kuorma voi todella rasittaa prosessoria; ota se käyttöön harkiten, mieluiten koneella jossa on GPU tai pelivaraa pitkäkestoiseen täyskuormatyöhön.
 
@@ -265,7 +275,7 @@ python shamanic_pipeline.py
 
 Luo rituaalisia tekstiartefakteja suoraan notebookin CSV/JSON-vientien pohjalta — ei LLM-kutsua, ei verkkoa. Kaikki merkkijonot tulevat tiedostosta `shamanic_locale.py` ja on lokalisoitu kaikille kuudelle tuetulle kielelle. Kun valinnainen `sentiment.csv` on saatavilla, se tuottaa lisäksi `emotional_undertow.txt`-tiedoston — kappalekohtaisen "tunnevuoroveden" sekä tasapainoyhteenvedon; ilman sitä tämä yksi rituaali yksinkertaisesti ohitetaan.
 
-### 5. Shamanistinen LLM-jälkikäsittelijä (valinnainen, vaatii OpenAI-avaimen)
+### 5. Shamanistinen LLM-jälkikäsittelijä (valinnainen, vaatii LLM-API-avaimen)
 
 ```bash
 python shamanic_ai.py
@@ -275,10 +285,12 @@ python shamanic_ai.py
 #                                          /sami_energetic_spark.txt
 ```
 
-Vaatii OpenAI API-avaimen. Luo `golden_key.env` projektin juuressa:
+Vaatii valitun palveluntarjoajan avaimen (`llm_provider`, oletus `openai`). Luo `golden_key.env` projektin juureen tarvitsemallasi avaimella:
 
 ```
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=sk-...          # llm_provider: openai (default)
+OPENROUTER_API_KEY=sk-or-...   # llm_provider: openrouter
+LLM_COMPAT_API_KEY=...         # llm_provider: openai_compat (llm_base_url)
 ```
 
 `golden_key.env` täsmää kuvioon `*.env` `.gitignore`:ssa, joten sitä ei commitata. Neljä ääntä ajetaan järjestyksessä:
@@ -300,7 +312,7 @@ python shamanic_voice.py
 
 Itsenäinen, kertasuoritteinen skripti, joka lukee `shamanic_ai.py`:n tuottamat neljä kerronnallista artefaktia ja syntetisoi kunkin `.mp3`-tiedostoksi ElevenLabsin `eleven_multilingual_v2`-mallilla (joka tunnistaa puhutun kielen automaattisesti, joten kieliparametria ei välitetä). Se kirjaa kunkin onnistumisen tai epäonnistumisen konsoliin ja päättyy — ei bottia, ei palvelinta, ei interaktiivista istuntoa. Se tarvitsee kaksi asiaa:
 
-- `ELEVENLABS_API_KEY`:n tiedostossa `golden_key.env` (sama tiedosto, joka sisältää `OPENAI_API_KEY`:n).
+- `ELEVENLABS_API_KEY`:n tiedostossa `golden_key.env` (sama tiedosto, joka sisältää LLM-avaimet).
 - `voices`-määrityksen tiedostossa `config.json` / `config.ini`, joka liittää ElevenLabs-äänen tunnisteen kuhunkin äänistä `katla`, `vieno`, `lumi`, `sami`. Ääni, jonka tunniste on tyhjä tai jonka artefakti puuttuu, ohitetaan (aja `shamanic_ai.py` ensin); yhden äänen epäonnistuminen ei keskeytä muita.
 
 > **Yksityisyys ja kustannukset.** Kuten `shamanic_ai.py` OpenAI:n kanssa, tämä skripti lähettää artefaktitekstin kolmannen osapuolen palveluun (ElevenLabs) syntetisoitavaksi, ja ElevenLabs on **maksullinen** API. Sisältö poistuu koneeltasi — älä aja sitä materiaalilla, jota et voi jakaa ulkopuolelle.
@@ -311,29 +323,33 @@ Itsenäinen, kertasuoritteinen skripti, joka lukee `shamanic_ai.py`:n tuottamat 
 python ksiega_niedomowien.py scan              # mitkä export_results/-kansiot kelpaavat
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
-python ksiega_niedomowien.py seal <packet>     # tarkistaa draft.json-tiedoston, kirjoittaa blind.json-tiedoston
-python ksiega_niedomowien.py fill <packet>     # valinnainen: sokeat arvaukset OpenAI-yhteensopivan API:n kautta
-python ksiega_niedomowien.py judge <packet>    # → export_results/Sanomattomien_kirja.md
+python ksiega_niedomowien.py draft <id>        # valinnainen: luonnos API:n kautta + seal, enintään 2 uusintaa
+python ksiega_niedomowien.py seal <id>         # tarkistaa draft.json-tiedoston, kirjoittaa blind.json-tiedoston
+python ksiega_niedomowien.py fill <id>         # valinnainen: sokeat arvaukset API:n kautta, sitten judge
+python ksiega_niedomowien.py judge <id>        # → export_results/Sanomattomien_kirja.md
+# <id> = prepare-komennon tulostama paketin tunnus, kansion nimen alku tai polku pakettikansioon
 ```
 
 Peli, joka rakentuu `raw_roots_chant.txt`-tiedoston päälle. Jokaisesta 3–6 peräkkäisen juuren lohkosta LLM kirjoittaa sumuisen suomenkielisen päiväkirjamerkinnän, jossa on aukkoja; aukkojen vastaukset ovat sanatarkkoja katkelmia lähdetekstistä, ja niiden on löydyttävä **sekä** `accessible_text.html`- että `accessible_text.docx`-tiedostosta eli totuuden lähteen kummastakin versiosta. Sen jälkeen erillinen, sokea malli yrittää täyttää aukot pelkän merkinnän perusteella; jokainen arvattu aukko katsotaan ilmeiseksi, ja sen katkelma poistetaan. Jäljelle jäävä — juuret lukeva KATLA (varoitusjärjestelmä) ja sanomattomat aukot sisältävä VIENO (shamaanikertoja) — lisätään tiedostoon `export_results/Sanomattomien_kirja.md`. Vastausavain menee tiedostoon `Sanomattomien_kirja.avain.json` ja tila tiedostoon `Sanomattomien_kirja.tila.json`; uudelleenajo ei koskaan monista merkintöjä.
 
-Skripti on deterministinen puolikas (suodattimet, lohkot, totuuden lähde, tarkistus, arviointi, Kirja). Luovan puolikkaan — `draft.json`-tiedoston kirjoittamisen — tekee agentti ohjeen `skills/ksiega-niedomowien/SKILL.md` mukaan.
+Skripti on deterministinen puolikas (suodattimet, lohkot, totuuden lähde, tarkistus, arviointi, Kirja). Luovan puolikkaan — `draft.json`-tiedoston kirjoittamisen — tekee joko agentti ohjeen `skills/ksiega-niedomowien/SKILL.md` mukaan tai API:n malli komennolla `draft`.
 
 **Syötteen suodattimet.** Kelpaavat vain ne `export_results/`-alikansiot, joilla on suomenkielinen nimi, `<html lang="fi">`, suomenkielinen loitsu eikä kielioppivuotoa; kaikki muu hylätään syyn kera. Rivi `roots.header` poistetaan, jos se on mukana. *Kielioppivuodon* tarkistus havaitsee korpukset, jotka on käsitelty ennen omorfin käyttöönottoa (v1.5.0): se laskee koko `keywords_tfidf.csv`-tiedostosta lemmatisoinnista selvinneet taivutusmuodot sekä spaCyn roskalemmat ja hylkää kansion, jos niitä on yli 1,0 sataa termiä kohden. Vaatii omorfin (asennuksen vaihe 5).
 
 **Miksi vain suomi.** Peli elää siitä, mitä lemmatisointi jättää sanomatta, joten se on mielekäs vain siellä, missä sanan palauttaminen perusmuotoon vie siltä todellista merkitystä. Suomi on agglutinoiva kieli: sen, minkä puola tai venäjä ilmaisevat osin erillisillä prepositioilla ja englanti enimmäkseen sanajärjestyksellä ja funktiosanoilla, suomi pakkaa itse sanaan — viisitoista sijamuotoa (`talossa`, `talosta`, `taloon`, `talolle`, `talotta`), possessiivisuffiksit (`taloni`, `talonsa`), liitepartikkelit (`-ko` kysymys, `-kin` ”myös”, `-han` korostus) ja verbimuodot, jotka kantavat yhtä aikaa persoonaa, aikamuotoa, tapaluokkaa ja passiivia (`tehtäisiinkö`). Loitsu supistaa kaiken tämän muotoihin `TALO` ja `TEHDÄ`: kuka, missä, mistä, mihin, kenen ja onko katoavat — juuri ne aukot, jotka kuulijan on täytettävä. Puolassa ja venäjässä perusmuoto menettää taivutuspäätteen, mutta suuri osa suhteesta on erillisessä sanassa (prepositiossa), joten perusmuoto ei koskaan kantanut sitä yksin; englanti menettää vain vähän luvun ja aikamuodon lisäksi. Islanti (neljä sijaa, joita prepositiot pitkälti hallitsevat) ja italia (prepositiot ja artikkelit, niukka nominitaivutus) ovat lähempänä vastaavasti puolan ja venäjän sekä englannin mallia. Teknisesti työkalu tarvitsee myös sanakirjapohjaisen analysaattorin todistaakseen, että loitsu on kieliopiton, ja yhdistääkseen juuret takaisin taivutettuun tekstiin; tässä putkessa sellainen on vain suomelle (omorfi), ja kynnysarvot on kalibroitu oikeilla suomenkielisillä korpuksilla.
 
-**Sokea täyttäjä (`fill`).** Käyttää samaa `golden_key.env`-tiedoston `OPENAI_API_KEY`-avainta kuin `shamanic_ai.py`. Asetusten `kirja_filler_model` (oletus `gpt-4o`) ja `kirja_filler_base_url` (tyhjä = OpenAI) — tai `--model` / `--base-url` — ohjaavat sen mihin tahansa OpenAI-yhteensopivaan Chat Completions -osoitteeseen, esim. `https://openrouter.ai/api/v1` mallilla `openai/gpt-4o-mini`; silloin `OPENAI_API_KEY`-muuttujassa pitää olla kyseisen palveluntarjoajan avain. Lähetetään vain `blind.json` — ei koskaan vastauksia eikä lähdetekstiä.
+**Luonnosten kirjoittaja API:n kautta (`draft`).** Madaltaa kynnystä: agenttia ei tarvita. Skripti lähettää paketin (chant, juuret ja lähdelauseet kohdasta `truth.sentences`) määritetylle palveluntarjoajalle, kirjoittaa `draft.json`-tiedoston ja sinetöi sen; jos `seal` hylkää luonnoksen, malli saa sen takaisin tarkistimen konkreettisten huomautusten kanssa, enintään 2 uusintaa (3 yritystä). Paluukoodit ovat samat kuin `seal`-komennolla (0 sinetöity, 4 yhä hylätty — korjaa viimeisin `draft.json` käsin tai skillillä). Olemassa olevaa `draft.json`-tiedostoa ei koskaan korvata ilman `--force`-valitsinta. Skill on edelleen vahvempi tila: rajattomasti uusintoja, ja agentti lukee huomautukset sitä mukaa. Yhtä sääntöä ei voi tarkistaa deterministisesti kummassakaan tilassa: *älä liitä todellisiin henkilöihin tosiasioita tai syytöksiä, joita lähdelauseissa ei ole*. Sekä luonnoksen kirjoittajan kehote että skill mainitsevat sen, mutta mikään ei tarkista sitä — lue todellisia henkilöitä koskevat merkinnät ennen kuin jaat ne.
+
+**Sokea täyttäjä (`fill`).** Lähettää määritetylle palveluntarjoajalle vain `blind.json`-tiedoston — ei koskaan vastauksia eikä lähdettä —, tallentaa `guesses.json`-tiedoston ja ajaa heti `judge`-komennon. Palveluntarjoaja: `kirja_llm_provider` (tyhjä = `llm_provider`); malli: `kirja_filler_model`; `--provider` / `--model` ohittavat molemmat. Erillinen `judge` on tarkoitettu sokean aliagentin arvauksille. Sekä `draft` että `fill` pyytävät ensin JSON-skeemaa (structured outputs); jos osoite hylkää sen, ne siirtyvät tavalliseen JSON-tilaan ja sitten pelkkään kehotteeseen. `fill` yrittää kahdesti uudelleen, jos vastaus on käyttökelvoton tai siitä puuttuu aukko. Jokainen käyttökelvoton vastaus tallennetaan pakettikansioon (`draft_reply_N.txt` / `fill_reply_N.txt`, mukana `finish_reason` ja mahdollinen kieltäytyminen), ja konsoli kertoo minne.
 
 **Skillin kytkeminen.**
 
 - *Claude Code:* kopioi `skills/ksiega-niedomowien/` kansioon `~/.claude/skills/` (henkilökohtainen) tai omaan repokopioosi kansioon `.claude/skills/`. Tämä repo jättää `.claude/`-kansion gitin ulkopuolelle, siksi skill toimitetaan kansiossa `skills/`.
-- *Claude-sovellukset:* pakkaa kansio `ksiega-niedomowien/` ZIP-tiedostoksi (kansion itsensä on oltava arkiston juuressa) ja lisää se kohdassa **Customize → Skills**; koodin suorituksen on oltava päällä, ja istunto tarvitsee pääsyn repokopioosi, koska omorfin automaatit ja `export_results/` ovat omalla levylläsi.
+- *Claude-sovellukset:* pakkaa kansio `ksiega-niedomowien/` ZIP-tiedostoksi (kansion itsensä on oltava arkiston juuressa) ja lisää se kohdassa **Customize → Skills**; koodin suorituksen on oltava päällä, ja istunto tarvitsee pääsyn repokopioosi, koska omorfin automaatit ja `export_results/` ovat omalla levylläsi. Käytä **Code**-välilehteä **paikallisen** istunnon kanssa: tavallisessa keskustelutilassa tai pilvi-istunnossa agentin lukemat tiedostot — lähdeotteet mukaan lukien — kopioidaan pilviympäristöön.
 - *Muut agentit:* `SKILL.md` on tavallinen Markdown-ohje YAML-otsakkeella; sitä voi noudattaa mikä tahansa agentti, joka pystyy ajamaan paikallisia komentoja repossa. Jos agentti ei pysty käynnistämään itsenäistä aliagenttia, käytä sokeaan vaiheeseen komentoa `fill`.
 - Pelkkä keskusteluavustaja ilman paikallista komentojen suoritusta (esim. custom GPT) ei pysty ajamaan tätä: omorfin ja sen noin 130 Mt:n automaattien on toimittava datasi vieressä.
 
-> **Yksityisyys ja kustannukset.** `fill` lähettää merkinnän sumuisen tekstin (ei lähdettä) määritettyyn osoitteeseen, ja luonnoksen kirjoittava agentti lukee otteita lähteestä. Käytä tätä vain aineistoon, jonka voit jakaa näille palveluntarjoajille.
+> **Yksityisyys ja kustannukset.** Kolme tasoa vähiten dataa lähettävästä eniten lähettävään: `fill` lähettää vain merkinnän sumuisen tekstin (ei lähdettä); `draft` lähettää lähdelauseet sanatarkasti (`truth.sentences`) ja kertoo ennen kutsua, kuinka monta niitä on; skillin mukaan toimiva agentti lukee otteita lähteestä ja lähettää ne oman mallinsa palveluntarjoajalle — ja pilvi-istunnossa työskentelee tiedostojen pilvikopion päällä. Kaikki API-kutsut ovat maksullisia. Käytä niitä vain aineistoon, jonka voit jakaa näille palveluntarjoajille.
 
 ## Tuloste
 
@@ -388,6 +404,7 @@ accessible_text_analyst/
 ├── generate_md.py                  # Gemini Notebook -Markdown-muunnin
 ├── shamanic_pipeline.py            # valinnainen: ei-LLM rituaalinen jälkikäsittelijä
 ├── shamanic_ai.py                  # valinnainen: LLM-vetoiset rituaaliset kertojat
+├── llm_klient.py                   # LLM-palveluntarjoajan ja avaimen valinta (yhteinen)
 ├── shamanic_voice.py               # valinnainen: ElevenLabs-äänidispatcher (kertasuoritteinen)
 ├── shamanic_locale.py              # lokalisointipaketti shamanistiselle kerrokselle
 ├── ksiega_niedomowien.py           # valinnainen: Sanomattomien kirja (vain suomi)
@@ -395,7 +412,7 @@ accessible_text_analyst/
 ├── config.example.json             # asetusmalli, JSON-pääte (versioidaan)
 ├── config.example.ini              # asetusmalli, INI-pääte (versioidaan)
 ├── config.json / config.ini        # paikalliset asetuksesi (gitignored)
-├── golden_key.env                  # OpenAI-avain shamanic_ai.py:lle (gitignored)
+├── golden_key.env                  # LLM- ja ElevenLabs-avaimet (gitignored)
 ├── requirements.txt                # pip-riippuvuudet
 ├── CLAUDE.md                       # opas Claude Codelle
 ├── README.md                       # kanoninen README (englanniksi)

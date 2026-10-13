@@ -13,7 +13,7 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 - `generate_diagnostic.py` — niezależny generator pełnego raportu **diagnostycznego** (`diagnostic_report.html`) budowanego wprost z eksportów CSV/JSON notatnika (nie z wyjścia `generate_report.py`). Nawigowalna, dostępna dla czytników ekranu struktura: spis treści `<nav>` plus sekcje — każda z własnym nagłówkiem i listami — dla przeglądu, tematów z akapitami, tez, nazwanych encji wg typu i najważniejszych słów kluczowych. Etykiety strukturalne podążają za `ui_lang`; fragmenty korpusu dostają `<span lang="…">`, etykiety NER — `<span lang="en">`.
 - `generate_md.py` — konwertuje `analysis_report.html` na `gemini_notebook_report.md` do Gemini Notebook (dawniej NotebookLM). Spany dostępnościowe są rozpakowywane, bo Gemini Notebook ich nie konsumuje.
 - `shamanic_pipeline.py` *(opcjonalny)* — post-procesor bez LLM, który zamienia eksportowane przez notatnik pliki CSV/JSON w rytualne artefakty tekstowe (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, a — gdy włączona jest opcjonalna analiza sentymentu — także `emotional_undertow.txt`), w pełni zlokalizowane we wszystkich sześciu wspieranych językach.
-- `shamanic_ai.py` *(opcjonalny, oparty na LLM)* — wywołuje OpenAI, by wygenerować cztery głosy narracyjne (`Katla`, `Vieno`, `Lumi`, `Sami`) na tych samych eksportach. Gdy obecny jest opcjonalny `sentiment.csv`, Vieno buduje swoją pieśń na łuku emocjonalnym tekstu zamiast na surowych zdaniach. Wymaga `OPENAI_API_KEY` w pliku `golden_key.env`.
+- `shamanic_ai.py` *(opcjonalny, oparty na LLM)* — wywołuje LLM (domyślnie OpenAI; OpenRouter albo dowolny endpoint zgodny z OpenAI przez `llm_provider`), by wygenerować cztery głosy narracyjne (`Katla`, `Vieno`, `Lumi`, `Sami`) na tych samych eksportach. Gdy obecny jest opcjonalny `sentiment.csv`, Vieno buduje swoją pieśń na łuku emocjonalnym tekstu zamiast na surowych zdaniach. Wymaga klucza wybranego providera w pliku `golden_key.env`.
 - `shamanic_voice.py` *(opcjonalny, wymaga ElevenLabs)* — samodzielny skrypt jednorazowy, który syntetyzuje cztery artefakty narracyjne wytworzone przez `shamanic_ai.py` do plików audio `.mp3` przez API ElevenLabs, loguje każdy sukces/błąd do konsoli i kończy działanie (bez bota, bez serwera). Wymaga `ELEVENLABS_API_KEY` w `golden_key.env` oraz mapowania `voices` w konfiguracji.
 - `shamanic_locale.py` — pakiet lokalizacyjny dla obu skryptów szamańskich (szablony, nagłówki i fallbacki Lumi we wszystkich sześciu językach).
 - `ksiega_niedomowien.py` *(opcjonalny, tylko fiński, z udziałem agenta)* — Księga Niedomówień (*Sanomattomien kirja*): zamienia `raw_roots_chant.txt` w przyrostowo rosnący kryptograficzny dziennik z lukami, których ślepy model nie zdołał odgadnąć. To deterministyczny pomocnik skilla z `skills/ksiega-niedomowien/SKILL.md`; komunikaty konsoli podążają za `ui_lang`.
@@ -176,8 +176,12 @@ Zawartość:
   "ui_lang": "",
   "lumi_katla_lines": null,
   "lumi_vieno_lines": null,
+  "llm_provider": "",
+  "llm_model": "",
+  "llm_base_url": "",
+  "kirja_llm_provider": "",
+  "kirja_drafter_model": "",
   "kirja_filler_model": "",
-  "kirja_filler_base_url": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -198,8 +202,14 @@ Zawartość:
 | `lumi_katla_lines` | integer lub null | Opcjonalny limit ornamentu dla raportu Lumi z `shamanic_ai.py`: ile niepustych linii monologu Katli widzi Lumi. `null` lub brak klucza = cała treść; integer N > 0 = pierwsze N linii. |
 | `lumi_vieno_lines` | integer lub null | To samo co `lumi_katla_lines`, dla pieśni ech Vieno. |
 | `voices`           | obiekt          | Mapuje każdy głos szamański (`katla` / `vieno` / `lumi` / `sami`) na identyfikator głosu ElevenLabs, używany przez `shamanic_voice.py`. Głos z pustym lub brakującym ID jest pomijany. Potrzebne tylko, jeśli uruchamiasz dyspozytor audio. |
-| `kirja_filler_model` | string | Model dla `ksiega_niedomowien.py fill` (ślepy wypełniacz luk Księgi). Pusty = `gpt-4o`. |
-| `kirja_filler_base_url` | string | Endpoint zgodny z OpenAI dla tego samego wypełniacza (np. `https://openrouter.ai/api/v1`). Pusty = OpenAI. Klucz to zawsze `OPENAI_API_KEY` z `golden_key.env` — przy własnym endpoincie musi to być klucz tamtego dostawcy. |
+| `llm_provider` | string | Provider LLM dla `shamanic_ai.py` i Księgi: `openai` (domyślnie), `openrouter` albo `openai_compat`. Każdy provider czyta z `golden_key.env` wyłącznie własny klucz — patrz *Providerzy LLM i klucze* poniżej. |
+| `llm_model` | string | Model dla tego providera. Pusty = domyślny providera (`gpt-4o` / `openai/gpt-4o`); wymagany dla `openai_compat`. |
+| `llm_base_url` | string | Adres endpointu, czytany **wyłącznie** przez `openai_compat` (np. `http://localhost:1234/v1`). Ignorowany przez `openai` i `openrouter`, które mają adresy na sztywno. |
+| `kirja_llm_provider` | string | Opcjonalne nadpisanie providera dla Księgi (`ksiega_niedomowien.py draft` / `fill`). Pusty = `llm_provider`. |
+| `kirja_drafter_model` | string | Model dla `draft` (autor szkiców Księgi przez API). Pusty = domyślny providera albo `llm_model`, gdy Księga używa providera globalnego. |
+| `kirja_filler_model` | string | Model dla `fill` (ślepy wypełniacz luk Księgi). Ten sam fallback co `kirja_drafter_model`. |
+
+> **Providerzy LLM i klucze.** Klucz jest przywiązany do jednego hosta i nigdy nie jest wysyłany gdzie indziej: `openai` → `OPENAI_API_KEY` → `api.openai.com`; `openrouter` → `OPENROUTER_API_KEY` → `openrouter.ai`; `openai_compat` → `LLM_COMPAT_API_KEY` → `llm_base_url`. Provider jest wybierany jawnie, nigdy nie jest zgadywany z adresu, więc skierowanie jednego skryptu do innej usługi nie może ani ujawnić klucza pierwszej usługi, ani zepsuć drugiego skryptu. Klucz sprzed v1.7.0 `kirja_filler_base_url` (wysyłał `OPENAI_API_KEY` pod dowolny adres) jest odrzucany z komunikatem migracyjnym. W OpenRouterze identyfikatory modeli mają prefiks dostawcy (`openai/gpt-4o`, `anthropic/claude-sonnet-5.5`), a ustawienia prywatności konta pozwalają wykluczyć dostawców, którzy mogą trenować na Twoich promptach.
 
 > **Analiza sentymentu — koszt CPU.** Przy `enable_sentiment: true` przebieg per akapit jest obliczeniowo kosztowny na CPU — z grubsza porównywalny z uruchomieniem lokalnego Whisper (mowa na tekst) na CPU. Na starszych lub ograniczonych termicznie maszynach to utrzymujące się obciążenie może być realnym obciążeniem dla procesora; włączaj je świadomie, najlepiej na maszynie z GPU lub z zapasem mocy na długotrwałą pracę pod pełnym obciążeniem.
 
@@ -265,7 +275,7 @@ python shamanic_pipeline.py
 
 Generuje rytualne artefakty tekstowe wprost z eksportów CSV/JSON notatnika — bez wywołania LLM, bez sieci. Wszystkie stringi pochodzą z `shamanic_locale.py` i są w pełni zlokalizowane we wszystkich sześciu wspieranych językach. Gdy obecny jest opcjonalny `sentiment.csv`, generuje dodatkowo `emotional_undertow.txt` — per-akapitowy „przypływ nastroju" plus podsumowanie bilansu; bez niego ten jeden rytuał jest po prostu pomijany.
 
-### 5. Szamański post-procesor LLM (opcjonalnie, wymaga klucza OpenAI)
+### 5. Szamański post-procesor LLM (opcjonalnie, wymaga klucza API LLM)
 
 ```bash
 python shamanic_ai.py
@@ -275,10 +285,12 @@ python shamanic_ai.py
 #                                          /sami_energetic_spark.txt
 ```
 
-Wymaga klucza API OpenAI. Stwórz `golden_key.env` w katalogu głównym projektu:
+Wymaga klucza wybranego providera (`llm_provider`, domyślnie `openai`). Stwórz `golden_key.env` w katalogu głównym projektu z potrzebnym kluczem:
 
 ```
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=sk-...          # llm_provider: openai (default)
+OPENROUTER_API_KEY=sk-or-...   # llm_provider: openrouter
+LLM_COMPAT_API_KEY=...         # llm_provider: openai_compat (llm_base_url)
 ```
 
 `golden_key.env` pasuje do `*.env` w `.gitignore`, więc nie zostanie zacommitowany. Cztery głosy odpalają się po kolei:
@@ -300,7 +312,7 @@ python shamanic_voice.py
 
 Samodzielny skrypt jednorazowy, który czyta cztery artefakty narracyjne wytworzone przez `shamanic_ai.py` i syntetyzuje każdy do `.mp3` przez model ElevenLabs `eleven_multilingual_v2` (sam wykrywa język mowy, więc nie przekazujemy parametru języka). Loguje każdy sukces lub błąd do konsoli i kończy działanie — nie ma bota, serwera ani sesji interaktywnej. Potrzebuje dwóch rzeczy:
 
-- `ELEVENLABS_API_KEY` w `golden_key.env` (ten sam plik, który zawiera `OPENAI_API_KEY`).
+- `ELEVENLABS_API_KEY` w `golden_key.env` (ten sam plik, który zawiera klucze LLM).
 - mapowania `voices` w `config.json` / `config.ini`, które przypisuje identyfikator głosu ElevenLabs każdemu z `katla`, `vieno`, `lumi`, `sami`. Głos z pustym ID lub bez artefaktu jest pomijany (najpierw uruchom `shamanic_ai.py`); awaria jednego głosu nie przerywa pozostałych.
 
 > **Prywatność i koszt.** Tak jak `shamanic_ai.py` z OpenAI, ten skrypt wysyła treść artefaktów do usługi zewnętrznej (ElevenLabs) w celu syntezy, a ElevenLabs to **płatne** API. Treść opuszcza twój komputer — nie uruchamiaj go na materiałach, których nie możesz udostępnić na zewnątrz.
@@ -311,29 +323,33 @@ Samodzielny skrypt jednorazowy, który czyta cztery artefakty narracyjne wytworz
 python ksiega_niedomowien.py scan              # które foldery export_results/ się kwalifikują
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
-python ksiega_niedomowien.py seal <packet>     # waliduje draft.json, zapisuje blind.json
-python ksiega_niedomowien.py fill <packet>     # opcjonalnie: ślepe zgadywanie przez API zgodne z OpenAI
-python ksiega_niedomowien.py judge <packet>    # → export_results/Sanomattomien_kirja.md
+python ksiega_niedomowien.py draft <id>        # opcjonalnie: szkic przez API + seal, do 2 powtórek
+python ksiega_niedomowien.py seal <id>         # waliduje draft.json, zapisuje blind.json
+python ksiega_niedomowien.py fill <id>         # opcjonalnie: ślepe zgadywanie przez API, potem judge
+python ksiega_niedomowien.py judge <id>        # → export_results/Sanomattomien_kirja.md
+# <id> = id pakietu wypisane przez prepare, początek nazwy folderu albo ścieżka do folderu pakietu
 ```
 
 Gra zbudowana na `raw_roots_chant.txt`. Dla każdego bloku 3–6 kolejnych korzeni LLM pisze mglisty fiński wpis dziennika z lukami, których odpowiedzi są dosłownymi fragmentami tekstu źródłowego — muszą występować w **obu** plikach `accessible_text.html` i `accessible_text.docx`, czyli w obu wersjach źródła prawdy. Potem osobny, ślepy model próbuje wypełnić luki wyłącznie na podstawie wpisu; każda odgadnięta luka uchodzi za oczywistą i jej fragment jest usuwany. To, co zostaje — KATLA (system ostrzegania) czytająca korzenie i VIENO (szamańska narratorka) z niedopowiedzianymi lukami — jest dopisywane do `export_results/Sanomattomien_kirja.md`. Klucz odpowiedzi trafia do `Sanomattomien_kirja.avain.json`, a stan do `Sanomattomien_kirja.tila.json`; ponowne uruchomienie nigdy nie dubluje wpisów.
 
-Skrypt to połowa deterministyczna (filtry, bloki, źródło prawdy, walidacja, ocena, Księga). Połowę twórczą — napisanie `draft.json` — wykonuje agent według `skills/ksiega-niedomowien/SKILL.md`.
+Skrypt to połowa deterministyczna (filtry, bloki, źródło prawdy, walidacja, ocena, Księga). Połowę twórczą — napisanie `draft.json` — wykonuje agent według `skills/ksiega-niedomowien/SKILL.md` albo model przez API w trybie `draft`.
 
 **Filtry wejścia.** Kwalifikują się tylko podfoldery `export_results/` z fińską nazwą, `<html lang="fi">`, fińskim chantem i bez przecieku gramatyki; wszystko inne jest odrzucane z podaniem powodu. Linia `roots.header` jest usuwana, jeśli występuje. Test *przecieku gramatyki* wyłapuje korpusy przetworzone przed włączeniem omorfi (v1.5.0): na pełnym `keywords_tfidf.csv` liczy formy odmienione, które przetrwały lematyzację, oraz śmieciowe lematy spaCy, i odrzuca folder powyżej 1,0 na 100 terminów. Wymaga omorfi (krok 5 instalacji).
 
 **Dlaczego tylko fiński.** Gra żyje z tego, czego lematyzacja nie dopowiada, więc ma sens tylko tam, gdzie sprowadzenie słowa do lematu odbiera mu realną treść. Fiński jest aglutynacyjny: to, co polski czy rosyjski wyrażają częściowo osobnymi przyimkami, a angielski głównie szykiem i słowami funkcyjnymi, fiński zamyka w samym słowie — piętnaście przypadków (`talossa` „w domu”, `talosta` „z domu”, `taloon` „do domu”, `talolle` „ku domowi”, `talotta` „bez domu”), sufiksy dzierżawcze (`taloni` „mój dom”, `talonsa` „jego/jej/ich dom”), klityki (`-ko` pytanie, `-kin` „też”, `-han` emfaza) i formy czasownika niosące naraz osobę, czas, tryb i stronę bierną (`tehtäisiinkö` „czy zostałoby to zrobione?”). Chant sprowadza to wszystko do `TALO` i `TEHDÄ`: znika kto, gdzie, skąd, dokąd, czyje i czy — dokładnie te luki, które słuchacz musi wypełnić. W polskim i rosyjskim lemat traci końcówkę fleksyjną, ale spora część relacji siedzi w osobnym słowie (przyimku), więc lemat nigdy nie niósł jej sam; angielski traci niewiele poza liczbą i czasem. Islandzki (cztery przypadki, w dużej mierze rządzone przez przyimki) i włoski (przyimki i rodzajniki, słaba fleksja imienna) są bliżsi odpowiednio wzorcowi polsko-rosyjskiemu i angielskiemu. Technicznie narzędzie potrzebuje też słownikowego analizatora, żeby wykazać, że chant jest pozbawiony gramatyki, i dopasować korzenie z powrotem do odmienionego tekstu; w tym pipeline'ie ma go tylko fiński (omorfi), a progi skalibrowano na prawdziwych fińskich korpusach.
 
-**Ślepy wypełniacz (`fill`).** Używa tego samego `OPENAI_API_KEY` z `golden_key.env` co `shamanic_ai.py`. `kirja_filler_model` (domyślnie `gpt-4o`) i `kirja_filler_base_url` (pusty = OpenAI) w konfiguracji — albo `--model` / `--base-url` — kierują go do dowolnego endpointu Chat Completions zgodnego z OpenAI, np. `https://openrouter.ai/api/v1` z modelem w rodzaju `openai/gpt-4o-mini`; `OPENAI_API_KEY` musi wtedy zawierać klucz tamtego dostawcy. Wysyłany jest wyłącznie `blind.json` — nigdy odpowiedzi ani źródło.
+**Autor szkiców przez API (`draft`).** Obniża próg wejścia: agent nie jest potrzebny. Skrypt wysyła pakiet (chant, korzenie i zdania źródła z `truth.sentences`) do skonfigurowanego providera, zapisuje `draft.json` i go pieczętuje; gdy `seal` odrzuci szkic, model dostaje go z powrotem razem z konkretnymi zarzutami walidatora, maksymalnie 2 powtórki (3 próby). Kody wyjścia jak w `seal` (0 zapieczętowany, 4 nadal odrzucony — popraw ostatni `draft.json` ręcznie albo skillem). Istniejący `draft.json` nigdy nie jest nadpisywany bez `--force`. Skill pozostaje mocniejszym trybem: nielimitowane powtórki, a agent czyta zarzuty na bieżąco. Jednej reguły nie da się sprawdzić deterministycznie w żadnym trybie: *nie przypisuj realnym osobom faktów ani zarzutów, których nie ma w zdaniach źródła*. Mówią o niej i prompt autora szkiców, i skill, ale nic jej nie weryfikuje — przeczytaj wpisy o realnych osobach, zanim je udostępnisz.
+
+**Ślepy wypełniacz (`fill`).** Wysyła wyłącznie `blind.json` — nigdy odpowiedzi ani źródło — do skonfigurowanego providera, zapisuje `guesses.json` i od razu uruchamia `judge`. Provider: `kirja_llm_provider` (pusty = `llm_provider`); model: `kirja_filler_model`; `--provider` / `--model` nadpisują oba. Samodzielne `judge` służy do zgadywań ślepego subagenta. Zarówno `draft`, jak i `fill` najpierw żądają schematu JSON (structured outputs); gdy endpoint go odrzuci, schodzą do zwykłego trybu JSON, a potem do samego promptu. `fill` ponawia dwa razy, gdy odpowiedź jest bezużyteczna albo brakuje w niej luki. Każda bezużyteczna odpowiedź trafia do folderu pakietu (`draft_reply_N.txt` / `fill_reply_N.txt`, z `finish_reason` i ewentualną odmową), a konsola mówi, gdzie.
 
 **Podpięcie skilla.**
 
 - *Claude Code:* skopiuj `skills/ksiega-niedomowien/` do `~/.claude/skills/` (osobiście) albo do `.claude/skills/` w swojej kopii repo. To repo ma `.claude/` w `.gitignore`, dlatego skill jest dostarczany w `skills/`.
-- *Aplikacje Claude:* spakuj folder `ksiega-niedomowien/` do ZIP-a (sam folder musi być korzeniem archiwum) i dodaj go w **Customize → Skills**; wykonywanie kodu musi być włączone, a sesja potrzebuje dostępu do Twojej kopii repo, bo automaty omorfi i `export_results/` są na Twoim dysku.
+- *Aplikacje Claude:* spakuj folder `ksiega-niedomowien/` do ZIP-a (sam folder musi być korzeniem archiwum) i dodaj go w **Customize → Skills**; wykonywanie kodu musi być włączone, a sesja potrzebuje dostępu do Twojej kopii repo, bo automaty omorfi i `export_results/` są na Twoim dysku. Używaj zakładki **Code** z sesją **lokalną**: w zwykłym trybie czatu albo w sesji chmurowej pliki czytane przez agenta — łącznie z fragmentami źródła — są kopiowane do środowiska w chmurze.
 - *Inni agenci:* `SKILL.md` to zwykła procedura w Markdownie z nagłówkiem YAML; może ją wykonać każdy agent, który potrafi uruchamiać lokalne polecenia w repo. Jeśli nie umie uruchomić niezależnego subagenta, do ślepego kroku użyj `fill`.
 - Asystent czysto czatowy bez lokalnego wykonywania poleceń (np. custom GPT) tego nie uruchomi: omorfi i jego ~130 MB automatów muszą działać obok Twoich danych.
 
-> **Prywatność i koszt.** `fill` wysyła mglisty tekst wpisu (nie źródło) do skonfigurowanego endpointu, a agent piszący szkic czyta fragmenty źródła. Używaj tego tylko na materiale, który możesz udostępnić tym dostawcom.
+> **Prywatność i koszt.** Trzy poziomy, od najmniejszej do największej ilości danych: `fill` wysyła wyłącznie mglisty tekst wpisu (nie źródło); `draft` wysyła dosłowne zdania źródła (`truth.sentences`) i przed wywołaniem wypisuje, ile ich jest; agent prowadzony przez skill czyta fragmenty źródła i wysyła je do własnego dostawcy modelu — a w sesji chmurowej pracuje na kopii plików w chmurze. Wszystkie wywołania API są płatne. Używaj ich tylko na materiale, który możesz udostępnić tym dostawcom.
 
 ## Wyjście
 
@@ -388,6 +404,7 @@ accessible_text_analyst/
 ├── generate_md.py                  # konwerter na Markdown dla Gemini Notebook
 ├── shamanic_pipeline.py            # opcjonalnie: rytualny post-procesor bez LLM
 ├── shamanic_ai.py                  # opcjonalnie: rytualni narratorzy LLM
+├── llm_klient.py                   # wybór providera LLM i klucza (wspólny)
 ├── shamanic_voice.py               # opcjonalnie: dyspozytor audio ElevenLabs (jednorazowy)
 ├── shamanic_locale.py              # pakiet lokalizacyjny dla warstwy szamańskiej
 ├── ksiega_niedomowien.py           # opcjonalnie: Księga Niedomówień (tylko fiński)
@@ -395,7 +412,7 @@ accessible_text_analyst/
 ├── config.example.json             # szablon konfiguracji, rozszerzenie JSON (wersjonowane)
 ├── config.example.ini              # szablon konfiguracji, rozszerzenie INI (wersjonowane)
 ├── config.json / config.ini        # twoja lokalna konfiguracja (gitignored)
-├── golden_key.env                  # klucz OpenAI dla shamanic_ai.py (gitignored)
+├── golden_key.env                  # klucze LLM i ElevenLabs (gitignored)
 ├── requirements.txt                # zależności pip
 ├── CLAUDE.md                       # przewodnik dla Claude Code
 ├── README.md                       # kanoniczne README (po angielsku)
