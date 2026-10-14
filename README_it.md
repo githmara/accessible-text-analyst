@@ -203,7 +203,7 @@ Contenuto:
 | `lumi_vieno_lines` | integer o null  | Come `lumi_katla_lines`, ma per il canto di echi di Vieno. |
 | `voices`           | oggetto         | Associa ciascuna voce sciamanica (`katla` / `vieno` / `lumi` / `sami`) a un ID voce ElevenLabs, consumato da `shamanic_voice.py`. Una voce con un ID vuoto o mancante viene saltata. Necessario solo se esegui il dispatcher audio. |
 | `llm_provider` | stringa | Fornitore LLM per `shamanic_ai.py` e per il Libro: `openai` (predefinito), `openrouter` oppure `openai_compat`. Ogni fornitore legge da `golden_key.env` solo la propria chiave — vedi *Fornitori LLM e chiavi* più sotto. |
-| `llm_model` | stringa | Modello per quel fornitore. Vuoto = predefinito del fornitore (`gpt-4o` / `openai/gpt-4o`); obbligatorio per `openai_compat`. |
+| `llm_model` | stringa | Modello per quel fornitore. Vuoto = predefinito del fornitore (`gpt-6.1-sol` / `openai/gpt-6.1-sol`); obbligatorio per `openai_compat`. |
 | `llm_base_url` | stringa | Indirizzo dell'endpoint, letto **solo** da `openai_compat` (es. `http://localhost:1234/v1`). Ignorato da `openai` e `openrouter`, i cui indirizzi sono fissi. |
 | `kirja_llm_provider` | stringa | Sostituzione opzionale del fornitore per il Libro (`ksiega_niedomowien.py draft` / `fill`). Vuoto = `llm_provider`. |
 | `kirja_drafter_model` | stringa | Modello per `draft` (l'autore delle bozze del Libro via API). Vuoto = predefinito del fornitore, oppure `llm_model` quando il Libro usa il fornitore globale. |

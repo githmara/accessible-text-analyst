@@ -106,5 +106,6 @@ llm:
   err_no_sdk: '[VIRHE] Paketti openai tai python-dotenv puuttuu (pip install -r requirements.txt).'
   err_no_key: '[VIRHE] {var} ei löytynyt tiedostosta golden_key.env (palveluntarjoaja {provider} tarvitsee sen). Jokainen palveluntarjoaja lukee vain oman avaimensa.'
   info_degraded: '[INFO] {endpoint} hylkäsi response_format-tilan {mode} ({error}). Siirryn tilaan {next}.'
+  info_no_temperature: '[INFO] Malli {model} hyväksyy vain oletuslämpötilan (hylkäsi arvon {temperature}). Yritän uudelleen ilman sitä; tämän ajon loppuun asti jätän sen pois tältä mallilta.'
   diag_reply: '[DIAG] Tila {mode}, finish_reason {finish}, vastauksen pituus {chars} merkkiä{refusal}. Koko vastaus: {path}'
   diag_refusal: ', kieltäytyminen: "{text}"'

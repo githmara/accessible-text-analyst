@@ -203,7 +203,7 @@ Sisältö:
 | `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
 | `voices`           | object          | Yhdistää jokaisen shamanistisen äänen (`katla` / `vieno` / `lumi` / `sami`) ElevenLabs-äänen tunnisteeseen; käyttää `shamanic_voice.py`. Ääni, jonka tunniste on tyhjä tai puuttuu, ohitetaan. Tarvitaan vain, jos ajat äänidispatcherin. |
 | `llm_provider` | string | LLM-palveluntarjoaja skriptille `shamanic_ai.py` ja Kirjalle: `openai` (oletus), `openrouter` tai `openai_compat`. Jokainen palveluntarjoaja lukee tiedostosta `golden_key.env` vain oman avaimensa — ks. *LLM-palveluntarjoajat ja avaimet* alla. |
-| `llm_model` | string | Malli tälle palveluntarjoajalle. Tyhjä = palveluntarjoajan oletus (`gpt-4o` / `openai/gpt-4o`); pakollinen `openai_compat`-tilassa. |
+| `llm_model` | string | Malli tälle palveluntarjoajalle. Tyhjä = palveluntarjoajan oletus (`gpt-6.1-sol` / `openai/gpt-6.1-sol`); pakollinen `openai_compat`-tilassa. |
 | `llm_base_url` | string | Osoite, jonka lukee **vain** `openai_compat` (esim. `http://localhost:1234/v1`). `openai` ja `openrouter` ohittavat sen, koska niiden osoitteet ovat kiinteät. |
 | `kirja_llm_provider` | string | Valinnainen palveluntarjoajan ohitus Kirjalle (`ksiega_niedomowien.py draft` / `fill`). Tyhjä = `llm_provider`. |
 | `kirja_drafter_model` | string | Malli komennolle `draft` (Kirjan luonnosten kirjoittaja API:n kautta). Tyhjä = palveluntarjoajan oletus tai `llm_model`, kun Kirja käyttää yleistä palveluntarjoajaa. |

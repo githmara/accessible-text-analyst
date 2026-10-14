@@ -203,7 +203,7 @@ cp config.example.ini  config.ini
 | `lumi_vieno_lines` | integer или null | То же, что и `lumi_katla_lines`, но для песни отзвуков Виено. |
 | `voices`           | объект          | Сопоставляет каждый шаманский голос (`katla` / `vieno` / `lumi` / `sami`) с идентификатором голоса ElevenLabs voice ID; используется `shamanic_voice.py`. Голос с пустым или отсутствующим ID пропускается. Нужен только если вы запускаете аудиодиспетчер. |
 | `llm_provider` | string | Провайдер LLM для `shamanic_ai.py` и Книги: `openai` (по умолчанию), `openrouter` или `openai_compat`. Каждый провайдер читает из `golden_key.env` только свой ключ — см. *Провайдеры LLM и ключи* ниже. |
-| `llm_model` | string | Модель для этого провайдера. Пусто = модель провайдера по умолчанию (`gpt-4o` / `openai/gpt-4o`); для `openai_compat` обязательна. |
+| `llm_model` | string | Модель для этого провайдера. Пусто = модель провайдера по умолчанию (`gpt-6.1-sol` / `openai/gpt-6.1-sol`); для `openai_compat` обязательна. |
 | `llm_base_url` | string | Адрес, который читает **только** `openai_compat` (например, `http://localhost:1234/v1`). `openai` и `openrouter` его игнорируют — их адреса зафиксированы. |
 | `kirja_llm_provider` | string | Необязательная замена провайдера для Книги (`ksiega_niedomowien.py draft` / `fill`). Пусто = `llm_provider`. |
 | `kirja_drafter_model` | string | Модель для `draft` (автор черновиков Книги через API). Пусто = модель провайдера по умолчанию или `llm_model`, если Книга использует глобального провайдера. |

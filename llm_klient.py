@@ -27,9 +27,9 @@ from shamanic_locale import t
 ROOT = Path(__file__).resolve().parent
 
 PROVIDERS = {
-    "openai": {"key": "OPENAI_API_KEY", "base_url": "https://api.openai.com/v1", "model": "gpt-4o"},
+    "openai": {"key": "OPENAI_API_KEY", "base_url": "https://api.openai.com/v1", "model": "gpt-6.1-sol"},
     "openrouter": {"key": "OPENROUTER_API_KEY", "base_url": "https://openrouter.ai/api/v1",
-                   "model": "openai/gpt-4o"},
+                   "model": "openai/gpt-6.1-sol"},
     "openai_compat": {"key": "LLM_COMPAT_API_KEY", "base_url": None, "model": None},
 }
 DEFAULT_PROVIDER = "openai"
@@ -229,6 +229,41 @@ def chat_json(client, settings, prompt, schema, name, ui_lang):
                         finish_reason=str(getattr(choice, "finish_reason", None) or "-"),
                         refusal=str(getattr(msg, "refusal", None) or ""))
     raise RuntimeError("unreachable")
+
+
+# Modele, które odrzuciły niedomyślną `temperature` — per (provider, adres, model),
+# żeby kolejne rytuały tego samego uruchomienia nie płaciły znowu za odrzucenie.
+_NO_TEMPERATURE = set()
+
+
+def is_temperature_error(exc):
+    """Czy 400 dotyczy WYŁĄCZNIE parametru `temperature` (rodzina gpt-6 przyjmuje tylko 1)."""
+    if not is_structure_error(exc):
+        return False
+    if getattr(exc, "param", None) == "temperature":
+        return True
+    return "temperature" in str(exc).lower()
+
+
+def chat_text(client, settings, messages, temperature, ui_lang):
+    """Chat Completions z `temperature` wołającego, a bez niej, gdy model ją odrzuca.
+
+    Twórcze temperatury rytuałów zostają tam, gdzie model je przyjmuje; model,
+    który zna tylko wartość domyślną (gpt-6.x: 400 „Only the default (1) value is
+    supported"), dostaje jedno ponowienie bez parametru. Każdy inny błąd leci wyżej.
+    """
+    cache_key = (settings.provider, settings.base_url, settings.model)
+    kwargs = {"model": settings.model, "messages": messages}
+    if cache_key not in _NO_TEMPERATURE:
+        try:
+            return client.chat.completions.create(**kwargs, temperature=temperature)
+        except Exception as e:
+            if not is_temperature_error(e):
+                raise
+            _NO_TEMPERATURE.add(cache_key)
+            print(t(ui_lang, "llm.info_no_temperature", model=settings.model,
+                    temperature=temperature))
+    return client.chat.completions.create(**kwargs)
 
 
 def save_diagnostics(path, reply, ui_lang):

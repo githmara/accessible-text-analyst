@@ -203,7 +203,7 @@ Innihald:
 | `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
 | `voices`           | hlutur          | Varpar hverri shamanískri rödd (`katla` / `vieno` / `lumi` / `sami`) yfir á ElevenLabs radd-auðkenni, notað af `shamanic_voice.py`. Rödd með tómu eða vantandi auðkenni er sleppt. Aðeins nauðsynlegt ef þú keyrir hljóðafgreiðarann. |
 | `llm_provider` | strengur | LLM-þjónusta fyrir `shamanic_ai.py` og Bókina: `openai` (sjálfgefið), `openrouter` eða `openai_compat`. Hver þjónusta les aðeins sinn eigin lykil úr `golden_key.env` — sjá *LLM-þjónustur og lyklar* hér fyrir neðan. |
-| `llm_model` | strengur | Líkan fyrir þá þjónustu. Tómt = sjálfgefið líkan þjónustunnar (`gpt-4o` / `openai/gpt-4o`); skylda fyrir `openai_compat`. |
+| `llm_model` | strengur | Líkan fyrir þá þjónustu. Tómt = sjálfgefið líkan þjónustunnar (`gpt-6.1-sol` / `openai/gpt-6.1-sol`); skylda fyrir `openai_compat`. |
 | `llm_base_url` | strengur | Slóð sem **aðeins** `openai_compat` les (t.d. `http://localhost:1234/v1`). `openai` og `openrouter` hunsa hana, því slóðir þeirra eru fastar. |
 | `kirja_llm_provider` | strengur | Valfrjáls yfirskrift þjónustu fyrir Bókina (`ksiega_niedomowien.py draft` / `fill`). Tómt = `llm_provider`. |
 | `kirja_drafter_model` | strengur | Líkan fyrir `draft` (höfund draga Bókarinnar gegnum API). Tómt = sjálfgefið líkan þjónustunnar, eða `llm_model` þegar Bókin notar almennu þjónustuna. |

@@ -17,7 +17,7 @@ UI_LANG = get_ui_lang()
 # Klient i model ustala llm_klient w __main__ (provider z configu: llm_provider,
 # llm_model, llm_base_url; klucz z golden_key.env przypisany do providera).
 client = None
-LLM_MODEL = None
+LLM_SETTINGS = None
 
 # Cytat z polskiej piosenki ludowej "Mój cygan" — używany w obu promptach jako
 # kotwica obrazu szamana. Angielską glossę dorzucamy w nawiasie, żeby model rozumiał
@@ -137,11 +137,12 @@ CRITICAL OUTPUT RULES:
 """
 
     print(t(UI_LANG, 'ai.llm_katla'))
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[{"role": "system", "content": system_message},
-                  {"role": "user", "content": prompt}],
-        temperature=0.7
+    response = llm_klient.chat_text(
+        client, LLM_SETTINGS,
+        [{"role": "system", "content": system_message},
+         {"role": "user", "content": prompt}],
+        temperature=0.7,
+        ui_lang=UI_LANG
     )
 
     script_content = response.choices[0].message.content
@@ -294,11 +295,12 @@ CRITICAL OUTPUT RULES:
 """
 
     print(t(UI_LANG, 'ai.llm_vieno'))
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[{"role": "system", "content": system_message},
-                  {"role": "user", "content": prompt}],
-        temperature=0.8
+    response = llm_klient.chat_text(
+        client, LLM_SETTINGS,
+        [{"role": "system", "content": system_message},
+         {"role": "user", "content": prompt}],
+        temperature=0.8,
+        ui_lang=UI_LANG
     )
 
     script_content = response.choices[0].message.content
@@ -407,11 +409,12 @@ CRITICAL OUTPUT RULES:
 """
 
     print(t(UI_LANG, 'ai.llm_lumi'))
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[{"role": "system", "content": system_message},
-                  {"role": "user", "content": prompt}],
-        temperature=0.65
+    response = llm_klient.chat_text(
+        client, LLM_SETTINGS,
+        [{"role": "system", "content": system_message},
+         {"role": "user", "content": prompt}],
+        temperature=0.65,
+        ui_lang=UI_LANG
     )
 
     script_content = response.choices[0].message.content
@@ -448,13 +451,14 @@ def ritual_sami_spark(export_dir, output_dir, lang):
         f"Deliver your energetic, bright synthesis and find the spark of hope or action!"
     )
 
-    response = client.chat.completions.create(
-        model=LLM_MODEL,
-        messages=[
+    response = llm_klient.chat_text(
+        client, LLM_SETTINGS,
+        [
             {"role": "system", "content": SAMI_SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ],
-        temperature=0.85 # Odrobina szaleństwa i ekspresji
+        temperature=0.85, # Odrobina szaleństwa i ekspresji
+        ui_lang=UI_LANG
     )
 
     script_content = response.choices[0].message.content
@@ -484,7 +488,7 @@ if __name__ == "__main__":
             # komunikat ma już własny prefiks — bez opakowania w ai.fatal_error
             print(e)
             raise SystemExit(1)
-        LLM_MODEL = llm.model
+        LLM_SETTINGS = llm
         print(t(UI_LANG, 'llm.info_provider', provider=llm.provider, model=llm.model,
                 endpoint=llm.endpoint))
 

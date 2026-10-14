@@ -106,5 +106,6 @@ llm:
   err_no_sdk: '[ОШИБКА] Не установлен пакет openai или python-dotenv (pip install -r requirements.txt).'
   err_no_key: '[ОШИБКА] {var} не найден в golden_key.env (нужен провайдеру {provider}). Каждый провайдер читает только свой ключ.'
   info_degraded: '[ИНФО] {endpoint} отклонил response_format {mode} ({error}). Перехожу на {next}.'
+  info_no_temperature: '[ИНФО] Модель {model} принимает только температуру по умолчанию (отклонила {temperature}). Повторяю без неё; до конца этого запуска для этой модели она не передаётся.'
   diag_reply: '[ДИАГ] Режим {mode}, finish_reason {finish}, ответ длиной {chars} символов{refusal}. Полный ответ: {path}'
   diag_refusal: ', отказ: "{text}"'

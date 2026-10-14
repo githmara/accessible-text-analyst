@@ -4,6 +4,38 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.7.1 — the default model moves to `gpt-6.1-sol` before `gpt-4o` is retired
+
+**Theme.** OpenAI retires `gpt-4o` (together with `gpt-4o-mini`, `gpt-4.1` and `gpt-4.1-mini`) on **January 14, 2027**. `gpt-4o` was the default model of both providers that have one, so with an empty `llm_model` the shamanic layer and the Book would have stopped working that day. Patch bump: no new command and no config key changes.
+
+### Default model
+
+| `llm_provider` | before | now |
+|---|---|---|
+| `openai` | `gpt-4o` | `gpt-6.1-sol` |
+| `openrouter` | `openai/gpt-4o` | `openai/gpt-6.1-sol` |
+
+`gpt-6.1-sol` costs the same per output token as `gpt-4o` and less per input token ($2 / $10 per million tokens, against $2.50 / $10). A model set explicitly in `llm_model`, `kirja_drafter_model` or `kirja_filler_model` is not affected.
+
+### Temperature degradation in `shamanic_ai.py`
+
+The four rituals send creative temperatures (Katla 0.7, Vieno 0.8, Lumi 0.65, Sami 0.85). The gpt-6 family accepts only the default value (1) and rejects anything else with HTTP 400, so changing only the name would have made all four rituals fail. Measured before the change on `gpt-6.1-sol` and `gpt-6-luna`.
+
+- The rituals now call the new `llm_klient.chat_text()`. It sends the ritual's temperature first. On a 400 that concerns `temperature` alone, it retries once without it, prints one `[INFO]` line and skips the parameter for that model for the rest of the run.
+- Every other error is raised as before. A model that accepts a temperature keeps it, so `gpt-4o` and other models set in the config behave exactly as in v1.7.0. OpenRouter drops an unsupported temperature without an error (measured), so no retry happens there.
+- The Book already sent no temperature (`chat_json`), so `draft` and `fill` needed no change.
+
+### Localization
+
+New key `llm.info_no_temperature` in all six `reports.yaml`.
+
+**Upgrade.** Pull. If you want to stay on `gpt-4o` until it is retired, set `"llm_model": "gpt-4o"`. You don't need to re-run the notebook.
+
+### Distribution
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.7.0 — LLM providers bound to their keys, API drafter for the Book
 
 **Theme.** Two things. First, an API key can no longer reach a host it was not issued for: until now `fill` and `shamanic_ai.py` shared `OPENAI_API_KEY`, and `kirja_filler_base_url` / `--base-url` decided where it went. Putting an OpenRouter key into that variable broke `shamanic_ai.py`, and forgetting to swap it sent the OpenAI key to a third party. Second, the Book of the Unsaid gets an API drafter, so you no longer need an agent to use it. Minor bump: there is a new command, and one config key is removed.

@@ -203,7 +203,7 @@ Contents:
 | `lumi_vieno_lines` | integer or null | Same as `lumi_katla_lines`, but for Vieno's echo chant. |
 | `voices`           | object          | Maps each shamanic voice (`katla` / `vieno` / `lumi` / `sami`) to an ElevenLabs voice ID, consumed by `shamanic_voice.py`. A voice with an empty or missing ID is skipped. Only needed if you run the audio dispatcher. |
 | `llm_provider` | string | LLM provider for `shamanic_ai.py` and the Book: `openai` (default), `openrouter` or `openai_compat`. Each provider reads only its own key from `golden_key.env` — see *LLM providers and keys* below. |
-| `llm_model` | string | Model for that provider. Empty = the provider's default (`gpt-4o` / `openai/gpt-4o`); required for `openai_compat`. |
+| `llm_model` | string | Model for that provider. Empty = the provider's default (`gpt-6.1-sol` / `openai/gpt-6.1-sol`); required for `openai_compat`. |
 | `llm_base_url` | string | Endpoint address, read **only** by `openai_compat` (e.g. `http://localhost:1234/v1`). Ignored by `openai` and `openrouter`, whose addresses are fixed. |
 | `kirja_llm_provider` | string | Optional provider override for the Book (`ksiega_niedomowien.py draft` / `fill`). Empty = `llm_provider`. |
 | `kirja_drafter_model` | string | Model for `draft` (the Book's API drafter). Empty = the provider's default, or `llm_model` when the Book uses the global provider. |

@@ -203,7 +203,7 @@ Zawartość:
 | `lumi_vieno_lines` | integer lub null | To samo co `lumi_katla_lines`, dla pieśni ech Vieno. |
 | `voices`           | obiekt          | Mapuje każdy głos szamański (`katla` / `vieno` / `lumi` / `sami`) na identyfikator głosu ElevenLabs, używany przez `shamanic_voice.py`. Głos z pustym lub brakującym ID jest pomijany. Potrzebne tylko, jeśli uruchamiasz dyspozytor audio. |
 | `llm_provider` | string | Provider LLM dla `shamanic_ai.py` i Księgi: `openai` (domyślnie), `openrouter` albo `openai_compat`. Każdy provider czyta z `golden_key.env` wyłącznie własny klucz — patrz *Providerzy LLM i klucze* poniżej. |
-| `llm_model` | string | Model dla tego providera. Pusty = domyślny providera (`gpt-4o` / `openai/gpt-4o`); wymagany dla `openai_compat`. |
+| `llm_model` | string | Model dla tego providera. Pusty = domyślny providera (`gpt-6.1-sol` / `openai/gpt-6.1-sol`); wymagany dla `openai_compat`. |
 | `llm_base_url` | string | Adres endpointu, czytany **wyłącznie** przez `openai_compat` (np. `http://localhost:1234/v1`). Ignorowany przez `openai` i `openrouter`, które mają adresy na sztywno. |
 | `kirja_llm_provider` | string | Opcjonalne nadpisanie providera dla Księgi (`ksiega_niedomowien.py draft` / `fill`). Pusty = `llm_provider`. |
 | `kirja_drafter_model` | string | Model dla `draft` (autor szkiców Księgi przez API). Pusty = domyślny providera albo `llm_model`, gdy Księga używa providera globalnego. |

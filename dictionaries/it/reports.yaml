@@ -106,5 +106,6 @@ llm:
   err_no_sdk: '[ERRORE] Manca il pacchetto openai o python-dotenv (pip install -r requirements.txt).'
   err_no_key: '[ERRORE] {var} non trovata in golden_key.env (serve al fornitore {provider}). Ogni fornitore legge solo la propria chiave.'
   info_degraded: '[INFO] {endpoint} ha rifiutato response_format {mode} ({error}). Passo a {next}.'
+  info_no_temperature: '[INFO] Il modello {model} accetta solo la temperatura predefinita (ha rifiutato {temperature}). Riprovo senza; per il resto di questa esecuzione la ometto per questo modello.'
   diag_reply: '[DIAG] Modalità {mode}, finish_reason {finish}, risposta di {chars} caratteri{refusal}. Risposta completa: {path}'
   diag_refusal: ', rifiuto: "{text}"'
