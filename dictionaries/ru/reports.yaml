@@ -109,3 +109,13 @@ llm:
   info_no_temperature: '[ИНФО] Модель {model} принимает только температуру по умолчанию (отклонила {temperature}). Повторяю без неё; до конца этого запуска для этой модели она не передаётся.'
   diag_reply: '[ДИАГ] Режим {mode}, finish_reason {finish}, ответ длиной {chars} символов{refusal}. Полный ответ: {path}'
   diag_refusal: ', отказ: "{text}"'
+deps:
+  naglowek: '[ЗАВИСИМОСТИ] Сверяю requirements.txt с установленными пакетами и с PyPI (только предупреждения).'
+  python_inny: '[ИНФО] Запущен Python {teraz}; этот набор в последний раз проверялся на Python {przetestowany}.'
+  brak_packaging: '[ВНИМАНИЕ] Нет библиотеки packaging, поэтому версии нельзя сравнить (pip install packaging).'
+  w_trzymana: '[УДЕРЖАНО] {nazwa} {inst}: вышла {nowa}, но граница {spec} намеренно её исключает (ещё не проверена).'
+  w_dopuszczona: '[ВНИМАНИЕ] {nazwa} {inst}: вышла {nowa}, и граница {spec} её допускает — с этим проектом она не проверялась.'
+  w_poza: '[ВНИМАНИЕ] {nazwa} {inst} не удовлетворяет границе {spec} из requirements.txt.'
+  w_brak: '[ВНИМАНИЕ] {nazwa} ({spec}) обязателен, но не установлен (pip install -r requirements.txt).'
+  w_pypi: '[ИНФО] {nazwa} {inst}: нет связи с PyPI, последняя версия не проверена.'
+  podsumowanie: '[ИТОГ] актуальны: {ok}, удержаны границей: {trzymane}, предупреждений: {ostrzezenia}, необязательных не установлено: {pominiete}.'

@@ -70,7 +70,7 @@ Outliery, które przetrwały heurystykę, są wypisywane w wyjściu `cell_para` 
 
 ## Wymagania
 
-- Python 3.10 lub nowszy.
+- Python 3.12 lub nowszy (zależności przetestowane na Pythonie 3.14).
 - ~1,5 GB wolnego miejsca na dysku na modele `_lg` spaCy (po jednym na język). Dodaj ~700 MB, jeśli włączasz wsparcie dla islandzkiego (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Dodaj ~700 MB, jeśli włączasz wsparcie OCR (`easyocr` pobiera `torch` oraz własne modele detekcji i rozpoznawania przy pierwszym wywołaniu OCR). Jeśli włączyłeś też islandzki, koszt `torch` jest dzielony między oba.
 - Dodaj ~130 MB, jeśli włączasz ulepszenie fińskiej morfologii (automaty FST `omorfi` pobierane poleceniem `omorfi-download`).
@@ -97,7 +97,7 @@ Katalog `.venv/` jest w `.gitignore`. Z poziomu aktywnego venv przejdź do sekcj
 ### Opcja B — Anaconda / Miniconda
 
 ```bash
-conda create -n accessible-text-analyst python=3.11
+conda create -n accessible-text-analyst python=3.14
 conda activate accessible-text-analyst
 ```
 
@@ -150,6 +150,10 @@ python -m spacy download fi_core_news_lg
 # FST (~130 MB plików *.hfst rozpakowanych do korzenia repozytorium; są w .gitignore).
 # Uruchom z korzenia repozytorium:
 omorfi-download
+
+# 6. (Opcjonalnie) Sprawdź zainstalowane wersje wobec granic z
+# requirements.txt i wobec PyPI. Tylko ostrzega, niczego nie blokuje:
+python audyt_zaleznosci.py
 ```
 
 ## Konfiguracja

@@ -109,3 +109,13 @@ llm:
   info_no_temperature: '[INFO] Il modello {model} accetta solo la temperatura predefinita (ha rifiutato {temperature}). Riprovo senza; per il resto di questa esecuzione la ometto per questo modello.'
   diag_reply: '[DIAG] Modalità {mode}, finish_reason {finish}, risposta di {chars} caratteri{refusal}. Risposta completa: {path}'
   diag_refusal: ', rifiuto: "{text}"'
+deps:
+  naglowek: '[DIPENDENZE] Confronto requirements.txt con i pacchetti installati e con PyPI (solo avvisi).'
+  python_inny: '[INFO] Stai usando Python {teraz}; questo insieme è stato testato l''ultima volta con Python {przetestowany}.'
+  brak_packaging: '[AVVISO] Manca la libreria packaging, quindi non è possibile confrontare le versioni (pip install packaging).'
+  w_trzymana: '[TRATTENUTA] {nazwa} {inst}: esiste {nowa}, ma il limite {spec} la esclude di proposito (non ancora testata).'
+  w_dopuszczona: '[AVVISO] {nazwa} {inst}: esiste {nowa} e il limite {spec} la consente — non è stata testata con questo progetto.'
+  w_poza: '[AVVISO] {nazwa} {inst} non rispetta il limite {spec} di requirements.txt.'
+  w_brak: '[AVVISO] {nazwa} ({spec}) è richiesto ma non installato (pip install -r requirements.txt).'
+  w_pypi: '[INFO] {nazwa} {inst}: PyPI non raggiungibile, l''ultima versione non è stata verificata.'
+  podsumowanie: '[RIEPILOGO] aggiornati: {ok}, trattenuti dal limite: {trzymane}, avvisi: {ostrzezenia}, opzionali non installati: {pominiete}.'

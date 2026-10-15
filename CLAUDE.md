@@ -28,8 +28,11 @@ Multi-file project for accessibility-oriented multilingual text analytics. There
 ## Common commands
 
 ```bash
-# Install dependencies (Python 3.10+ assumed; .venv is in .gitignore)
+# Install dependencies (Python 3.12+ required by numpy 2.5 / lingua 2.2; the set is tested on
+# Python 3.14.3; .venv is in .gitignore)
 pip install -r requirements.txt
+# Compare installed versions with the bounds and with PyPI (warnings only, exit code always 0)
+python audyt_zaleznosci.py
 
 # spaCy models are NOT in requirements.txt — install the *_lg models for each language you need.
 # The notebook's MODEL_BY_LANG hardcodes _lg variants because KMeans topics + NER quality depend on word vectors.
@@ -91,6 +94,13 @@ clone, or use a committed `.pre-commit-config.yaml` for portability. nbstripout 
 strips outputs from the `.ipynb` blob independently.
 
 `requirements.txt` lists `nbstripout` — if it has been activated in the local git config, notebook outputs are stripped on commit. `generate_report.py` reads outputs from the `.ipynb` file directly, so the report must be regenerated from a freshly-executed notebook (don't commit-then-report).
+
+## Dependencies and environment (v1.8.0)
+
+- **Bounds in `requirements.txt`**, Reżyser's canon: upper bound = next minor above the version that was TESTED. Optional dependencies stay commented out as `# package<bound>` lines, so uncommenting keeps the bound. Raise a bound only after testing the new version, and record the test in the file header.
+- **`audyt_zaleznosci.py`** mirrors Reżyser's dependency gate but **only warns** (exit code always 0): ATA is not frozen into a bundle, the user installs the manifest, so an untested release is information for them, not a build blocker. Verdicts: up to date / held by a bound / allowed but untested / outside the bound / missing; optional packages that are not installed are skipped. Console output is `t(UI_LANG, 'deps.*')` in all six `reports.yaml`. `PYTHON_PRZETESTOWANY` in the script is the single source of the tested interpreter.
+- **Interpreter migration 3.11 → 3.14 (2026-10-15)** was verified by running cells 0–39 of the notebook (everything before the interactive `cell_qa_rag`), `shamanic_pipeline.py` and a full `ksiega_niedomowien.py` cycle on the same corpus with both interpreters: every CSV/JSON/HTML/TXT export and every shamanic artefact was byte-identical; the `.docx` differs only in ZIP compression (identical XML members). `omorfi-download` needs no extra flags on 3.14 and fetches the same v0.9.9 automata. The Jupyter kernel is `analyst_env` → `.venv\Scripts\python.exe`.
+- **Why no PyInstaller bundle:** the notebook would have to be rewritten as plain Python, and torch plus the models would push the asset towards GitHub's 2 GB per-asset limit.
 
 ## Pipeline architecture (notebook)
 

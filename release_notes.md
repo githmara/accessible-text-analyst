@@ -4,6 +4,37 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.8.0 — Python 3.14, bounded dependencies and a dependency audit
+
+**Theme.** The project now runs on Python 3.14, and `requirements.txt` finally says which versions were tested. Until now the manifest had no version bounds at all, so a fresh install picked whatever PyPI offered that day. On 2026-10-15 that meant `openai` 3.31 instead of the 2.37 the code was written against, `pandas` 3 and `numpy` 2.5, a combination nobody had run. Minor bump: there is a new command, and the install result changes.
+
+### Python 3.14
+
+- Verified on the same Finnish corpus with Python 3.11 and Python 3.14: notebook cells 0–39 (everything before the interactive Q&A cell, including sentiment and `omorfi`), `shamanic_pipeline.py`, and a full `ksiega_niedomowien.py` cycle (`prepare` → `draft` → `fill` → `judge`) through the API.
+- Every export file (`*.csv`, `topic_keywords.json`, `accessible_text.html`, the theses) and every shamanic artefact was **byte-identical** between the two interpreters. `accessible_text.docx` differs only in ZIP compression; its contents are identical.
+- All 137 packages, including the optional ones, install from ready-made wheels on Windows x64 for Python 3.14, so nothing has to be compiled.
+- `omorfi-download` needs no extra options on Python 3.14 and downloads the same automata (v0.9.9).
+- **Minimum Python is now 3.12** (required by `numpy` 2.5 and `lingua-language-detector` 2.2). The READMEs said 3.10 and are corrected in all six languages; the Conda example now creates a Python 3.14 environment.
+
+### Bounded dependencies
+
+Every package in `requirements.txt`, including the commented-out optional ones (sentiment, Icelandic, OCR, `omorfi`), now has an upper bound one minor version above the tested release, for example `openai<3.32` or `torch<2.15`. An optional line stays commented as `# torch<2.15`, so uncommenting it keeps the bound. The file header records the Python version and the date of the test.
+
+### `audyt_zaleznosci.py`
+
+New command: `python audyt_zaleznosci.py`. It compares what is installed with the bounds and with the latest release on PyPI and reports, for each package, one of: up to date, held back by a bound on purpose, newer release allowed by the bound but not tested yet, installed version outside the bound, or missing. Optional packages that are not installed are skipped. It **only warns** and always exits with code 0: this project is not frozen into an installer, you install the dependencies yourself, so an untested release is information for you, not a reason to stop. Messages are shown in `ui_lang`, in all six languages.
+
+### Localization
+
+New keys `deps.*` in all six `reports.yaml`.
+
+**Upgrade.** Create a fresh environment on Python 3.12 or newer (3.14 recommended), run `pip install -r requirements.txt`, download the spaCy models you need and, for Finnish, run `omorfi-download` again. Then run `python audyt_zaleznosci.py`. If you use the notebook in Jupyter or VS Code, register the kernel of the new environment again (`python -m ipykernel install --user --name analyst_env`).
+
+### Distribution
+Source-only minor release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.7.1 — the default model moves to `gpt-6.1-sol` before `gpt-4o` is retired
 
 **Theme.** OpenAI retires `gpt-4o` (together with `gpt-4o-mini`, `gpt-4.1` and `gpt-4.1-mini`) on **January 14, 2027**. `gpt-4o` was the default model of both providers that have one, so with an empty `llm_model` the shamanic layer and the Book would have stopped working that day. Patch bump: no new command and no config key changes.

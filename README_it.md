@@ -70,7 +70,7 @@ Gli outlier che sopravvivono all'euristica vengono elencati nell'output di `cell
 
 ## Requisiti
 
-- Python 3.10 o superiore.
+- Python 3.12 o superiore (le dipendenze sono testate su Python 3.14).
 - ~1,5 GB di spazio libero su disco per i modelli `_lg` di spaCy (uno per lingua). Aggiungi ~700 MB se attivi il supporto per l'islandese (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Aggiungi ~700 MB se attivi il supporto OCR (`easyocr` scarica `torch` insieme ai propri modelli di rilevamento e riconoscimento alla prima chiamata OCR). Se hai abilitato anche l'islandese, il costo di `torch` è condiviso tra le due.
 - Aggiungi ~130 MB se attivi il miglioramento della morfologia finlandese (gli automi FST di `omorfi` scaricati con `omorfi-download`).
@@ -97,7 +97,7 @@ La directory `.venv/` è in `.gitignore`. Dall'interno del venv attivato, proseg
 ### Opzione B — Anaconda / Miniconda
 
 ```bash
-conda create -n accessible-text-analyst python=3.11
+conda create -n accessible-text-analyst python=3.14
 conda activate accessible-text-analyst
 ```
 
@@ -150,6 +150,10 @@ python -m spacy download fi_core_news_lg
 # (~130 MB di file *.hfst estratti nella radice del repository; sono in .gitignore).
 # Eseguilo dalla radice del repository:
 omorfi-download
+
+# 6. (Facoltativo) Confronta le versioni installate con i limiti di
+# requirements.txt e con PyPI. Avvisa soltanto, non blocca nulla:
+python audyt_zaleznosci.py
 ```
 
 ## Configurazione

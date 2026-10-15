@@ -109,3 +109,13 @@ llm:
   info_no_temperature: '[INFO] Model {model} przyjmuje tylko domyślną temperaturę (odrzucił {temperature}). Ponawiam bez niej; do końca tego uruchomienia pomijam ją dla tego modelu.'
   diag_reply: '[DIAG] Tryb {mode}, finish_reason {finish}, odpowiedź ma {chars} znaków{refusal}. Pełna odpowiedź: {path}'
   diag_refusal: ', odmowa: "{text}"'
+deps:
+  naglowek: '[ZALEŻNOŚCI] Sprawdzam requirements.txt wobec tego, co zainstalowane, i wobec PyPI (tylko ostrzeżenia).'
+  python_inny: '[INFO] Działasz na Pythonie {teraz}; ten zestaw był ostatnio testowany na Pythonie {przetestowany}.'
+  brak_packaging: '[UWAGA] Brak biblioteki packaging, więc nie da się porównać wersji (pip install packaging).'
+  w_trzymana: '[WSTRZYMANA] {nazwa} {inst}: jest {nowa}, ale granica {spec} celowo ją wyklucza (jeszcze nieprzetestowana).'
+  w_dopuszczona: '[UWAGA] {nazwa} {inst}: jest {nowa}, a granica {spec} ją dopuszcza — nie była testowana z tym projektem.'
+  w_poza: '[UWAGA] {nazwa} {inst} nie spełnia granicy {spec} z requirements.txt.'
+  w_brak: '[UWAGA] {nazwa} ({spec}) jest wymagany, ale nie jest zainstalowany (pip install -r requirements.txt).'
+  w_pypi: '[INFO] {nazwa} {inst}: brak połączenia z PyPI, najnowszej wersji nie sprawdzono.'
+  podsumowanie: '[PODSUMOWANIE] aktualne: {ok}, wstrzymane granicą: {trzymane}, ostrzeżenia: {ostrzezenia}, opcjonalne niezainstalowane: {pominiete}.'

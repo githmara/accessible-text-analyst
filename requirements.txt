@@ -1,30 +1,36 @@
+# Granice wersji (od v1.8.0): górna granica = następny minor ponad wersją PRZETESTOWANĄ.
+# Zestaw przetestowany na Pythonie 3.14.3 (2026-10-15): notatnik komórki 0–39 (w tym
+# sentyment i omorfi), shamanic_pipeline.py, pełny cykl ksiega_niedomowien.py.
+# Minimalny Python wynika z zależności: 3.12 (numpy 2.5, lingua 2.2).
+# Nowsze wydania sprawdza `python audyt_zaleznosci.py` (tylko ostrzega).
+
 # Środowisko i narzędzia
-ipykernel
-nbstripout
-jupytext
-pyyaml
+ipykernel<7.5
+nbstripout<0.10
+jupytext<1.20
+pyyaml<6.1
 
 # Parsowanie plików i ekstrakcja tekstu
-pdfplumber
-python-docx
-beautifulsoup4
-lxml
-requests
+pdfplumber<0.12
+python-docx<1.3
+beautifulsoup4<4.16
+lxml<6.2
+requests<2.35
 
 # Analiza tekstu i NLP
-lingua-language-detector
-spacy
-numpy
-pandas
-scikit-learn
-tqdm
+lingua-language-detector<2.3
+spacy<3.9
+numpy<2.6
+pandas<3.1
+scikit-learn<1.10
+tqdm<4.71
 # Wsparcie dla języka islandzkiego (Hugging Face: IceBERT + MIM-GOLD-22).
 # Odkomentuj obie linie, jeśli analizujesz teksty po islandzku — pozwoli to
 # załadować spaCy + IceBERT-base (wektory) i icelandic-ner-MIM-GOLD-22 (NER)
 # w komórce cell_model. Pobranie tych modeli to ~700 MB przy pierwszym uruchomieniu.
 # Dla pozostałych języków (pl, ru, en, it, fi) te zależności nie są potrzebne.
-# transformers
-# torch
+# transformers<5.20
+# torch<2.15
 # Opcjonalne doprecyzowanie fińskiej morfologii (komórka cell_model).
 # Odkomentuj linię poniżej, a po instalacji pobierz automaty poleceniem:
 #   omorfi-download
@@ -33,13 +39,13 @@ tqdm
 # Windowsie. Komponent omorfi_lemmas nadpisuje lematy i cechy morfologiczne
 # fińskich tokenów tam, gdzie analiza słownikowa zgadza się z UPOS taggera spaCy.
 # Brak pakietu lub automatów => cell_model zostaje przy lematyzatorze spaCy.
-# omorfi
+# omorfi<0.11
 
 # Generowanie raportu
-markdown
-markdownify
-openai
-python-dotenv
+markdown<3.12
+markdownify<1.3
+openai<3.32
+python-dotenv<1.3
 
 # Opcjonalna analiza sentymentu (pożywka dla rytuału Vieno i lokalnego rytuału
 # "prąd podskórny"). Odkomentuj te linie ORAZ ustaw "enable_sentiment": true
@@ -55,16 +61,16 @@ python-dotenv
 # Brak którejkolwiek z nich => sentyment jest po prostu pomijany (bez fallbacku),
 # a reszta potoku działa jak dotąd. transformers i torch współdzielone z blokami
 # islandzkim/OCR.
-# transformers
-# torch
-# sentencepiece
-# protobuf
-# tiktoken
+# transformers<5.20
+# torch<2.15
+# sentencepiece<0.3
+# protobuf<7.37
+# tiktoken<0.15
 
 # Wsparcie OCR dla skanowanych PDF-ów i obrazów (.png/.jpg/.jpeg/.tif/.tiff/.bmp/.webp).
 # Odkomentuj obie linie, jeśli twój korpus zawiera skany lub obrazy — pozwoli to
 # renderować strony PDF przez pypdfium2 i rozpoznawać tekst przez easyocr.
 # easyocr ciągnie też torch (+ kilkaset MB modeli OCR przy pierwszym uruchomieniu),
 # więc dla korpusów tekstowych nie ma sensu instalować tej pary.
-# pypdfium2
-# easyocr
+# pypdfium2<5.15
+# easyocr<1.8

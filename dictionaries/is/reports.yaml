@@ -109,3 +109,13 @@ llm:
   info_no_temperature: '[INFO] Líkanið {model} tekur aðeins við sjálfgefnu hitastigi (hafnaði {temperature}). Reyni aftur án þess; það sem eftir er af keyrslunni sleppi ég því fyrir þetta líkan.'
   diag_reply: '[GREINING] Háttur {mode}, finish_reason {finish}, svar upp á {chars} stafi{refusal}. Allt svarið: {path}'
   diag_refusal: ', synjun: "{text}"'
+deps:
+  naglowek: '[PAKKAR] Ber requirements.txt saman við uppsetta pakka og PyPI (aðeins viðvaranir).'
+  python_inny: '[INFO] Þú keyrir Python {teraz}; þetta safn var síðast prófað á Python {przetestowany}.'
+  brak_packaging: '[VIÐVÖRUN] packaging-safnið vantar, svo ekki er hægt að bera saman útgáfur (pip install packaging).'
+  w_trzymana: '[HALDIÐ] {nazwa} {inst}: {nowa} er til, en mörkin {spec} útiloka hana viljandi (ekki enn prófuð).'
+  w_dopuszczona: '[VIÐVÖRUN] {nazwa} {inst}: {nowa} er til og mörkin {spec} leyfa hana — hún hefur ekki verið prófuð með þessu verkefni.'
+  w_poza: '[VIÐVÖRUN] {nazwa} {inst} uppfyllir ekki mörkin {spec} í requirements.txt.'
+  w_brak: '[VIÐVÖRUN] {nazwa} ({spec}) er nauðsynlegt en ekki uppsett (pip install -r requirements.txt).'
+  w_pypi: '[INFO] {nazwa} {inst}: ekki náðist samband við PyPI, nýjasta útgáfan var ekki athuguð.'
+  podsumowanie: '[SAMANTEKT] uppfært: {ok}, haldið af mörkum: {trzymane}, viðvaranir: {ostrzezenia}, valkvætt ekki uppsett: {pominiete}.'

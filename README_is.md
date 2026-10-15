@@ -70,7 +70,7 @@ Hvati reglu 6 er hreint hljóðfræðilegur: ensk rödd sem les finnsk/pólsk/í
 
 ## Kröfur
 
-- Python 3.10 eða nýrri.
+- Python 3.12 eða nýrri (pakkarnir eru prófaðir á Python 3.14).
 - ~1,5 GB af lausu plássi fyrir spaCy `_lg`-líkön (eitt per tungumál). Bættu við ~700 MB ef þú vilt íslenskustuðning (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Bættu við ~700 MB ef þú vilt OCR-stuðning (`easyocr` sækir `torch` ásamt sínum greiningar- og þekkingarlíkönum við fyrsta OCR-kall). Ef þú virkjaðir líka íslensku deilist kostnaður `torch` milli beggja.
 - Bættu við ~130 MB ef þú vilt endurbót á finnskri beygingarfræði (FST-stýrivélar `omorfi`, sóttar með `omorfi-download`).
@@ -97,7 +97,7 @@ python -m venv .venv
 ### Valkostur B — Anaconda / Miniconda
 
 ```bash
-conda create -n accessible-text-analyst python=3.11
+conda create -n accessible-text-analyst python=3.14
 conda activate accessible-text-analyst
 ```
 
@@ -150,6 +150,10 @@ python -m spacy download fi_core_news_lg
 # (~130 MB af *.hfst-skrám sem pakkast upp í rót verkefnisins; þær eru í .gitignore).
 # Keyrðu úr rót verkefnisins:
 omorfi-download
+
+# 6. (Valkvætt) Berðu uppsettar útgáfur saman við mörkin í
+# requirements.txt og við PyPI. Skriftan varar aðeins við, hún stöðvar ekkert:
+python audyt_zaleznosci.py
 ```
 
 ## Stillingar

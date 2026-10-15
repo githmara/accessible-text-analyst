@@ -109,3 +109,13 @@ llm:
   info_no_temperature: '[INFO] Model {model} accepts only the default temperature (rejected {temperature}). Retrying without it; the rest of this run skips it for this model.'
   diag_reply: '[DIAG] Mode {mode}, finish_reason {finish}, reply of {chars} characters{refusal}. Full reply: {path}'
   diag_refusal: ', refusal: "{text}"'
+deps:
+  naglowek: '[DEPENDENCIES] Checking requirements.txt against what is installed and against PyPI (warnings only).'
+  python_inny: '[INFO] You are running Python {teraz}; this set was last tested on Python {przetestowany}.'
+  brak_packaging: '[WARNING] The packaging library is missing, so versions cannot be compared (pip install packaging).'
+  w_trzymana: '[HELD] {nazwa} {inst}: {nowa} exists, but the bound {spec} excludes it on purpose (not tested yet).'
+  w_dopuszczona: '[WARNING] {nazwa} {inst}: {nowa} exists and the bound {spec} allows it — it has not been tested with this project.'
+  w_poza: '[WARNING] {nazwa} {inst} does not satisfy the bound {spec} in requirements.txt.'
+  w_brak: '[WARNING] {nazwa} ({spec}) is required but not installed (pip install -r requirements.txt).'
+  w_pypi: '[INFO] {nazwa} {inst}: PyPI could not be reached, the latest version was not checked.'
+  podsumowanie: '[SUMMARY] up to date: {ok}, held by a bound: {trzymane}, warnings: {ostrzezenia}, optional not installed: {pominiete}.'

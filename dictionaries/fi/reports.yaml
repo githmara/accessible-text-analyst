@@ -109,3 +109,13 @@ llm:
   info_no_temperature: '[INFO] Malli {model} hyväksyy vain oletuslämpötilan (hylkäsi arvon {temperature}). Yritän uudelleen ilman sitä; tämän ajon loppuun asti jätän sen pois tältä mallilta.'
   diag_reply: '[DIAG] Tila {mode}, finish_reason {finish}, vastauksen pituus {chars} merkkiä{refusal}. Koko vastaus: {path}'
   diag_refusal: ', kieltäytyminen: "{text}"'
+deps:
+  naglowek: '[RIIPPUVUUDET] Verrataan requirements.txt-tiedostoa asennettuihin versioihin ja PyPI:hin (vain varoituksia).'
+  python_inny: '[INFO] Käytössä on Python {teraz}; tämä kokoonpano testattiin viimeksi Pythonilla {przetestowany}.'
+  brak_packaging: '[VAROITUS] packaging-kirjasto puuttuu, joten versioita ei voi verrata (pip install packaging).'
+  w_trzymana: '[PIDÄTETTY] {nazwa} {inst}: {nowa} on saatavilla, mutta raja {spec} sulkee sen tarkoituksella pois (ei vielä testattu).'
+  w_dopuszczona: '[VAROITUS] {nazwa} {inst}: {nowa} on saatavilla ja raja {spec} sallii sen — sitä ei ole testattu tämän projektin kanssa.'
+  w_poza: '[VAROITUS] {nazwa} {inst} ei täytä requirements.txt-tiedoston rajaa {spec}.'
+  w_brak: '[VAROITUS] {nazwa} ({spec}) vaaditaan, mutta sitä ei ole asennettu (pip install -r requirements.txt).'
+  w_pypi: '[INFO] {nazwa} {inst}: PyPI:hin ei saatu yhteyttä, uusinta versiota ei tarkistettu.'
+  podsumowanie: '[YHTEENVETO] ajan tasalla: {ok}, rajalla pidätetyt: {trzymane}, varoituksia: {ostrzezenia}, asentamattomia valinnaisia: {pominiete}.'

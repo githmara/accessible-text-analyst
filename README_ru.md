@@ -70,7 +70,7 @@
 
 ## Требования
 
-- Python 3.10 или новее.
+- Python 3.12 или новее (зависимости проверены на Python 3.14).
 - ~1,5 ГБ свободного места на диске под модели `_lg` spaCy (по одной на язык). Добавьте ~700 МБ, если включаете поддержку исландского (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Добавьте ~700 МБ, если включаете поддержку OCR (`easyocr` подтягивает `torch` плюс собственные модели детекции и распознавания при первом вызове OCR). Если включена и поддержка исландского, стоимость `torch` делится между обеими опциями.
 - Добавьте ~130 МБ, если включаете улучшение финской морфологии (автоматы FST `omorfi`, скачиваемые командой `omorfi-download`).
@@ -97,7 +97,7 @@ python -m venv .venv
 ### Вариант B — Anaconda / Miniconda
 
 ```bash
-conda create -n accessible-text-analyst python=3.11
+conda create -n accessible-text-analyst python=3.14
 conda activate accessible-text-analyst
 ```
 
@@ -150,6 +150,10 @@ python -m spacy download fi_core_news_lg
 # (~130 МБ файлов *.hfst, распакованных в корень репозитория; они в .gitignore).
 # Запускайте из корня репозитория:
 omorfi-download
+
+# 6. (Необязательно) Сверьте установленные версии с границами из
+# requirements.txt и с PyPI. Скрипт только предупреждает, ничего не блокирует:
+python audyt_zaleznosci.py
 ```
 
 ## Конфигурация

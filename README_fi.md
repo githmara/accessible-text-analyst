@@ -70,7 +70,7 @@ Heuristiikasta selviytyneet poikkeamat listataan `cell_para`:n ulostulossa manua
 
 ## Vaatimukset
 
-- Python 3.10 tai uudempi.
+- Python 3.12 tai uudempi (riippuvuudet on testattu Pythonilla 3.14).
 - ~1,5 GB vapaata levytilaa spaCyn `_lg`-malleja varten (yksi per kieli). Lisää ~700 MB, jos otat käyttöön islanninkielisen tuen (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
 - Lisää ~700 MB, jos otat käyttöön OCR-tuen (`easyocr` lataa `torch`:n sekä omat tunnistus- ja luonnistusmallinsa ensimmäisellä OCR-kutsulla). Jos otit käyttöön myös islanninkielen, `torch`:n kustannus jaetaan näiden välillä.
 - Lisää ~130 MB, jos otat käyttöön suomen morfologian parannuksen (`omorfi`:n FST-automaatit, jotka ladataan komennolla `omorfi-download`).
@@ -97,7 +97,7 @@ Hakemisto `.venv/` on `.gitignore`:ssa. Aktivoidusta venvistä siirry kohtaan **
 ### Vaihtoehto B — Anaconda / Miniconda
 
 ```bash
-conda create -n accessible-text-analyst python=3.11
+conda create -n accessible-text-analyst python=3.14
 conda activate accessible-text-analyst
 ```
 
@@ -150,6 +150,10 @@ python -m spacy download fi_core_news_lg
 # FST-automaatit (~130 MB *.hfst-tiedostoja, jotka puretaan repon juureen;
 # ne ovat .gitignore:ssa). Aja repon juuresta:
 omorfi-download
+
+# 6. (Valinnainen) Vertaa asennettuja versioita requirements.txt-tiedoston
+# rajoihin ja PyPI:hin. Komento vain varoittaa, se ei estä mitään:
+python audyt_zaleznosci.py
 ```
 
 ## Asetukset
