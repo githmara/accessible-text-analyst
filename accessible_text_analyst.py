@@ -383,6 +383,41 @@ def load_image(path):
     return [text]
 
 
+# Goły numer strony: „7”, „- 7 -”, „xii”, „7 / 120”, „7 z 120”, „7 of 120”,
+# „7 из 120”, „7 af 120”. Wzorzec 1:1 z `core_pdf._RE_NUMER_STRONY` w Reżyserze
+# (bliźniak `formaty_zrodel`).
+_PAGE_NUMBER_LINE = re.compile(
+    r"^[-–—\s]*(?:\d{1,4}|[ivxlcdmIVXLCDM]{1,6})(?:\s*(?:/|z|of|из|af)\s*\d{1,4})?[-–—\s]*$")
+# Pas marginesu (ułamek wysokości strony od góry i od dołu), jak w Reżyserze.
+PAGE_MARGIN = 0.12
+
+
+def _page_text_without_numbers(page):
+    """Tekst strony pdfplumber bez gołych numerów stron. Zwraca (tekst, ile usunięto).
+
+    `strip_repeated_headers` ich nie łapie (rdzeń krótszy niż 6 znaków), więc
+    do 2026-10-15 numer zostawał w korpusie i sklejał się z ostatnim zdaniem
+    strony („…erikseen. 2”). Usuwamy linię WYŁĄCZNIE, gdy jednocześnie:
+    pasuje do `_PAGE_NUMBER_LINE`, leży w górnym/dolnym pasie `PAGE_MARGIN`
+    strony (pozycja z `extract_text_lines`) i jest wśród 3 pierwszych/ostatnich
+    niepustych linii tekstu. Liczba w tabeli albo w akapicie zostaje.
+    """
+    text = page.extract_text() or ""
+    if not text.strip():
+        return text, 0
+    band = page.height * PAGE_MARGIN
+    numbers = {l["text"].strip() for l in page.extract_text_lines()
+               if (l["top"] <= band or l["bottom"] >= page.height - band)
+               and _PAGE_NUMBER_LINE.match(l["text"])}
+    if not numbers:
+        return text, 0
+    lines = text.splitlines()
+    nonempty = [i for i, l in enumerate(lines) if l.strip()]
+    edge = set(nonempty[:3] + nonempty[-3:])
+    kept = [l for i, l in enumerate(lines) if not (i in edge and l.strip() in numbers)]
+    return "\n".join(kept), len(lines) - len(kept)
+
+
 def load_pdf(path):
     """Загружает PDF постранично, удаляет повторяющиеся колонтитулы, очищает текст.
 
@@ -399,7 +434,13 @@ def load_pdf(path):
         return []
     with pdfplumber.open(path) as pdf:
         total = len(pdf.pages)
-        texts = [page.extract_text() or "" for page in pdf.pages]
+        texts, removed_numbers = [], 0
+        for page in pdf.pages:
+            text, n = _page_text_without_numbers(page)
+            texts.append(text)
+            removed_numbers += n
+    if removed_numbers:
+        print(f"  PDF: удалено номеров страниц: {removed_numbers}.")
     empty = [i for i, t in enumerate(texts) if not t.strip()]
     if empty and total > 0:
         if len(empty) == total:
