@@ -199,7 +199,8 @@ def _header_key(line):
     return s, core, num
 
 
-def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge=3):
+def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge=3,
+                           margin_lines=None):
     """Удаляет повторяющиеся колонтитулы.
 
     Kandydatami są WYŁĄCZNIE linie z brzegów strony (pierwsze i ostatnie
@@ -208,6 +209,13 @@ def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge
     stronach, albo gdy jej rdzeń bez numeru powtarza się, a numer rośnie
     RAZEM ze stroną (stały offset numer − indeks w >= 80% wystąpień).
     Dokumenty krótsze niż 3 strony zostają nietknięte.
+
+    `margin_lines` (od 1.9.1): lista zgodna z `raw_pages` — dla strony z warstwą
+    tekstu zbiór linii leżących w pasie marginesu (pozycja z pdfplumber), dla
+    strony z OCR `None`. Kandydatem jest wtedy linia z brzegu tekstu ORAZ
+    z pasa marginesu, jak w Reżyserze: akapit prozy powtórzony na kilku
+    stronach, który po zdjęciu numeru strony wypadł na jej brzeg, nie leży
+    w marginesie i zostaje (zmierzone na PDF-ie z Worda).
 
     Dawna wersja (próg max(2, N*0.25), cała strona, numer zawsze zdejmowany)
     wycinała prozę: refren na 2 z 8 stron, „— Tak, panie — odparł.” na 2 z 4,
@@ -222,9 +230,11 @@ def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge
         return list(raw_pages), set()
     threshold = max(3, math.ceil(n_pages * min_fraction))
 
-    def edges(page):
+    def edges(pi, page):
         ls = [l for l in page.splitlines() if l.strip()]
-        return set(ls[:edge] + ls[-edge:])
+        base = set(ls[:edge] + ls[-edge:])
+        band = margin_lines[pi] if margin_lines is not None else None
+        return base if band is None else {l for l in base if l.strip() in band}
 
     def candidate(line):
         return (len(line.strip()) <= max_line_chars
@@ -234,7 +244,7 @@ def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge
     exact, core_offsets = Counter(), {}
     for pi, page in enumerate(raw_pages):
         seen_exact, seen_core = set(), set()
-        for line in edges(page):
+        for line in edges(pi, page):
             if not candidate(line):
                 continue
             s, core, num = _header_key(line)
@@ -253,8 +263,8 @@ def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge
 
     protected = 0
     cleaned = []
-    for page in raw_pages:
-        e = edges(page)
+    for pi, page in enumerate(raw_pages):
+        e = edges(pi, page)
         kept = []
         for line in page.splitlines():
             if _is_structural_line(line):
@@ -264,6 +274,11 @@ def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge
                 if s in bp_exact or (num is not None and core in bp_core):
                     continue
             kept.append(line)
+        # Bezpiecznik: strona z treścią nie traci WSZYSTKICH linii. Gdy każda
+        # linia strony wygląda na kolontytuł (strony o identycznej krótkiej
+        # treści), to są dane, nie stopka — strona zostaje w całości.
+        if page.strip() and not any(l.strip() for l in kept):
+            kept = page.splitlines()
         cleaned.append("\n".join(kept))
     if protected:
         print(f"  Защищено структурных маркеров (сцены/акты/didaskalia): {protected}")
@@ -383,39 +398,103 @@ def load_image(path):
     return [text]
 
 
-# Goły numer strony: „7”, „- 7 -”, „xii”, „7 / 120”, „7 z 120”, „7 of 120”,
-# „7 из 120”, „7 af 120”. Wzorzec 1:1 z `core_pdf._RE_NUMER_STRONY` w Reżyserze
-# (bliźniak `formaty_zrodel`).
+# Kształt gołego numeru strony: „7”, „- 7 -”, „xii”, „7 / 120”, „7 z 120”,
+# „7 of 120”, „7 из 120”, „7 af 120”. Wzorzec 1:1 z `core_pdf._RE_NUMER_STRONY`
+# w Reżyserze (bliźniak `formaty_zrodel`). SAM KSZTAŁT NIE WYSTARCZA do
+# usunięcia — patrz `_page_numbers_to_drop` (audyt Reżysera 19.13: „II”,
+# „MIX”, „did” z marginesu jednej strony znikały, w ATA 1.9.0 tak samo).
 _PAGE_NUMBER_LINE = re.compile(
-    r"^[-–—\s]*(?:\d{1,4}|[ivxlcdmIVXLCDM]{1,6})(?:\s*(?:/|z|of|из|af)\s*\d{1,4})?[-–—\s]*$")
-# Pas marginesu (ułamek wysokości strony od góry i od dołu), jak w Reżyserze.
-PAGE_MARGIN = 0.12
+    r"^[-–—\s]*(\d{1,4}|[ivxlcdmIVXLCDM]{1,6})(?:\s*(?:/|z|of|из|af)\s*\d{1,4})?[-–—\s]*$")
+# Pas marginesu (ułamek wysokości strony od góry i od dołu), jak w Reżyserze:
+# 7%, nie 12% — margines Worda to 8,5% A4, a pas 12% obejmował pierwszą
+# i ostatnią linię TREŚCI.
+PAGE_MARGIN = 0.07
+# Minimalny ułamek stron, na których numer musi rosnąć razem ze stroną.
+PAGE_SHARE = 0.25
+_ROMAN = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
 
 
-def _page_text_without_numbers(page):
-    """Tekst strony pdfplumber bez gołych numerów stron. Zwraca (tekst, ile usunięto).
+def _roman_value(text):
+    """Wartość POPRAWNEJ (kanonicznej) liczby rzymskiej, inaczej None."""
+    s = text.lower()
+    if not s or any(ch not in _ROMAN for ch in s):
+        return None
+    value = 0
+    for a, b in zip(s, s[1:] + " "):
+        va, vb = _ROMAN[a], _ROMAN.get(b, 0)
+        value += -va if va < vb else va
+    if not 0 < value < 4000:
+        return None
+    canon, rest = "", value
+    for v, sym in ((1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"),
+                   (90, "xc"), (50, "l"), (40, "xl"), (10, "x"), (9, "ix"),
+                   (5, "v"), (4, "iv"), (1, "i")):
+        while rest >= v:
+            canon += sym
+            rest -= v
+    return value if canon == s else None
 
-    `strip_repeated_headers` ich nie łapie (rdzeń krótszy niż 6 znaków), więc
-    do 2026-10-15 numer zostawał w korpusie i sklejał się z ostatnim zdaniem
-    strony („…erikseen. 2”). Usuwamy linię WYŁĄCZNIE, gdy jednocześnie:
-    pasuje do `_PAGE_NUMBER_LINE`, leży w górnym/dolnym pasie `PAGE_MARGIN`
-    strony (pozycja z `extract_text_lines`) i jest wśród 3 pierwszych/ostatnich
-    niepustych linii tekstu. Liczba w tabeli albo w akapicie zostaje.
+
+def _page_number_value(text):
+    m = _PAGE_NUMBER_LINE.match(text)
+    if not m:
+        return None
+    core = m.group(1)
+    return int(core) if core.isdigit() else _roman_value(core)
+
+
+def _page_text_and_number_candidates(page):
+    """(tekst, [(linia, wartość, 'top'|'bottom'), …], {linie w pasie marginesu}).
+
+    Kandydat = linia w górnym/dolnym pasie `PAGE_MARGIN` (pozycja z
+    `extract_text_lines`) o kształcie numeru strony. O usunięciu decyduje
+    dopiero `_page_numbers_to_drop`, patrząc na cały dokument.
     """
     text = page.extract_text() or ""
     if not text.strip():
-        return text, 0
+        return text, [], set()
     band = page.height * PAGE_MARGIN
-    numbers = {l["text"].strip() for l in page.extract_text_lines()
-               if (l["top"] <= band or l["bottom"] >= page.height - band)
-               and _PAGE_NUMBER_LINE.match(l["text"])}
-    if not numbers:
-        return text, 0
-    lines = text.splitlines()
-    nonempty = [i for i, l in enumerate(lines) if l.strip()]
-    edge = set(nonempty[:3] + nonempty[-3:])
-    kept = [l for i, l in enumerate(lines) if not (i in edge and l.strip() in numbers)]
-    return "\n".join(kept), len(lines) - len(kept)
+    found, margin = [], set()
+    for l in page.extract_text_lines():
+        side = "top" if l["top"] <= band else ("bottom" if l["bottom"] >= page.height - band else None)
+        if side:
+            margin.add(l["text"].strip())
+        value = _page_number_value(l["text"]) if side else None
+        if value is not None:
+            found.append((l["text"].strip(), value, side))
+    return text, found, margin
+
+
+def _page_numbers_to_drop(pages):
+    """Usuwa gołe numery stron; zwraca (teksty stron, ile usunięto).
+
+    Linia znika tylko wtedy, gdy jej wartość rośnie RAZEM ze stroną — ta sama
+    różnica „numer − indeks strony” w tym samym pasie na co najmniej
+    max(2, ⌈PAGE_SHARE·N⌉) stronach — i jest wśród 3 pierwszych/ostatnich
+    niepustych linii tekstu. Rzymski nagłówek „II” na jednej stronie, słowo
+    „MIX” czy rok „2026” w stopce tej różnicy nie dzielą i zostają. Dokument
+    jednostronicowy nie traci nic. `strip_repeated_headers` numerów nie łapie
+    (rdzeń krótszy niż 6 znaków), więc bez tego numer sklejał się z ostatnim
+    zdaniem strony („…erikseen. 2”).
+    """
+    groups = {}
+    for idx, (_text, found, _margin) in enumerate(pages):
+        for line, value, side in found:
+            groups.setdefault((side, value - idx), set()).add((idx, line))
+    need = max(2, math.ceil(len(pages) * PAGE_SHARE))
+    drop = set()
+    for members in groups.values():
+        if len({idx for idx, _ in members}) >= need:
+            drop |= members
+    texts, removed = [], 0
+    for idx, (text, _found, _margin) in enumerate(pages):
+        lines = text.splitlines()
+        nonempty = [i for i, l in enumerate(lines) if l.strip()]
+        edge = set(nonempty[:3] + nonempty[-3:])
+        kept = [l for i, l in enumerate(lines) if not (i in edge and (idx, l.strip()) in drop)]
+        removed += len(lines) - len(kept)
+        texts.append("\n".join(kept))
+    return texts, removed
 
 
 def load_pdf(path):
@@ -434,11 +513,10 @@ def load_pdf(path):
         return []
     with pdfplumber.open(path) as pdf:
         total = len(pdf.pages)
-        texts, removed_numbers = [], 0
-        for page in pdf.pages:
-            text, n = _page_text_without_numbers(page)
-            texts.append(text)
-            removed_numbers += n
+        info = [_page_text_and_number_candidates(page) for page in pdf.pages]
+    texts, removed_numbers = _page_numbers_to_drop(info)
+    # Pas marginesu znany tylko dla stron z warstwą tekstu; strona z OCR → None.
+    margins = [m if t.strip() else None for (t, _f, m) in info]
     if removed_numbers:
         print(f"  PDF: удалено номеров страниц: {removed_numbers}.")
     empty = [i for i, t in enumerate(texts) if not t.strip()]
@@ -460,12 +538,13 @@ def load_pdf(path):
         print(f"  [ВНИМАНИЕ] Страницы без текста, их содержимого НЕ будет в корпусе: "
               f"{', '.join(str(i + 1) for i in still_empty)}.")
     raw_pages = [t for t in texts if t.strip()]
+    raw_margins = [m for t, m in zip(texts, margins) if t.strip()]
     skipped = len(still_empty)
     if not raw_pages:
         print("  [ВНИМАНИЕ] OCR не вернул текста ни на одной странице.")
         return []
     # Удаляем повторяющиеся колонтитулы до объединения строк
-    cleaned_raw, removed_bp = strip_repeated_headers(raw_pages)
+    cleaned_raw, removed_bp = strip_repeated_headers(raw_pages, margin_lines=raw_margins)
     if removed_bp:
         print(f"  Удалено {len(removed_bp)} повторяющихся колонтитулов:")
         for bp in sorted(removed_bp)[:5]:

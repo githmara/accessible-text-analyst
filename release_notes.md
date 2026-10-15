@@ -4,6 +4,21 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.9.1 — page numbers and headers are recognised by position, not by shape alone
+
+**Theme.** A pre-release audit of the Director, which shares this PDF logic, proved by execution that a line shaped like a page number was enough to delete it. v1.9.0 inherited that: a lone "II" chapter heading, the word "MIX" or a year in the top or bottom margin of a single page disappeared from the corpus. Patch bump: nothing new to configure, the corpus only keeps more of the source text.
+
+### What changed
+- A bare page number is removed only when it advances together with the page — the same difference "number minus page index" in the same top or bottom margin band on at least a quarter of the pages (minimum two). A one-page document loses nothing. Roman numerals count only in their canonical form, so "did" or "IIII" are words.
+- The margin band is 7% of the page height instead of 12%. Word's default margin is 8.5% of an A4 page, so the wider band also covered the first and last line of body text.
+- On pages with a text layer, a repeated header or footer must also lie in that margin band. A paragraph repeated on several pages that ended up at the edge of the page after the page number was removed is prose and stays. Scanned (OCR) pages keep the previous edge-only rule, because OCR gives no positions.
+- A page never loses all its lines to header removal.
+
+### Distribution
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.9.0 — Markdown input, safer cleaning, scans inside text PDFs
 
 **Theme.** Two new kinds of input reach the corpus — Markdown files and scanned pages inside an otherwise text PDF — and the cleaning heuristics that run before analysis no longer delete prose. An audit on 2026-10-15 reproduced, by execution, cases in all six languages where the old rules removed whole articles, ordinary sentences and grammatical repetitions. The rule now is that over-cleaning is worse than leftover junk: a heuristic that can hit prose is narrowed or removed, even if a few garbage lemmas remain. Minor bump: a new input format, and the corpus produced from the same source can differ.
