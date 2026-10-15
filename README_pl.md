@@ -308,7 +308,7 @@ LLM_COMPAT_API_KEY=...         # llm_provider: openai_compat (llm_base_url)
 
 ```bash
 python shamanic_voice.py
-# → export_results/<projekt>/audio_scripts/katla_entity_monologue.mp3
+# → export_results/<project>/audio_scripts/katla_entity_monologue.mp3
 #                                          /vieno_echoes_chant.mp3
 #                                          /lumi_final_report.mp3
 #                                          /sami_energetic_spark.mp3
