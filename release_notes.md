@@ -4,6 +4,35 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.9.0 — Markdown input, safer cleaning, scans inside text PDFs
+
+**Theme.** Two new kinds of input reach the corpus — Markdown files and scanned pages inside an otherwise text PDF — and the cleaning heuristics that run before analysis no longer delete prose. An audit on 2026-10-15 reproduced, by execution, cases in all six languages where the old rules removed whole articles, ordinary sentences and grammatical repetitions. The rule now is that over-cleaning is worse than leftover junk: a heuristic that can hit prose is narrowed or removed, even if a few garbage lemmas remain. Minor bump: a new input format, and the corpus produced from the same source can differ.
+
+### Markdown input
+`source_file` may now point to a `.md` or `.markdown` file. It is converted to HTML (`tables`, `fenced_code`, `footnotes`, `def_list`, `abbr`, `sane_lists` — the same set the Director uses, except line-break handling) and read in document mode, without the web-page heuristics: front matter and code blocks are dropped, link text and footnote text are kept, a "See also" section at the end is cut. Task-list boxes `[ ]` and `~~strikethrough~~` markers stay in the text, because python-markdown has no extension for them.
+
+### Web pages and HTML files
+`load_html` and `load_url` were two copies of the same code; they now share one extractor, so a fix reaches both.
+- The "Related articles / Читайте также / Lue myös" cut now fires only when a short element's whole text is the stop phrase. Before, a phrase anywhere inside a wrapper `div` deleted the whole article, and sentences such as "Мы рекомендуем…" or "lue myös toinen luku" truncated the rest of the text.
+- Widgets are recognised by whole class or id tokens, and an element holding at least half of the article is never removed. Before, `shared-content`, `widget_text` or `content-with-sidebar` deleted the article itself.
+- The view-counter cleanup runs only in the article head, never on a year, so "NATO 2024", "PKB 2500" and "EU 2030" survive; the removal of a doubled title respects word boundaries.
+
+### PDF
+- Pages without a text layer are now read with OCR one by one, in page order, also when the rest of the PDF has text. Before, OCR ran only when no page had text, so scans inserted into a text PDF silently disappeared. Pages that stay empty (no OCR installed, wrong `ocr_languages`) are listed by number.
+- Bare page numbers ("7", "- 7 -", "7 / 120") are removed when they sit in the top or bottom margin band of the page, using the same pattern as the Director. They used to stay glued to the last sentence of each page.
+- Repeated headers and footers are now looked for only in the first and last three lines of a page, with a higher threshold. Refrains, repeated dialogue lines and numbered lessons are no longer taken for headers. Screenplay markers `INT.` / `EXT.` are now really protected.
+
+### Text correction
+Doubled words are no longer collapsed. Repetition is grammatical in all six languages («чуть чуть», «piano piano», «bardzo bardzo», "had had"), and the rule also merged phone numbers. A typo such as "the the" now costs one extra lemma instead.
+
+### Console localization gate
+`.github/scripts/bramka_printow.py` checks every script in the repository root and fails the release when a `print()` carries a hard-coded literal instead of `t(UI_LANG, …)`. The notebook is outside the gate, because its output is Russian by design. It found five English "library missing" messages in `generate_md.py` and `generate_report.py`; they now come from `deps.err_missing_lib` in all six languages.
+
+### Distribution
+Source-only minor release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.8.0 — Python 3.14, bounded dependencies and a dependency audit
 
 **Theme.** The project now runs on Python 3.14, and `requirements.txt` finally says which versions were tested. Until now the manifest had no version bounds at all, so a fresh install picked whatever PyPI offered that day. On 2026-10-15 that meant `openai` 3.31 instead of the 2.37 the code was written against, `pandas` 3 and `numpy` 2.5, a combination nobody had run. Minor bump: there is a new command, and the install result changes.
