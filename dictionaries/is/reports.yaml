@@ -119,3 +119,4 @@ deps:
   w_brak: '[VIÐVÖRUN] {nazwa} ({spec}) er nauðsynlegt en ekki uppsett (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: ekki náðist samband við PyPI, nýjasta útgáfan var ekki athuguð.'
   podsumowanie: '[SAMANTEKT] uppfært: {ok}, haldið af mörkum: {trzymane}, viðvaranir: {ostrzezenia}, valkvætt ekki uppsett: {pominiete}.'
+  err_missing_lib: '[VILLA] Safnið {lib} vantar. Keyrðu: pip install {pkg}'

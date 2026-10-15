@@ -14,13 +14,13 @@ UI_LANG = get_ui_lang()
 try:
     import markdownify
 except ImportError:
-    print("[ERROR] markdownify library missing. Run: pip install markdownify")
+    print(t(UI_LANG, "deps.err_missing_lib", lib="markdownify", pkg="markdownify"))
     sys.exit(1)
 
 try:
     from bs4 import BeautifulSoup
 except ImportError:
-    print("[ERROR] beautifulsoup4 library missing. Run: pip install beautifulsoup4")
+    print(t(UI_LANG, "deps.err_missing_lib", lib="beautifulsoup4", pkg="beautifulsoup4"))
     sys.exit(1)
 
 CONFIG_CANDIDATES = ("config.json", "config.ini")

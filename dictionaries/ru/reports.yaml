@@ -119,3 +119,4 @@ deps:
   w_brak: '[ВНИМАНИЕ] {nazwa} ({spec}) обязателен, но не установлен (pip install -r requirements.txt).'
   w_pypi: '[ИНФО] {nazwa} {inst}: нет связи с PyPI, последняя версия не проверена.'
   podsumowanie: '[ИТОГ] актуальны: {ok}, удержаны границей: {trzymane}, предупреждений: {ostrzezenia}, необязательных не установлено: {pominiete}.'
+  err_missing_lib: '[ОШИБКА] Не установлена библиотека {lib}. Выполните: pip install {pkg}'

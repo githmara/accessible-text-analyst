@@ -81,14 +81,14 @@ OUTPUT_HTML = str(PROJECT_DIR / OUTPUT_HTML_NAME)
 try:
     import markdown
 except ImportError:
-    print("[ERROR] markdown library missing. Run: pip install markdown")
+    print(t(UI_LANG, "deps.err_missing_lib", lib="markdown", pkg="markdown"))
     sys.exit(1)
 
 try:
     from lingua import Language, LanguageDetectorBuilder
 except ImportError:
-    print("[ERROR] lingua-language-detector library missing.")
-    print("        Run: pip install lingua-language-detector")
+    print(t(UI_LANG, "deps.err_missing_lib", lib="lingua",
+            pkg="lingua-language-detector"))
     sys.exit(1)
 
 

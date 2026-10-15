@@ -119,3 +119,4 @@ deps:
   w_brak: '[VAROITUS] {nazwa} ({spec}) vaaditaan, mutta sitä ei ole asennettu (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: PyPI:hin ei saatu yhteyttä, uusinta versiota ei tarkistettu.'
   podsumowanie: '[YHTEENVETO] ajan tasalla: {ok}, rajalla pidätetyt: {trzymane}, varoituksia: {ostrzezenia}, asentamattomia valinnaisia: {pominiete}.'
+  err_missing_lib: '[VIRHE] Kirjasto {lib} puuttuu. Suorita: pip install {pkg}'

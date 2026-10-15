@@ -55,11 +55,17 @@ jobs:
         run: |
           python .github/scripts/test_wydanie.py
           python .github/scripts/test_parytet.py
+          python .github/scripts/test_bramka_printow.py
 
       # Rozjazd tłumaczeń (klucze, placeholdery, struktura i polecenia w README ×6)
       # BLOKUJE wydanie — odpowiednik `--waliduj` z Reżysera.
       - name: Translation parity gate
         run: python .github/scripts/parytet.py
+
+      # print() w skryptach samodzielnych idzie przez t(UI_LANG, …) — hard-kod
+      # w konsoli BLOKUJE wydanie (notatnik celowo rosyjski, poza zakresem).
+      - name: Console hard-code gate
+        run: python .github/scripts/bramka_printow.py
 
       - name: Decide from release_notes.md and existing tags
         id: decyzja

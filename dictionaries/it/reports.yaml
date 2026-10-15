@@ -119,3 +119,4 @@ deps:
   w_brak: '[AVVISO] {nazwa} ({spec}) è richiesto ma non installato (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: PyPI non raggiungibile, l''ultima versione non è stata verificata.'
   podsumowanie: '[RIEPILOGO] aggiornati: {ok}, trattenuti dal limite: {trzymane}, avvisi: {ostrzezenia}, opzionali non installati: {pominiete}.'
+  err_missing_lib: '[ERRORE] Manca la libreria {lib}. Esegui: pip install {pkg}'

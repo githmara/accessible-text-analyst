@@ -20,7 +20,7 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 
 ## Mitä putki tekee
 
-1. Lataa tekstin tiedostosta (`.pdf`, `.txt`, `.docx`, `.html` tai kuvista: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) tai URL-osoitteesta — poistaen toistuvat ylä- ja alatunnisteet, sivupalkit, "Related articles" -osiot ja vastaavan kalvotekstin. Skannatut PDF:t ja kuvasyötteet siirtyvät OCR:lle (`pypdfium2` + `easyocr`).
+1. Lataa tekstin tiedostosta (`.pdf`, `.txt`, `.docx`, `.md`, `.html` tai kuvista: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) tai URL-osoitteesta — poistaen toistuvat ylä- ja alatunnisteet, sivupalkit, "Related articles" -osiot ja vastaavan kalvotekstin. Skannatut PDF:t ja kuvasyötteet siirtyvät OCR:lle (`pypdfium2` + `easyocr`).
 2. Tunnistaa korpuksen kielen [`lingua-language-detector`-kirjastolla](https://github.com/pemistahl/lingua-py). Hallitseva kieli ohjaa spaCy-putken; sama tunnistin käytetään uudelleen kappale- ja lausekohtaisesti kielitagitettua vientiä varten.
 3. Lataa spaCy-mallit **kahdessa vaiheessa**. Ensin hallitsevan kielen malli käsittelee koko korpuksen alusta loppuun (tokenointi → stop-sanat → lemmatisointi → POS → NER). Sitten `cell_multilang_pass` toistaa kielikohtaiset NLP-läpiajot vain niille kappaleille, joiden tunnistettu kieli eroaa hallitsevasta — ladaten jokaisen ei-hallitsevan mallin tarpeen mukaan funktion `get_nlp()` kautta, joka on kääritty `functools.lru_cache(maxsize=2)`:een. LRU-välimuistilla on merkitystä vasta tässä toisessa vaiheessa; muistissa on milloin tahansa enintään kaksi mallia.
 4. Tokenointi → stop-sanojen suodatus → lemmatisointi → POS-merkitseminen → NER (kaksivaiheinen monikielinen NER lausekohtaisella mallin dispatcherilla).
@@ -197,7 +197,7 @@ Sisältö:
 
 | Avain              | Tyyppi          | Tarkoitus |
 |--------------------|-----------------|-----------|
-| `source_file`      | string          | Polku tiedostoon (`.pdf`, `.txt`, `.docx`, `.html` tai kuva) **tai** URL (`http://`, `https://`). Tyhjä merkkijono tai puuttuva tiedosto → sisäänrakennettu esimerkkikorpus. |
+| `source_file`      | string          | Polku tiedostoon (`.pdf`, `.txt`, `.docx`, `.md`, `.html` tai kuva) **tai** URL (`http://`, `https://`). Tyhjä merkkijono tai puuttuva tiedosto → sisäänrakennettu esimerkkikorpus. |
 | `custom_patterns`  | string[]        | Valinnainen lista säännöllisistä lausekkeista, jotka poistetaan raakatekstistä (juoksevat otsikot, alatunnisteet, toistuvat kalvotekstit). Esimerkki: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Vaihtaa `generate_report.py`:n lukijaystävällisen tilan (`true`, piilottaa Hugging Face/torch -latauspalkit ja lemmatisointi/POS-taulukot) ja täyden diagnostisen tilan (`false`) välillä. |
 | `ocr_languages`    | string[]        | `easyocr`:n kielet (käytetään vain skannatuissa PDF:issä tai kuvalähteissä). Yhdessä `easyocr.Reader`-instanssissa voi sekoittaa vain saman kirjaimiston kieliä — esim. `["ru", "en"]` kyrilliselle tai `["en", "pl", "it", "fi", "is"]` latinalaiselle. |

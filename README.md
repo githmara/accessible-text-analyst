@@ -20,7 +20,7 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 
 ## What the pipeline does
 
-1. Loads text from a file (`.pdf`, `.txt`, `.docx`, `.html`, or images: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) or from a URL — stripping repeated headers/footers, sidebars, "Related articles" sections, and similar boilerplate. Scanned PDFs and image inputs fall back to OCR (`pypdfium2` + `easyocr`).
+1. Loads text from a file (`.pdf`, `.txt`, `.docx`, `.md`, `.html`, or images: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) or from a URL — stripping repeated headers/footers, sidebars, "Related articles" sections, and similar boilerplate. Scanned PDFs and image inputs fall back to OCR (`pypdfium2` + `easyocr`).
 2. Detects the corpus language with [`lingua-language-detector`](https://github.com/pemistahl/lingua-py). The dominant language drives the spaCy pipeline; the same detector is reused per paragraph and per sentence to power language-tagged export.
 3. Loads spaCy models in **two stages**. First, the dominant language's model processes the entire corpus end-to-end (tokenization → stop-words → lemmatization → POS → NER). Then `cell_multilang_pass` re-runs the per-language NLP passes only for paragraphs whose detected language differs from the dominant one — loading each non-dominant model on demand through `get_nlp()`, which is wrapped in `functools.lru_cache(maxsize=2)`. The LRU cache only matters during this second stage; at most two models live in RAM at any time.
 4. Tokenization → stop-word filtering → lemmatization → POS tagging → NER (two-stage multilingual with per-sentence model dispatch).
@@ -197,7 +197,7 @@ Contents:
 
 | Key                | Type            | Purpose |
 |--------------------|-----------------|---------|
-| `source_file`      | string          | Path to a file (`.pdf`, `.txt`, `.docx`, `.html`, or an image) **or** a URL (`http://`, `https://`). An empty string or a missing file falls back to the built-in example corpus. |
+| `source_file`      | string          | Path to a file (`.pdf`, `.txt`, `.docx`, `.md`, `.html`, or an image) **or** a URL (`http://`, `https://`). An empty string or a missing file falls back to the built-in example corpus. |
 | `custom_patterns`  | string[]        | Optional regular expressions stripped from the raw text (running heads, footers, repetitive boilerplate). Example: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Toggles `generate_report.py` between reader-facing mode (`true`, hides Hugging Face/torch loading bars and lemmatization/POS tables) and full diagnostic mode (`false`). |
 | `ocr_languages`    | string[]        | Languages for `easyocr` (used only when a PDF is a scan or the source is an image). Within a single `easyocr.Reader` you can only mix languages of the same script — e.g. `["ru", "en"]` for Cyrillic or `["en", "pl", "it", "fi", "is"]` for Latin. |

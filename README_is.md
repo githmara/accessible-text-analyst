@@ -20,7 +20,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 
 ## Hvað gerir leiðslan
 
-1. Hleður texta úr skrá (`.pdf`, `.txt`, `.docx`, `.html` eða myndum: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) eða úr URL — fjarlægir endurteknar haus-/fótlínur, hliðarspjöld, „Related articles"-kafla og álíka kjarna. Skannaðar PDF-skrár og myndainntak fá OCR (`pypdfium2` + `easyocr`) til vara.
+1. Hleður texta úr skrá (`.pdf`, `.txt`, `.docx`, `.md`, `.html` eða myndum: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) eða úr URL — fjarlægir endurteknar haus-/fótlínur, hliðarspjöld, „Related articles"-kafla og álíka kjarna. Skannaðar PDF-skrár og myndainntak fá OCR (`pypdfium2` + `easyocr`) til vara.
 2. Greinir tungumál safnsins með [`lingua-language-detector`](https://github.com/pemistahl/lingua-py). Ríkjandi tungumál stýrir spaCy-leiðslunni; sami greinir er endurnýttur per málsgrein og per setningu fyrir tungumálamerktan útflutning.
 3. Hleður spaCy-líkönum **í tveimur þrepum**. Fyrst vinnur líkan ríkjandi tungumáls allt safnið frá byrjun til enda (tókun → stop-orð → uppslátt → POS → NER). Síðan endurkeyrir `cell_multilang_pass` málkennslupörin (NLP) aðeins fyrir málsgreinar þar sem greint tungumál er annað en ríkjandi — hleður hvert ekki-ríkjandi líkan að ósk gegnum `get_nlp()`, sem er vafið inn í `functools.lru_cache(maxsize=2)`. LRU-skyndiminnið skiptir aðeins máli í þessu öðru þrepi; aldrei eru fleiri en tvö líkön í minni samtímis.
 4. Tókun → sía stop-orða → uppslátt → POS-merking → NER (tveggja þrepa fjöltyngdur NER með per-setningar dispatcher).
@@ -197,7 +197,7 @@ Innihald:
 
 | Lykill             | Tegund          | Tilgangur |
 |--------------------|-----------------|-----------|
-| `source_file`      | string          | Slóð á skrá (`.pdf`, `.txt`, `.docx`, `.html` eða mynd) **eða** URL (`http://`, `https://`). Tómur strengur eða týnd skrá → innbyggður sýnishornssafn. |
+| `source_file`      | string          | Slóð á skrá (`.pdf`, `.txt`, `.docx`, `.md`, `.html` eða mynd) **eða** URL (`http://`, `https://`). Tómur strengur eða týnd skrá → innbyggður sýnishornssafn. |
 | `custom_patterns`  | string[]        | Valfrjáls listi af reglulegum tjáningum sem eru fjarlægðar úr hráum texta (hlaupandi hausar, fætur, endurtekið kjarnamál). Dæmi: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Skiptir `generate_report.py` á milli lesendaham (`true`, felur Hugging Face/torch hleðslulínur og uppsláttar/POS-töflur) og fullum greiningarham (`false`). |
 | `ocr_languages`    | string[]        | Tungumál fyrir `easyocr` (notuð aðeins þegar PDF er skann eða uppspretta er mynd). Innan eins `easyocr.Reader` má aðeins blanda tungumálum úr sama letri — t.d. `["ru", "en"]` fyrir kýrillíska eða `["en", "pl", "it", "fi", "is"]` fyrir latneska. |

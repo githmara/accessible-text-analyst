@@ -119,3 +119,4 @@ deps:
   w_brak: '[WARNING] {nazwa} ({spec}) is required but not installed (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: PyPI could not be reached, the latest version was not checked.'
   podsumowanie: '[SUMMARY] up to date: {ok}, held by a bound: {trzymane}, warnings: {ostrzezenia}, optional not installed: {pominiete}.'
+  err_missing_lib: '[ERROR] The {lib} library is missing. Run: pip install {pkg}'

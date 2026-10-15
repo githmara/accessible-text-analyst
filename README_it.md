@@ -20,7 +20,7 @@ Pipeline NLP multilingue progettata per **l'accessibilità con i lettori di sche
 
 ## Cosa fa la pipeline
 
-1. Carica testo da un file (`.pdf`, `.txt`, `.docx`, `.html` o immagini: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) o da un URL — rimuovendo intestazioni/piè di pagina ricorrenti, barre laterali, sezioni "Related articles" e simili contenuti modello. PDF scansionati e immagini in input ricadono su OCR (`pypdfium2` + `easyocr`).
+1. Carica testo da un file (`.pdf`, `.txt`, `.docx`, `.md`, `.html` o immagini: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) o da un URL — rimuovendo intestazioni/piè di pagina ricorrenti, barre laterali, sezioni "Related articles" e simili contenuti modello. PDF scansionati e immagini in input ricadono su OCR (`pypdfium2` + `easyocr`).
 2. Rileva la lingua del corpus con [`lingua-language-detector`](https://github.com/pemistahl/lingua-py). La lingua dominante guida la pipeline spaCy; lo stesso rilevatore viene riutilizzato a livello di paragrafo e di frase per l'export con marcatori di lingua.
 3. Carica i modelli spaCy **in due fasi**. Prima il modello della lingua dominante elabora l'intero corpus dall'inizio alla fine (tokenizzazione → stop-word → lemmatizzazione → POS → NER). Poi `cell_multilang_pass` riesegue le passate NLP specifiche per lingua solo per i paragrafi il cui linguaggio rilevato differisce da quello dominante — caricando ogni modello non dominante su richiesta tramite `get_nlp()`, incapsulato in `functools.lru_cache(maxsize=2)`. La cache LRU conta solo in questa seconda fase; in nessun momento ci sono più di due modelli in RAM.
 4. Tokenizzazione → filtraggio delle stop-word → lemmatizzazione → POS tagging → NER (NER multilingue a due stadi con dispatch del modello per frase).
@@ -197,7 +197,7 @@ Contenuto:
 
 | Chiave             | Tipo            | Scopo |
 |--------------------|-----------------|-------|
-| `source_file`      | string          | Percorso a un file (`.pdf`, `.txt`, `.docx`, `.html` o un'immagine) **o** un URL (`http://`, `https://`). Una stringa vuota o un file mancante ricade sul corpus di esempio integrato. |
+| `source_file`      | string          | Percorso a un file (`.pdf`, `.txt`, `.docx`, `.md`, `.html` o un'immagine) **o** un URL (`http://`, `https://`). Una stringa vuota o un file mancante ricade sul corpus di esempio integrato. |
 | `custom_patterns`  | string[]        | Lista opzionale di espressioni regolari da rimuovere dal testo grezzo (intestazioni correnti, piè di pagina, contenuti modello ripetitivi). Esempio: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Alterna `generate_report.py` tra modalità lettore (`true`, nasconde le barre di caricamento di Hugging Face/torch e le tabelle di lemmatizzazione/POS) e modalità diagnostica completa (`false`). |
 | `ocr_languages`    | string[]        | Lingue per `easyocr` (usate solo quando un PDF è una scansione o la sorgente è un'immagine). All'interno di una singola `easyocr.Reader` si possono mescolare solo lingue dello stesso alfabeto — ad es. `["ru", "en"]` per il cirillico o `["en", "pl", "it", "fi", "is"]` per il latino. |

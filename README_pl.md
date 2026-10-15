@@ -20,7 +20,7 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 
 ## Co robi potok
 
-1. Wczytuje tekst z pliku (`.pdf`, `.txt`, `.docx`, `.html` lub obrazów: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) lub z URL — usuwając powtarzające się nagłówki/stopki, panele boczne, sekcje „Powiązane artykuły” i podobne szablony. Skanowane PDF-y i obrazy są obsługiwane przez OCR (`pypdfium2` + `easyocr`).
+1. Wczytuje tekst z pliku (`.pdf`, `.txt`, `.docx`, `.md`, `.html` lub obrazów: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) lub z URL — usuwając powtarzające się nagłówki/stopki, panele boczne, sekcje „Powiązane artykuły” i podobne szablony. Skanowane PDF-y i obrazy są obsługiwane przez OCR (`pypdfium2` + `easyocr`).
 2. Wykrywa język korpusu przez [`lingua-language-detector`](https://github.com/pemistahl/lingua-py). Dominujący język steruje potokiem spaCy; ten sam detektor jest używany ponownie per akapit i per zdanie do eksportu z tagami językowymi.
 3. Ładuje modele spaCy **dwuetapowo**. Najpierw model dominującego języka przetwarza cały korpus od początku do końca (tokenizacja → stop-słowa → lematyzacja → POS → NER). Następnie `cell_multilang_pass` powtarza per-językowe przebiegi NLP tylko dla akapitów, których wykryty język różni się od dominującego — ładując każdy niedominujący model na żądanie przez `get_nlp()` opakowane w `functools.lru_cache(maxsize=2)`. Cache LRU ma znaczenie dopiero na tym drugim etapie; w żadnym momencie nie ma w RAM więcej niż dwóch modeli.
 4. Tokenizacja → filtrowanie stop-słów → lematyzacja → tagowanie POS → NER (dwuetapowy wielojęzyczny NER z per-zdaniowym dispatcherem modeli).
@@ -197,7 +197,7 @@ Zawartość:
 
 | Klucz              | Typ              | Cel |
 |--------------------|------------------|-----|
-| `source_file`      | string           | Ścieżka do pliku (`.pdf`, `.txt`, `.docx`, `.html` lub obraz) **albo** URL (`http://`, `https://`). Pusty string lub brak pliku → wbudowany przykładowy korpus. |
+| `source_file`      | string           | Ścieżka do pliku (`.pdf`, `.txt`, `.docx`, `.md`, `.html` lub obraz) **albo** URL (`http://`, `https://`). Pusty string lub brak pliku → wbudowany przykładowy korpus. |
 | `custom_patterns`  | string[]         | Opcjonalna lista wyrażeń regularnych usuwanych z surowego tekstu (żywe nagłówki, stopki, powtarzające się szablony). Przykład: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean          | Przełącza `generate_report.py` między trybem czytelnika (`true`, ukrywa paski ładowania Hugging Face/torch i tabele lematyzacji/POS) a pełnym trybem diagnostycznym (`false`). |
 | `ocr_languages`    | string[]         | Języki dla `easyocr` (używane tylko przy skanowanych PDF-ach lub źródłach-obrazach). W ramach jednej instancji `easyocr.Reader` można łączyć tylko języki tego samego skryptu — np. `["ru", "en"]` dla cyrylicy lub `["en", "pl", "it", "fi", "is"]` dla łaciny. |

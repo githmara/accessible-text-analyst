@@ -119,3 +119,4 @@ deps:
   w_brak: '[UWAGA] {nazwa} ({spec}) jest wymagany, ale nie jest zainstalowany (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: brak połączenia z PyPI, najnowszej wersji nie sprawdzono.'
   podsumowanie: '[PODSUMOWANIE] aktualne: {ok}, wstrzymane granicą: {trzymane}, ostrzeżenia: {ostrzezenia}, opcjonalne niezainstalowane: {pominiete}.'
+  err_missing_lib: '[BŁĄD] Brak biblioteki {lib}. Uruchom: pip install {pkg}'

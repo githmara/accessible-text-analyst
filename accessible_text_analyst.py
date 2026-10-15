@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.19.3
+#       jupytext_version: 1.19.6
 #   kernelspec:
 #     display_name: analyst_env
 #     language: python
@@ -26,10 +26,10 @@
 #
 # **Этапы анализа:**
 #
-# 1. **Загрузка корпуса** — PDF постранично (pdfplumber), TXT, DOCX (python-docx), HTML-файл или **URL** (прямой адрес страницы); BeautifulSoup удаляет навигацию, боковые панели и блоки «Похожие статьи» при загрузке из URL или HTML; встроенный пример как запасной вариант.
+# 1. **Загрузка корпуса** — PDF постранично (pdfplumber), TXT, DOCX (python-docx), Markdown (.md), HTML-файл или **URL** (прямой адрес страницы); BeautifulSoup удаляет навигацию, боковые панели и блоки «Похожие статьи» при загрузке из URL или HTML; встроенный пример как запасной вариант.
 # 2. **Определение языка** — `lingua-language-detector` определяет преобладающий язык корпуса и одновременно служит детектором для отдельных абзацев и предложений (используется на этапе экспорта).
 # 3. **Языковая модель spaCy** — автоматически выбирается модель версии **Large (lg)**: `pl_core_news_lg`, `ru_core_news_lg`, `en_core_web_lg`, `it_core_news_lg`, `fi_core_news_lg`; для исландского (`is`) — `spacy.blank("is")` + Hugging Face (IceBERT, MIM-GOLD-22). Модели подгружаются по требованию через `get_nlp(lang)`, защищённый `functools.lru_cache(maxsize=2)`: одновременно в RAM держатся не более двух моделей, остальные вытесняются по принципу LRU.
-# 4. **Коррекция текста** — удаление точных повторов слов (все языки); нормализация аббревиатур с пробелами для польского (`m. in.`→`m.in.`), русского (`т. е.`→`т.е.`) и английского (`e. g.`→`e.g.`).
+# 4. **Коррекция текста** — нормализация аббревиатур с пробелами для польского (`m. in.`→`m.in.`), русского (`т. е.`→`т.е.`) и английского (`e. g.`→`e.g.`).
 # 5. **Базовый NLP** — токенизация на слова и предложения, фильтрация стоп-слов, лемматизация, POS-теггинг (NOUN/VERB/ADJ/…).
 # 6. **Именованные сущности (NER)** — люди, организации, места, даты и другие объекты (с частотной сводкой по всему корпусу).
 # 7. **Мешок слов (CountVectorizer)** — матрица частот с языко-специфичными стоп-словами; топ-10 слов и топ-5 биграмм.
@@ -49,7 +49,7 @@
 # config.ini) и укажите source_file. Если ни один файл не найден,
 # используется встроенный пример.
 # ============================================================
-import os, re, json
+import os, re, json, math
 from pathlib import Path
 from collections import Counter
 from urllib.parse import urlparse
@@ -95,6 +95,10 @@ else:
     print("       Скопируйте config.example.json в config.json (или config.example.ini в config.ini)")
     print("       и задайте source_file.")
 
+# Wielkie litery sześciu języków korpusu (łacinka z diakrytykami + cyrylica).
+_WIELKIE = "A-ZĄĆĘŁŃÓŚŹŻÄÖÜÉÈÀÌÒÙÁÍÚÝÞÐÆÅА-ЯЁ"
+
+
 def clean_web_article_start(text, check_window=400):
     """Remove common web-scraping artifacts from extracted article text:
     - Photo credits/view counters: "Fot. CPK 521", standalone "CPK 524"
@@ -104,16 +108,22 @@ def clean_web_article_start(text, check_window=400):
         return text
     # Remove photo credit patterns (Polish "Fot." = photo)
     text = re.sub(r"\bFot\.\s+[A-Z][A-Za-z0-9]*\.?\s*\d*\s*", " ", text)
-    # Remove ALL-CAPS word + 3-digit number that leaked in as view/photo counter
-    text = re.sub(r"\b[A-Z]{2,}\s+\d{3,}\s+", " ", text)
-    # Remove doubled short phrases in the first check_window chars
-    # (responsive design often repeats title/author/date for mobile+desktop)
-    head = text[:check_window]
-    m = re.search(r"(.{10,60})\s+\1", head)
-    if m:
-        repeated = re.escape(m.group(1))
-        text = re.sub(r"(" + repeated + r")\s+\1", r"\1", text, count=1)
-    return re.sub(r"\s+", " ", text).strip()
+    # Licznik wyświetleń/zdjęć: TYLKO w nagłówku artykułu, nigdy rok, a po
+    # liczbie musi stać wielka litera. Na całym tekście ten wzorzec zjadał
+    # prozę: „Szczyt NATO 2024 odbył” → „Szczyt odbył”, „PKB 2500 mld”,
+    # „BMW 320”, „EU 2030” (audyt 2026-10-15).
+    head, tail = text[:check_window], text[check_window:]
+    head = re.sub(rf"\b[A-Z]{{2,}}\s+(?!(?:19|20)\d\d\b)\d{{3,}}\s+(?=[{_WIELKIE}])",
+                  " ", head)
+    # Podwojony tytuł/autor/data z układu responsywnego (mobile + desktop).
+    # Granice białych znaków i bez interpunkcji zdaniowej w środku: dawne
+    # (.{10,60})\s+\1 zwijało „na przykład na przykładzie” i refren
+    # „Тук-тук, кто там? Тук-тук, кто там?”.
+    m = re.search(r"(?<!\S)([^\s,;?!…—–](?:[^,;?!…—–]{8,58})[^\s,;?!…—–])\s+\1(?!\S)", head)
+    if m and not re.search(r"\.\s", m.group(1)):
+        rep = re.escape(m.group(1))
+        head = re.sub(r"(?<!\S)(" + rep + r")\s+\1(?!\S)", r"\1", head, count=1)
+    return re.sub(r"\s+", " ", head + tail).strip()
 
 def clean_pdf_text(s: str) -> str:
     """Базовая очистка текста из PDF: мягкие дефисы, разорванные слова, пробелы."""
@@ -125,12 +135,6 @@ def clean_pdf_text(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
-def _norm_line(line: str) -> str:
-    """Нормализация строки для сравнения: убираем ведущие/замыкающие цифры."""
-    s = re.sub(r"^\s*\d+\s*", "", line.strip())
-    s = re.sub(r"\s*\d+\s*$", "", s.strip())
-    return re.sub(r"\s+", " ", s).lower().strip()
-
 # Структурные маркеры сценариев, пьес и иных текстов с повторяющейся
 # разметкой границ. Эти строки могут многократно встречаться на разных
 # страницах PDF (например, [scena 1] на каждой странице длинной сцены),
@@ -140,6 +144,9 @@ def _norm_line(line: str) -> str:
 _STRUCTURAL_PATTERNS = [
     re.compile(r"^\s*\[[^\]]+\]\s*$"),   # [scena 1], [koniec], [napis na ekranie]
     re.compile(r"^\s*\([^)]+\)\s*$"),    # (didaskalia)
+    # INT./EXT. poza grupą z końcowym \b: po kropce stoi spacja, więc \b nie
+    # pasowało i „INT. KUCHNIA” nie było chronione (audyt 2026-10-15).
+    re.compile(r"^\s*(?:INT|EXT)\.", re.IGNORECASE),
     re.compile(
         r"^\s*(?:"
         # ru (сцены/акты + главы/части)
@@ -151,7 +158,7 @@ _STRUCTURAL_PATTERNS = [
         # en (scenes/acts + chapters; screenplay headings)
         r"ACT|SCENE|EPILOGUE|PROLOGUE|FINALE|END|"
         r"CHAPTER|PART|BOOK|SECTION|"
-        r"FADE\s+IN|FADE\s+OUT|CUT\s+TO|INT\.|EXT\.|"
+        r"FADE\s+IN|FADE\s+OUT|CUT\s+TO|"
         # it (scene/atti + capitoli)
         r"ATTO|EPILOGO|PROLOGO|FINE|"
         r"CAPITOLO|PARTE|LIBRO|SEZIONE|"
@@ -178,48 +185,89 @@ def _is_structural_line(line: str) -> bool:
     return any(p.match(stripped) for p in _STRUCTURAL_PATTERNS)
 
 
-def strip_repeated_headers(raw_pages, min_fraction=0.25, max_line_chars=150):
+# Linia dialogu/cytatu/punktu: nigdy nie jest kolontytułem.
+_DIALOG_LINE = re.compile(r"^\s*[—–\-„\"«»'•*·]")
+
+
+def _header_key(line):
+    """(pełny klucz, rdzeń bez numeru na brzegu, numer albo None)."""
+    s = re.sub(r"\s+", " ", line.strip()).lower()
+    lead = re.match(r"^(\d+)\s*", s)
+    trail = re.search(r"\s*(\d+)$", s)
+    num = int(lead.group(1)) if lead else (int(trail.group(1)) if trail else None)
+    core = re.sub(r"^\d+\s*|\s*\d+$", "", s).strip()
+    return s, core, num
+
+
+def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge=3):
     """Удаляет повторяющиеся колонтитулы.
-    Строки, встречающиеся (после удаления цифр) в >= min_fraction страниц,
-    считаются колонтитулами и удаляются из всех страниц.
+
+    Kandydatami są WYŁĄCZNIE linie z brzegów strony (pierwsze i ostatnie
+    `edge` niepuste) — kolontytuł nie żyje w środku strony. Linia jest
+    kolontytułem, gdy powtarza się 1:1 na >= max(3, ceil(N*min_fraction))
+    stronach, albo gdy jej rdzeń bez numeru powtarza się, a numer rośnie
+    RAZEM ze stroną (stały offset numer − indeks w >= 80% wystąpień).
+    Dokumenty krótsze niż 3 strony zostają nietknięte.
+
+    Dawna wersja (próg max(2, N*0.25), cała strona, numer zawsze zdejmowany)
+    wycinała prozę: refren na 2 z 8 stron, „— Tak, panie — odparł.” na 2 z 4,
+    „Lekcja 1/2/3” jako jeden klucz (audyt 2026-10-15). Koszt zmiany: nagłówki
+    dokumentów 2-stronicowych i „Pytanie N” na każdej stronie zostają.
 
     Исключение: строки, соответствующие _STRUCTURAL_PATTERNS (маркеры
-    сцен, актов и т.п. в сценариях и пьесах), сохраняются всегда — даже
-    если они формально подпадают под порог повторов. Без этого
-    исключения PDF-сценарии теряли бы границы сцен и подобные пометки.
+    сцен, актов и т.п. в сценариях и пьесах), сохраняются всегда.
     """
-    threshold = max(2, int(len(raw_pages) * min_fraction))
-    line_counts = Counter()
-    for page in raw_pages:
-        seen = set()
-        for line in page.splitlines():
-            if not line.strip() or len(line.strip()) > max_line_chars:
+    n_pages = len(raw_pages)
+    if n_pages < 3:
+        return list(raw_pages), set()
+    threshold = max(3, math.ceil(n_pages * min_fraction))
+
+    def edges(page):
+        ls = [l for l in page.splitlines() if l.strip()]
+        return set(ls[:edge] + ls[-edge:])
+
+    def candidate(line):
+        return (len(line.strip()) <= max_line_chars
+                and not _is_structural_line(line)
+                and not _DIALOG_LINE.match(line))
+
+    exact, core_offsets = Counter(), {}
+    for pi, page in enumerate(raw_pages):
+        seen_exact, seen_core = set(), set()
+        for line in edges(page):
+            if not candidate(line):
                 continue
-            if _is_structural_line(line):
-                # Защищённая строка не должна попадать в кандидаты —
-                # иначе порог может быть достигнут и она исчезла бы
-                # из всех страниц при удалении.
+            s, core, num = _header_key(line)
+            if len(core) <= 5:
                 continue
-            n = _norm_line(line)
-            if len(n) > 5 and n not in seen:
-                line_counts[n] += 1
-                seen.add(n)
-    boilerplate = {n for n, c in line_counts.items() if c >= threshold}
+            if s not in seen_exact:
+                exact[s] += 1
+                seen_exact.add(s)
+            if num is not None and core not in seen_core:
+                core_offsets.setdefault(core, []).append(num - pi)
+                seen_core.add(core)
+    bp_exact = {s for s, c in exact.items() if c >= threshold}
+    bp_core = {core for core, offs in core_offsets.items()
+               if len(offs) >= threshold
+               and Counter(offs).most_common(1)[0][1] >= 0.8 * len(offs)}
+
     protected = 0
     cleaned = []
     for page in raw_pages:
+        e = edges(page)
         kept = []
         for line in page.splitlines():
             if _is_structural_line(line):
-                kept.append(line)
                 protected += 1
-                continue
-            if _norm_line(line) not in boilerplate:
-                kept.append(line)
+            elif line in e and candidate(line):
+                s, core, num = _header_key(line)
+                if s in bp_exact or (num is not None and core in bp_core):
+                    continue
+            kept.append(line)
         cleaned.append("\n".join(kept))
     if protected:
         print(f"  Защищено структурных маркеров (сцены/акты/didaskalia): {protected}")
-    return cleaned, boilerplate
+    return cleaned, bp_exact | bp_core
 
 # ============================================================
 # OCR: распознавание сканов PDF и изображений через easyocr.
@@ -379,7 +427,9 @@ def load_txt(path, page_size=2000):
     if CUSTOM_PATTERNS:
         for _cp in CUSTOM_PATTERNS:
             text = re.sub(_cp, "", text)
-        text = re.sub(r"\\s+", " ", text).strip()
+        # Było r"\\s+" — dosłowny ukośnik + „s”: spacje się nie zwijały,
+        # a „C:\s+ścieżka” traciło `\s` (audyt 2026-10-15). `\n` zostaje.
+        text = re.sub(r"[ \t]+", " ", text).strip()
     while len(text) > page_size:
         split_at = text.rfind(" ", 0, page_size)
         if split_at == -1:
@@ -428,7 +478,7 @@ RELATED_ARTICLES_STOPWORDS = [
     "podobne artykuły", "podobne wpisy", "powiązane artykuły", "powiązane wpisy",
     "polecane artykuły", "polecamy", "czytaj też", "czytaj także",
     "również cię zainteresuje", "może cię zainteresować", "zobacz również",
-    "więcej z", "więcej na ten temat",
+    "zobacz też", "więcej na ten temat",
     # Русский
     "похожие статьи", "похожие материалы", "подобные статьи",
     "читайте также", "смотрите также", "вам также может понравиться",
@@ -436,7 +486,7 @@ RELATED_ARTICLES_STOPWORDS = [
     # English
     "related articles", "related posts", "see also", "read also",
     "you may also like", "you might also like", "may also like",
-    "more from", "more like this", "trending now",
+    "more like this", "trending now",
     "recommended for you", "you might enjoy",
     # Italiano
     "articoli correlati", "leggi anche", "potrebbe interessarti anche",
@@ -448,63 +498,82 @@ RELATED_ARTICLES_STOPWORDS = [
     "tengdar greinar", "lesa meira", "sjá einnig", "tengt efni",
     "þér gæti einnig líkað",
 ]
+# Stop-fraza musi być CAŁYM tekstem elementu (po zdjęciu „:”, „»”, „…” z końca).
+# Do 2026-10-15 wystarczało, że element ją ZAWIERA, i to w każdym <div>/<section>:
+# wrapper z całym artykułem pasował pierwszy i artykuł znikał w całości, a zdanie
+# „Lekarze polecamy…”, „Мы рекомендуем…”, „lue myös toinen luku” ucinało resztę
+# tekstu (audyt, 14 przypadków w 6 językach). Dlatego też zniknęły prefiksy
+# „więcej z” i „more from” — przy dopasowaniu całego tekstu były martwe.
+_RELATED_SET = frozenset(RELATED_ARTICLES_STOPWORDS)
+_RELATED_TAGS = ["h2", "h3", "h4", "h5", "h6", "p", "strong", "b", "span", "li"]
 
-def load_html(path, page_size=2000):
-    """Извлекает основной текст из HTML-файла через BeautifulSoup.
-    Удаляет: навигацию, шапку/подвал, боковые панели, блоки
-    «Похожие статьи» / «Podobne artykuły» и тексты ссылок-меню.
+# Klasy/id elementów-śmieci wewnątrz treści — dopasowanie po TOKENACH, nie po
+# podciągu: „share” trafiało w „shared-content”, „widget” w „widget_text”,
+# „sidebar” w „content-with-sidebar” i usuwało wrapper artykułu.
+_NAV_INNER_WORDS = frozenset({
+    "related", "podobne", "powiązane", "comment", "comments", "komentarz",
+    "komentarze", "social", "share", "sharing", "advertisement", "advert",
+    "reklama", "banner", "popup", "widget", "subscribe", "newsletter",
+    "sidebar", "correlati",
+})
+_NAV_INNER_STEMS = ("liittyv", "tengd", "related")   # tylko jako POCZĄTEK tokenu
+
+_STRIP_TAGS = ["script", "style", "nav", "header", "footer", "aside",
+               "noscript", "form", "button", "iframe", "figure"]
+
+
+def _norm_related(text):
+    t = re.sub(r"\s+", " ", text).strip().lower()
+    return re.sub(r"[\s:»›→>…]+$", "", t)
+
+
+def _cut_related_blocks(root):
+    """Odcina blok „Zobacz też” / „Читайте также”: nagłówek i wszystko PO nim.
+
+    Kandydatem jest wyłącznie krótki element, którego CAŁY tekst to stop-fraza.
+    Wspinamy się do rodzica, dopóki ma ten sam tekst (`<p><strong>Czytaj też
+    </strong></p><ul>…` tnie od akapitu), ale nigdy do `root`. Wszystkie
+    trafienia od końca — nie `break` po pierwszym.
     """
-    try:
-        from bs4 import BeautifulSoup
-    except ImportError:
-        print("[ВНИМАНИЕ] beautifulsoup4 не установлен: pip install beautifulsoup4 lxml")
-        return []
-    with open(path, encoding="utf-8", errors="replace") as _f:
-        html = _f.read()
-    soup = BeautifulSoup(html, "html.parser")
-    # 1. Remove tags that never contain article text
-    for tag in soup(["script","style","nav","header","footer","aside",
-                      "noscript","form","button","iframe","figure"]):
-        tag.decompose()
-    # 2. Find the main content container
-    main = (soup.find("main") or soup.find("article")
-            or soup.find(id=lambda x: x and any(k in x.lower()
-                         for k in ("content","article","main","post","story")))
-            or soup.find(class_=lambda x: x and any(k in " ".join(x).lower()
-                         for k in ("entry-content","post-content","article-body",
-                                   "article-content","story-body"))))
-    if not main:
-        # last resort: largest block
-        candidates = [el for el in soup.find_all(["article","section","div"])
-                       if el.get_text(strip=True)]
-        main = max(candidates, key=lambda e: len(e.get_text()), default=soup)
-    # 3. Remove nav/boilerplate elements INSIDE main (not globally)
-    _NAV_INNER = ["related","podobne","powiązane","comment","komentarz",
-                  "social","share","advertisement","reklama","banner","popup",
-                  "widget","subscribe","newsletter","sidebar","correlati",
-                  "liittyv","tengd"]
-    for el in list(main.find_all(True)):
-        if not el.attrs:
+    hits = [h for h in root.find_all(_RELATED_TAGS)
+            if _norm_related(h.get_text()) in _RELATED_SET]
+    for hdr in reversed(hits):
+        if hdr.parent is None:            # usunięty razem z wcześniejszym rodzeństwem
             continue
-        _cls = " ".join(el.get("class") or []).lower()
-        _id  = (el.get("id") or "").lower()
-        if any(p in _cls or p in _id for p in _NAV_INNER):
-            el.decompose()
-    # 4. Cut off "Podobne artykuły" / "Related articles" sections
-    for hdr in main.find_all(["h1","h2","h3","h4","h5","p","div","section"]):
-        if any(sw in hdr.get_text().lower() for sw in RELATED_ARTICLES_STOPWORDS):
-            for sib in list(hdr.next_siblings):
-                sib.decompose() if hasattr(sib, "decompose") else None
-            hdr.decompose()
-            break
-    # 5. Extract, normalise and clean web artifacts
-    raw_text = re.sub(r"\s+", " ", main.get_text(separator=" ", strip=True)).strip()
-    raw_text = clean_web_article_start(raw_text)
-    if not raw_text:
-        print("[ВНИМАНИЕ] Не удалось извлечь текст из HTML.")
-        return []
+        key = _norm_related(hdr.get_text())
+        while (hdr.parent is not None and hdr.parent is not root
+               and _norm_related(hdr.parent.get_text()) == key):
+            hdr = hdr.parent
+        for sib in list(hdr.next_siblings):
+            if hasattr(sib, "decompose"):
+                sib.decompose()
+            else:
+                sib.extract()
+        hdr.decompose()
+
+
+def _strip_nav_inner(main):
+    """Usuwa w `main` elementy o klasie/id z `_NAV_INNER_WORDS` (po tokenach).
+
+    Bezpiecznik: element z co najmniej połową tekstu `main` to wrapper
+    artykułu, nie widżet — zostaje.
+    """
+    total = len(main.get_text(" ", strip=True)) or 1
+    for el in list(main.find_all(True)):
+        if el.parent is None or not el.attrs:
+            continue
+        toks = re.split(r"[\s_\-]+", (" ".join(el.get("class") or []) + " "
+                                     + (el.get("id") or "")).lower())
+        if not any(t in _NAV_INNER_WORDS or t.startswith(_NAV_INNER_STEMS)
+                   for t in toks if t):
+            continue
+        if len(el.get_text(" ", strip=True)) >= 0.5 * total:
+            continue
+        el.decompose()
+
+
+def _split_pages(text, page_size):
     pages = []
-    text = raw_text
     while len(text) > page_size:
         split_at = text.rfind(" ", 0, page_size)
         if split_at == -1:
@@ -513,9 +582,61 @@ def load_html(path, page_size=2000):
         text = text[split_at:].strip()
     if text:
         pages.append(text)
+    return pages
+
+
+def _extract_web_text(html):
+    """Wspólny ekstraktor strony WWW dla `load_html` i `load_url`.
+
+    Do 2026-10-15 oba loadery miały kroki 1–5 skopiowane 1:1 (różniły się
+    dwoma komentarzami) — poprawka w jednym nie trafiała do drugiego.
+    """
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    # 1. Tagi, które nigdy nie zawierają treści artykułu
+    for tag in soup(_STRIP_TAGS):
+        tag.decompose()
+    # 2. Główny kontener treści
+    main = (soup.find("main") or soup.find("article")
+            or soup.find(id=lambda x: x and any(k in x.lower()
+                         for k in ("content", "article", "main", "post", "story")))
+            or soup.find(class_=lambda x: x and any(k in " ".join(x).lower()
+                         for k in ("entry-content", "post-content", "article-body",
+                                   "article-content", "story-body"))))
+    if not main:
+        candidates = [el for el in soup.find_all(["article", "section", "div"])
+                      if el.get_text(strip=True)]
+        main = max(candidates, key=lambda e: len(e.get_text()), default=soup)
+    # 3. Widżety WEWNĄTRZ main (nie globalnie)
+    _strip_nav_inner(main)
+    # 4. Blok „Podobne artykuły” / „Related articles”
+    _cut_related_blocks(main)
+    # 5. Tekst, normalizacja, artefakty scrapingu
+    raw_text = re.sub(r"\s+", " ", main.get_text(separator=" ", strip=True)).strip()
+    return clean_web_article_start(raw_text)
+
+
+def load_html(path, page_size=2000):
+    """Извлекает основной текст из HTML-файла через BeautifulSoup.
+    Удаляет: навигацию, шапку/подвал, боковые панели, блоки
+    «Похожие статьи» / «Podobne artykuły» и тексты ссылок-меню.
+    """
+    try:
+        from bs4 import BeautifulSoup  # noqa: F401
+    except ImportError:
+        print("[ВНИМАНИЕ] beautifulsoup4 не установлен: pip install beautifulsoup4 lxml")
+        return []
+    with open(path, encoding="utf-8", errors="replace") as _f:
+        html = _f.read()
+    raw_text = _extract_web_text(html)
+    if not raw_text:
+        print("[ВНИМАНИЕ] Не удалось извлечь текст из HTML.")
+        return []
+    pages = _split_pages(raw_text, page_size)
     print(f"  HTML: извлечено {len(raw_text)} символов, "
           f"разбито на {len(pages)} псевдостраниц (~{page_size} символов каждая).")
     return pages
+
 
 def load_url(url, page_size=2000):
     """Загружает страницу по URL, очищает её BeautifulSoup и разбивает на псевдостраницы.
@@ -524,7 +645,7 @@ def load_url(url, page_size=2000):
     """
     try:
         import requests
-        from bs4 import BeautifulSoup
+        from bs4 import BeautifulSoup  # noqa: F401
     except ImportError:
         print("[ВНИМАНИЕ] requests или beautifulsoup4 не установлены.")
         print("  pip install requests beautifulsoup4 lxml")
@@ -538,57 +659,69 @@ def load_url(url, page_size=2000):
     except Exception as _e:
         print(f"[ВНИМАНИЕ] Не удалось загрузить URL: {_e}")
         return []
-    soup = BeautifulSoup(html, "html.parser")
-    # 1. Remove tags that never contain article text
-    for tag in soup(["script","style","nav","header","footer","aside",
-                      "noscript","form","button","iframe","figure"]):
-        tag.decompose()
-    # 2. Find the main content container
-    main = (soup.find("main") or soup.find("article")
-            or soup.find(id=lambda x: x and any(k in x.lower()
-                         for k in ("content","article","main","post","story")))
-            or soup.find(class_=lambda x: x and any(k in " ".join(x).lower()
-                         for k in ("entry-content","post-content","article-body",
-                                   "article-content","story-body"))))
-    if not main:
-        candidates = [el for el in soup.find_all(["article","section","div"])
-                       if el.get_text(strip=True)]
-        main = max(candidates, key=lambda e: len(e.get_text()), default=soup)
-    # 3. Remove nav/boilerplate elements INSIDE main (not globally)
-    _NAV_INNER = ["related","podobne","powiązane","comment","komentarz",
-                  "social","share","advertisement","reklama","banner","popup",
-                  "widget","subscribe","newsletter","sidebar","correlati",
-                  "liittyv","tengd"]
-    for el in list(main.find_all(True)):
-        if not el.attrs:
-            continue
-        _cls = " ".join(el.get("class") or []).lower()
-        _id  = (el.get("id") or "").lower()
-        if any(p in _cls or p in _id for p in _NAV_INNER):
-            el.decompose()
-    # 4. Cut off "Podobne artykuły" / "Related articles" sections
-    for hdr in main.find_all(["h1","h2","h3","h4","h5","p","div","section"]):
-        if any(sw in hdr.get_text().lower() for sw in RELATED_ARTICLES_STOPWORDS):
-            for sib in list(hdr.next_siblings):
-                sib.decompose() if hasattr(sib, "decompose") else None
-            hdr.decompose()
-            break
-    # 5. Extract, normalise and clean web artifacts
-    raw_text = re.sub(r"\s+", " ", main.get_text(separator=" ", strip=True)).strip()
-    raw_text = clean_web_article_start(raw_text)
+    raw_text = _extract_web_text(html)
     if not raw_text:
         print("[ВНИМАНИЕ] Не удалось извлечь текст со страницы.")
         return []
-    pages, text = [], raw_text
-    while len(text) > page_size:
-        split_at = text.rfind(" ", 0, page_size)
-        if split_at == -1:
-            split_at = page_size
-        pages.append(text[:split_at].strip())
-        text = text[split_at:].strip()
-    if text:
-        pages.append(text)
+    pages = _split_pages(raw_text, page_size)
     print(f"  URL: извлечено {len(raw_text)} символов, "
+          f"разбито на {len(pages)} псевдостраниц (~{page_size} символов каждая).")
+    return pages
+
+
+# Markdown: rozszerzenia python-markdown. `fenced_code` zamienia ``` na <pre>,
+# które wypada z korpusu (kod to nie proza: lematy `def`, `print`, ścieżki);
+# `tables` — bez niego wiersz tabeli zostaje tekstem z „|”; `sane_lists` —
+# mniej fałszywych <ol> z liczb w zdaniach; `footnotes`, `def_list`, `abbr` —
+# bez nich w korpusie zostawały `[^1]`, „: definicja” i „*[SKRÓT]: …”.
+# Ta sama lista co `core_markdown.ROZSZERZENIA` w Reżyserze POZA `nl2br`
+# (pojedyncze złamanie linii nie ma tu znaczenia — tekst i tak jest spłaszczany).
+MD_EXTENSIONS = ["sane_lists", "tables", "fenced_code", "footnotes", "def_list", "abbr"]
+# Front matter YAML na samym początku pliku (Jekyll/Hugo/Obsidian).
+_MD_FRONT_MATTER = re.compile(r"\A---[ \t]*\r?\n.*?\r?\n---[ \t]*\r?\n", re.S)
+
+
+def load_md(path, page_size=2000):
+    """Markdown → HTML → текст в режиме ДОКУМЕНТА.
+
+    To nie jest strona WWW: bez szukania <main>, bez `_strip_nav_inner`
+    i bez `clean_web_article_start` (liczniki zdjęć i podwojone tytuły to
+    artefakty scrapingu). Zostaje odcięcie bloku „Zobacz też”, bo bywa
+    w notatkach i README. Bloki kodu (``` / wcięte) wypadają w całości,
+    tekst linków zostaje, adresy URL nie.
+    """
+    try:
+        import markdown
+        from bs4 import BeautifulSoup
+    except ImportError:
+        print("[ВНИМАНИЕ] markdown или beautifulsoup4 не установлены: "
+              "pip install markdown beautifulsoup4")
+        return []
+    with open(path, encoding="utf-8", errors="replace") as _f:
+        raw = _f.read()
+    raw = _MD_FRONT_MATTER.sub("", raw, count=1)
+    html = markdown.markdown(raw, extensions=MD_EXTENSIONS, output_format="html5")
+    soup = BeautifulSoup(html, "html.parser")
+    _n_code = len(soup.find_all("pre"))
+    for tag in soup(["pre", "script", "style"]):
+        tag.decompose()
+    # Odnośniki przypisów: numer w tekście i strzałka powrotu „↩” to nie proza.
+    for tag in soup.find_all("a", class_=["footnote-ref", "footnote-backref"]):
+        tag.decompose()
+    # Blok przypisów python-markdown dokleja na KOŃCU dokumentu, czyli za
+    # „## Zobacz też” — cięcie zabierało go razem z blokiem (zmierzone).
+    _footnotes = soup.find("div", class_="footnote")
+    if _footnotes is not None:
+        _footnotes.extract()
+    _cut_related_blocks(soup)
+    if _footnotes is not None:
+        soup.append(_footnotes)
+    raw_text = re.sub(r"\s+", " ", soup.get_text(separator=" ", strip=True)).strip()
+    if not raw_text:
+        print("[ВНИМАНИЕ] Не удалось извлечь текст из Markdown.")
+        return []
+    pages = _split_pages(raw_text, page_size)
+    print(f"  MD: извлечено {len(raw_text)} символов (блоков кода пропущено: {_n_code}), "
           f"разбито на {len(pages)} псевдостраниц (~{page_size} символов каждая).")
     return pages
 
@@ -618,11 +751,13 @@ elif SOURCE_FILE and os.path.isfile(SOURCE_FILE):
         corpus = load_docx(SOURCE_FILE)
     elif ext in (".html", ".htm"):
         corpus = load_html(SOURCE_FILE)
+    elif ext in (".md", ".markdown"):
+        corpus = load_md(SOURCE_FILE)
     elif ext in (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"):
         corpus = load_image(SOURCE_FILE)
     else:
         print(f"[ВНИМАНИЕ] Неизвестное расширение: {ext}. "
-              f"Поддерживаются: .pdf, .txt, .html, .docx, .png, .jpg, .jpeg, .tif, .tiff, .bmp, .webp")
+              f"Поддерживаются: .pdf, .txt, .md, .html, .docx, .png, .jpg, .jpeg, .tif, .tiff, .bmp, .webp")
 elif SOURCE_FILE:
     print(f"[ВНИМАНИЕ] Источник не найден: {SOURCE_FILE!r}. Используется встроенный пример.")
 
@@ -1077,7 +1212,7 @@ print(f"[ИНФО] LRU-кэш моделей: maxsize=2. Дополнитель�
 # Автоматически исправляет типичные ошибки оформления во всех поддерживаемых языках.
 #
 # **Для всех языков:**
-# - Удаление точных повторов слов (`the the`, `jest jest`, `что что` и т.п.)
+# - Повторы слов НЕ удаляются: удвоение бывает нормой языка («чуть чуть», «piano piano», «bardzo bardzo»)
 # - Схлопывание множественных пробелов
 #
 # **Нормализация аббревиатур (польский `pl`):**
@@ -1252,14 +1387,11 @@ for i, original in enumerate(corpus, 1):
             corpus_issues.append((i, "исправлено",
                 f"аббревиатура: шаблон '{pattern}' → '{replacement}'"))
             fixed = new_text
-    # 2. Повтор слова (все языки, без учёта регистра)
-    def _fix_repeat(m):
-        w = m.group(1)
-        corpus_issues.append((i, "исправлено",
-            f"повтор слова: '{w} {w}' → '{w}'"))
-        return w
-    fixed = re.sub(r"\b(\w{2,})\s+\1\b", _fix_repeat, fixed,
-                   flags=re.IGNORECASE)
+    # 2. Повтор слова — УДАЛЕНО 2026-10-15. Zwijanie `\b(\w{2,})\s+\1\b`
+    # niszczyło poprawną reduplikację we wszystkich sześciu językach („bardzo
+    # bardzo”, „чуть чуть”, „hiljaa hiljaa”, „piano piano”, „had had”,
+    # „mjög mjög”) i numery („Tel. 22 22 33 44”). Literówka „the the” kosztuje
+    # jeden lemat; zmiana sensu tekstu dla czytnika kosztuje więcej.
     # 3. Множественные пробелы
     fixed = re.sub(r"  +", " ", fixed)
     corrected.append(fixed)
