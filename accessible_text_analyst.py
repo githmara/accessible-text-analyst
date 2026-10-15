@@ -326,24 +326,32 @@ def _ocr_image_array(image_or_path, langs):
     return "\n".join(s for s in results if s and s.strip())
 
 
-def _pdf_ocr_pages(path, langs):
-    """Рендерит PDF постранично через pypdfium2 и распознаёт текст.
-    Возвращает список текстов (по странице)."""
+def _pdf_ocr_pages(path, langs, pages=None):
+    """Рендерит страницы PDF через pypdfium2 и распознаёт текст.
+
+    pages — индексы страниц (от 0) для OCR; None = все страницы.
+    Возвращает словарь {индекс: текст} (пустой, если OCR недоступен).
+    """
     try:
         import pypdfium2 as pdfium
     except ImportError:
         print("[ВНИМАНИЕ] pypdfium2 не установлен. Выполните: pip install pypdfium2")
-        return []
+        return {}
     try:
         import numpy as np
     except ImportError:
         print("[ВНИМАНИЕ] numpy не установлен — нужен для OCR PDF.")
-        return []
+        return {}
+    # Читатель проверяем ОДИН раз: без easyocr предупреждение печаталось
+    # бы на каждой странице.
+    if _get_ocr_reader(langs) is None:
+        return {}
     pdf = pdfium.PdfDocument(path)
-    pages_text = []
+    pages_text = {}
     total = len(pdf)
+    indices = list(range(total)) if pages is None else list(pages)
     try:
-        for i in range(total):
+        for i in indices:
             page = pdf[i]
             # scale=2.0 → ~144 DPI, разумный баланс качества OCR и скорости
             bitmap = page.render(scale=2.0)
@@ -351,8 +359,7 @@ def _pdf_ocr_pages(path, langs):
             arr = np.array(pil_img)
             text = _ocr_image_array(arr, langs)
             page.close()
-            if text.strip():
-                pages_text.append(text)
+            pages_text[i] = text
             print(f"  OCR: страница {i+1}/{total} — {len(text)} символов.")
     finally:
         pdf.close()
@@ -378,33 +385,44 @@ def load_image(path):
 
 def load_pdf(path):
     """Загружает PDF постранично, удаляет повторяющиеся колонтитулы, очищает текст.
-    Если ни одна страница не дала извлекаемого текста — считаем PDF сканом
-    и запускаем OCR (pypdfium2 + easyocr)."""
+
+    Страницы без текстового слоя (сканы) распознаются OCR (pypdfium2 +
+    easyocr) — ТОЛЬКО они и в исходном порядке страниц. До 2026-10-15 OCR
+    запускался лишь тогда, когда текста не было НИ НА ОДНОЙ странице: в
+    смешанном PDF (текст + вставленные сканы) сканы молча выпадали из корпуса.
+    Страницы, оставшиеся пустыми и после OCR (или без OCR), перечисляются
+    номерами — их содержимого в корпусе не будет."""
     try:
         import pdfplumber
     except ImportError:
         print("[ВНИМАНИЕ] pdfplumber не установлен. Выполните: pip install pdfplumber")
         return []
-    raw_pages, skipped = [], 0
     with pdfplumber.open(path) as pdf:
         total = len(pdf.pages)
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            if text.strip():
-                raw_pages.append(text)
-            else:
-                skipped += 1
-    # Если pdfplumber не извлёк ни одной страницы текста — типичный скан.
-    # Запускаем OCR через pypdfium2 + easyocr.
-    if not raw_pages and total > 0:
-        print(f"  PDF: ни одна из {total} страниц не содержит извлекаемого текста.")
-        print(f"  Предполагается, что это скан. Запуск OCR (языки: {OCR_LANGS})...")
-        raw_pages = _pdf_ocr_pages(path, OCR_LANGS)
-        if not raw_pages:
-            print("  [ВНИМАНИЕ] OCR не вернул текста ни на одной странице.")
-            return []
-        skipped = max(0, total - len(raw_pages))
-        print(f"  OCR PDF: распознано страниц {len(raw_pages)} из {total}.")
+        texts = [page.extract_text() or "" for page in pdf.pages]
+    empty = [i for i, t in enumerate(texts) if not t.strip()]
+    if empty and total > 0:
+        if len(empty) == total:
+            print(f"  PDF: ни одна из {total} страниц не содержит извлекаемого текста.")
+            print(f"  Предполагается, что это скан. Запуск OCR (языки: {OCR_LANGS})...")
+        else:
+            print(f"  PDF: страницы без текстового слоя (вероятно, сканы): "
+                  f"{', '.join(str(i + 1) for i in empty)}. "
+                  f"Запуск OCR только для них (языки: {OCR_LANGS})...")
+        for i, text in _pdf_ocr_pages(path, OCR_LANGS, pages=empty).items():
+            texts[i] = text
+        ocr_ok = [i for i in empty if texts[i].strip()]
+        if ocr_ok:
+            print(f"  OCR PDF: распознано страниц {len(ocr_ok)} из {len(empty)}.")
+    still_empty = [i for i, t in enumerate(texts) if not t.strip()]
+    if still_empty:
+        print(f"  [ВНИМАНИЕ] Страницы без текста, их содержимого НЕ будет в корпусе: "
+              f"{', '.join(str(i + 1) for i in still_empty)}.")
+    raw_pages = [t for t in texts if t.strip()]
+    skipped = len(still_empty)
+    if not raw_pages:
+        print("  [ВНИМАНИЕ] OCR не вернул текста ни на одной странице.")
+        return []
     # Удаляем повторяющиеся колонтитулы до объединения строк
     cleaned_raw, removed_bp = strip_repeated_headers(raw_pages)
     if removed_bp:
