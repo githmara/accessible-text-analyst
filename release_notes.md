@@ -24,6 +24,14 @@ Every package in `requirements.txt`, including the commented-out optional ones (
 
 New command: `python audyt_zaleznosci.py`. It compares what is installed with the bounds and with the latest release on PyPI and reports, for each package, one of: up to date, held back by a bound on purpose, newer release allowed by the bound but not tested yet, installed version outside the bound, or missing. Optional packages that are not installed are skipped. It **only warns** and always exits with code 0: this project is not frozen into an installer, you install the dependencies yourself, so an untested release is information for you, not a reason to stop. Messages are shown in `ui_lang`, in all six languages.
 
+### Releases are created from these notes
+
+A new workflow publishes a release by itself when a `## vX.Y.Z — title` section at the top of this file reaches `main` and the tag `vX.Y.Z` does not exist yet. The tag and the release are created together, and the title and body come from that section. An existing tag means there is nothing to do, and a version that is not newer than the latest tag stops the workflow with an error. The workflow runs only on pushes to `main` and on a manual start, and the notes are treated as data, never as commands. This release is the first one published this way.
+
+### TiflotecniaVoices patch
+
+The "New issue" page now links to the Reżyser Audio GPT repository for the TiflotecniaVoices patch for NVDA, which is distributed there.
+
 ### Localization
 
 New keys `deps.*` in all six `reports.yaml`.

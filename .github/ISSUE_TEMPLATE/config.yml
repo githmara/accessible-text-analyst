@@ -1,0 +1,9 @@
+# Strona „New issue”: zwykłe zgłoszenia zostają tutaj, a prośby o patch
+# TiflotecniaVoices idą do Reżysera Audio GPT, gdzie działa bot patcha
+# (etykieta tiflotecnia-patch nadawana przez maintainera, link w sekrecie,
+# wyłącznik przez zmienną repozytorium). Jeden bot do utrzymania, nie dwa.
+blank_issues_enabled: true
+contact_links:
+  - name: TiflotecniaVoices patch for NVDA
+    url: https://github.com/githmara/Rezyser-Audio-GPT/issues/new
+    about: The patch is distributed through the Reżyser Audio GPT repository. Open an issue there, in any language, and the maintainer will send it to you.

@@ -1,0 +1,70 @@
+name: Release (from release_notes.md)
+
+# Wydanie powstaje SAMO, gdy na main trafia sekcja `## vX.Y.Z — tytuł` na
+# szczycie release_notes.md, a tagu vX.Y.Z jeszcze nie ma. Tag i Release
+# powstają atomowo (`gh release create --target <sha>`), z tytułem i treścią
+# wyciętymi z tej sekcji. Plik VERSION celowo nie istnieje: projekt jest
+# source-only, numer żyje w notatkach i w tagu.
+#
+# Dlaczego to nie otwiera furtki (analiza przed wdrożeniem, 2026-10-15):
+#   * jedyne wyzwalacze to `push` na main i ręczny `workflow_dispatch` — oba
+#     wymagają prawa zapisu, które i tak pozwala zmienić ten plik. PR z forka
+#     NIE wyzwala `push` w repo bazowym; `pull_request_target` jest tu zakazany;
+#   * treść notatek to DANE: zero `${{ }}` w `run:`, wersja przechodzi ścisły
+#     wzorzec w wydanie.py, tytuł i treść idą przez pliki i zmienne środowiska;
+#   * uprawnienia minimalne i tylko w jobie (`contents: write`), checkout bez
+#     zapamiętanego tokena, akcja przypięta do SHA;
+#   * wydanie „wstecz” (wersja nie wyższa od najnowszego tagu) = błąd, istniejący
+#     tag = spokojny no-op; `concurrency` wyklucza dwa równoległe przebiegi.
+
+on:
+  push:
+    branches: [main]
+    paths: [release_notes.md, .github/workflows/release.yml, .github/scripts/wydanie.py]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+
+      - name: Self-test
+        run: python .github/scripts/test_wydanie.py
+
+      - name: Decide from release_notes.md and existing tags
+        id: decyzja
+        run: |
+          git ls-remote --tags "https://github.com/${GITHUB_REPOSITORY}.git" > "$RUNNER_TEMP/tagi.txt"
+          python .github/scripts/wydanie.py "$RUNNER_TEMP/tagi.txt"
+
+      - name: Create tag and release
+        if: steps.decyzja.outputs.decyzja == 'wydaj'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.decyzja.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$(cat "$RUNNER_TEMP/tytul.txt")" \
+            --notes-file "$RUNNER_TEMP/tresc.md" \
+            --latest
+          echo "Released $TAG at $GITHUB_SHA"
+
+      - name: Nothing to release
+        if: steps.decyzja.outputs.decyzja == 'pomin'
+        env:
+          TAG: ${{ steps.decyzja.outputs.tag }}
+        run: echo "Tag $TAG already exists — nothing to release."
