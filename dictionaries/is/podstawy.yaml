@@ -15,6 +15,7 @@ alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÐÉÍÓÚÝÞÆÖ"
 diakrytyki: "áéíóúýæöþð"
 
 skrotowce: [t.d., þ.e., m.a., u.þ.b., o.s.frv., dr., prof., bls., skv., fh.]
+skrotowce_kodu: []
 
 naglowki_struktury: [ÞÁTTUR, ATRIÐI, ENDIR, EPILOGUR, FORLEIKUR, KAFLI, HLUTI, BÓK]
 

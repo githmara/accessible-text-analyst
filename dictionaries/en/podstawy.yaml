@@ -11,6 +11,7 @@ alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 diakrytyki: ""
 
 skrotowce: [e.g., i.e., U.S., U.K., a.k.a., n.b., etc., vs., cf., viz., Dr., Mr., Mrs., Prof., St., Fig., No., p., pp.]
+skrotowce_kodu: [etc., vs., cf., viz.]
 
 # FADE IN / FADE OUT / CUT TO to konwencja scenariusza, nie język — zostają w kodzie.
 naglowki_struktury: [ACT, SCENE, EPILOGUE, PROLOGUE, FINALE, END, CHAPTER, PART, BOOK, SECTION]

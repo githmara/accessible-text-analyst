@@ -96,9 +96,11 @@ else:
     print("       и задайте source_file.")
 
 # Wielkie litery wszystkich języków korpusu — suma pól `alfabet` z
-# dictionaries/<kod>/podstawy.yaml (łacinka z diakrytykami + cyrylica).
+# dictionaries/<kod>/podstawy.yaml (łacinka z diakrytykami + cyrylica)
+# + Ü, której nie ma żaden alfabet, a otwiera obce nazwy w nagłówkach
+# („Fot CPK 521 Über…”) — dawne _WIELKIE ją miało.
 from shamanic_locale import wielkie_litery
-_WIELKIE = wielkie_litery()
+_WIELKIE = wielkie_litery() + "Ü"
 
 
 def clean_web_article_start(text, check_window=400):
@@ -1252,6 +1254,19 @@ def _build_finnish_omorfi(fi_nlp):
     return fi_nlp
 
 
+def _pusty_potok(lang):
+    """spacy.blank для языка + sentencizer; язык, которого spaCy не знает
+    (ImportError E048, напр. se, kl), получает многоязычный «xx»."""
+    try:
+        nlp_ = spacy.blank(lang)
+    except ImportError:
+        print(f"[ВНИМАНИЕ] spaCy не знает язык '{lang}' — используется многоязычный spacy.blank('xx').")
+        nlp_ = spacy.blank("xx")
+    if "sentencizer" not in nlp_.pipe_names:
+        nlp_.add_pipe("sentencizer")
+    return nlp_
+
+
 def _load_nlp_model_uncached(lang):
     """Внутренняя загрузка модели без кэша. Используется через get_nlp()."""
     if lang == "is":
@@ -1265,9 +1280,7 @@ def _load_nlp_model_uncached(lang):
         # Язык из основ с `spacy: null` и без собственной ветки (как is выше):
         # пустой конвейер своего языка, а не английская модель.
         print(f"[ВНИМАНИЕ] Для языка '{lang}' нет модели spaCy (spacy: null в podstawy.yaml) — используется spacy.blank.")
-        nlp_ = spacy.blank(lang)
-        nlp_.add_pipe("sentencizer")
-        return nlp_
+        return _pusty_potok(lang)
     model_name = MODEL_BY_LANG.get(lang, "en_core_web_lg")
     try:
         nlp_ = spacy.load(model_name)
@@ -1282,10 +1295,7 @@ def _load_nlp_model_uncached(lang):
         print(f"  Доступные модели (lg):")
         for _m in MODEL_BY_LANG.values():
             print(f"    python -m spacy download {_m}")
-        nlp_ = spacy.blank(lang if lang in SUPPORTED_LANGS else "en")
-        if "sentencizer" not in nlp_.pipe_names:
-            nlp_.add_pipe("sentencizer")
-        return nlp_
+        return _pusty_potok(lang if lang in SUPPORTED_LANGS else "en")
 
 
 @lru_cache(maxsize=2)
@@ -1772,10 +1782,13 @@ df_sent = pd.DataFrame({"sent_id": range(1, len(all_sents)+1), "sentence": all_s
 df_para = pd.DataFrame({"para_id": range(1, len(paragraphs)+1), "paragraph": paragraphs})
 
 # Языково-специфичный паттерн токенов для CountVectorizer / TF-IDF
-# Буквы — поле `alfabet` основ (у каждого языка; прежний fallback \S{2,}
-# для it/fi/is пропускал в TF-IDF цифры и знаки).
-from shamanic_locale import wzorzec_tokenow
-TOKEN_PAT = wzorzec_tokenow(LANG)
+# Один шаблон для всех языков (shamanic_locale.WZORZEC_TOKENOW): ≥2 любые
+# БУКВЫ, дефис и апостроф только между буквами («itä-suome», «dell'anno»),
+# без цифр и «_». Шаблон из алфавита корпуса терял «tšekki», «Müller»,
+# «łódź» целиком (аудит 2026-10-16); прежний \S{2,} для it/fi/is
+# пропускал цифры и знаки препинания.
+from shamanic_locale import WZORZEC_TOKENOW
+TOKEN_PAT = WZORZEC_TOKENOW
 
 # Лемматизируем абзацы (понадобится для TF-IDF)
 def to_lemma_str(text):

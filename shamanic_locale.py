@@ -19,7 +19,7 @@ _DICT_ROOT = Path(__file__).resolve().parent / 'dictionaries'
 POLA_PODSTAW = {
     'jezyk': str, 'lingua': str, 'nazwa_ru': str, 'locale': str,
     'spacy': (str, type(None)), 'alfabet': str, 'diakrytyki': str,
-    'skrotowce': list, 'naglowki_struktury': list,
+    'skrotowce': list, 'skrotowce_kodu': list, 'naglowki_struktury': list,
     'stopfrazy_powiazane': list, 'nav_slowa': list, 'nav_rdzenie': list,
 }
 PLIK_PODSTAW = 'podstawy.yaml'
@@ -29,20 +29,35 @@ class BladPodstaw(ValueError):
     """Niekompletne albo niespójne podstawy języka."""
 
 
+def _katalogi_jezykow(root):
+    """Katalogi języków; `_szkice/`, `.cache/` itp. nie są językami."""
+    return sorted(p for p in Path(root).iterdir()
+                  if p.is_dir() and not p.name.startswith(('_', '.')))
+
+
 def wczytaj_podstawy(root=_DICT_ROOT):
-    """{kod: dane} dla każdego katalogu w `root`; brak pliku/pola = BladPodstaw."""
+    """{kod: dane} dla każdego katalogu języka w `root`; brak pliku/pola = BladPodstaw.
+
+    Przy imporcie modułu błąd kończy się stosem wywołań, a nie komunikatem
+    przez t(): bez kompletnych podstaw nie ma listy języków, więc nie ma też
+    języka interfejsu, w którym dałoby się go wypisać."""
     wynik = {}
-    for katalog in sorted(p for p in Path(root).iterdir() if p.is_dir()):
+    for katalog in _katalogi_jezykow(root):
         plik = katalog / PLIK_PODSTAW
         if not plik.is_file():
             raise BladPodstaw(f'{plik}: missing — every language needs its basics')
         with open(plik, 'r', encoding='utf-8') as f:
             dane = yaml.safe_load(f) or {}
+        if not isinstance(dane, dict):
+            raise BladPodstaw(f'{plik}: must be a mapping of fields, not {type(dane).__name__}')
         for pole, typ in POLA_PODSTAW.items():
             if pole not in dane:
                 raise BladPodstaw(f'{plik}: field "{pole}" missing')
             if not isinstance(dane[pole], typ):
-                raise BladPodstaw(f'{plik}: field "{pole}" has type {type(dane[pole]).__name__}')
+                wskazowka = (' — quote the value: YAML reads no/yes/on/off as booleans'
+                             if isinstance(dane[pole], bool) else '')
+                raise BladPodstaw(f'{plik}: field "{pole}" has type '
+                                  f'{type(dane[pole]).__name__}{wskazowka}')
         wynik[katalog.name] = dane
     return wynik
 
@@ -59,13 +74,27 @@ def lingua_jezyki():
     return [getattr(Language, p['lingua']) for p in PODSTAWY.values()]
 
 
+def kody_regex():
+    """Alternatywa kodów języków do wnętrza grupy regexu („en|fi…”)."""
+    return '|'.join(sorted(PODSTAWY))
+
+
+def nazwy_regex():
+    """Alternatywa angielskich nazw języków: „English|Finnish|…”."""
+    return '|'.join(sorted(LANGUAGE_NAMES.values()))
+
+
 def _klasa(litery):
     return ''.join(re.escape(z) for z in dict.fromkeys(litery))
 
 
-def wzorzec_tokenow(kod):
-    """Wzorzec tokenów CountVectorizer/TF-IDF: ≥2 litery alfabetu języka."""
-    return rf'(?u)\b[{_klasa(PODSTAWY[kod]["alfabet"].lower())}]{{2,}}\b'
+# Token TF-IDF: ≥2 dowolne LITERY (nie tylko alfabetu korpusu — „tšekki”,
+# „Müller”, „łódź” w tekście islandzkim to też słowa), łącznik i apostrof
+# tylko MIĘDZY literami („itä-suome”, którą omorfi celowo trzyma razem,
+# „dell'anno”). Bez cyfr i podkreślnika. Wzorzec z alfabetu (2026-10-16)
+# gubił całe słowa — kanon: nadmierne czyszczenie jest gorsze niż śmieci.
+_LITERA = r"[^\W\d_]"
+WZORZEC_TOKENOW = rf"(?u)\b{_LITERA}(?:{_LITERA}|[-'’](?={_LITERA}))+\b"
 
 
 def wielkie_litery():
@@ -79,6 +108,9 @@ def diakrytyki(kod):
 
 
 _CZLONY = re.compile(r'[^\s.]+|\.|\s+')
+# Odstęp wewnątrz skrótowca: spacje/tabulatory i NAJWYŻEJ jeden koniec linii
+# — pusta linia to granica akapitu, nie rozstrzelony skrót.
+_ODSTEP = r'[ \t]*(?:\r?\n)?[ \t]*'
 
 
 def _czlony(skrot):
@@ -95,9 +127,9 @@ def wzorzec_skrotowca(skrot):
     wzor = r'\b'
     for i, c in enumerate(czlony):
         if c == '.':
-            wzor += r'\.' if i == len(czlony) - 1 else r'\.\s*'
+            wzor += r'\.' if i == len(czlony) - 1 else r'\.' + _ODSTEP
         elif c.isspace():
-            wzor += r'\s+'
+            wzor += r'(?=\s)' + _ODSTEP
         else:
             wzor += re.escape(c)
     if not skrot.endswith('.'):
@@ -111,20 +143,29 @@ def wzorce_skrotowcow(kod):
     return sorted(((w, s) for w, s in pary if w), key=lambda p: -len(p[1]))
 
 
-def _warianty(skrot):
+def _warianty(skrot, bez_kropki):
     rozstrzelony = re.sub(r'\.(?=[^\s.])', '. ', skrot)
     warianty = {skrot, rozstrzelony}
-    if wzorzec_skrotowca(skrot):          # bez kropki końcowej tylko wieloczłonowe
+    if bez_kropki:
         warianty |= {w.rstrip('.') for w in warianty}
     return warianty
 
 
 def warianty_skrotowcow():
-    """{kod: frozenset zapisów} do rozpoznawania języka krótkich fragmentów.
-    Zapis występujący w dwóch językach (prof., dr.) jest niejednoznaczny
-    i wypada ze wszystkich — wtedy decyduje lingua."""
-    per_jezyk = {kod: set().union(*(_warianty(s) for s in p['skrotowce']))
-                 for kod, p in PODSTAWY.items()}
+    """{kod: frozenset zapisów} rozpoznających język krótkiego fragmentu <code>.
+
+    Wchodzą: skrótowce WIELOCZŁONOWE (m.in., т.е., u.þ.b. — typograficznie
+    jednoznaczne) oraz jednoczłonowe wpisane do `skrotowce_kodu` (np., etc.),
+    każdy także bez kropki końcowej. Pozostałe jednoczłonowe (os., str., n.,
+    v.) wyglądają jak kod Pythona albo pojedyncza litera, więc nie wchodzą.
+    Zapis wspólny dwóm językom wypada ze wszystkich — decyduje wtedy lingua."""
+    per_jezyk = {}
+    for kod, p in PODSTAWY.items():
+        zbior = set()
+        for s in p['skrotowce']:
+            if wzorzec_skrotowca(s) or s in p['skrotowce_kodu']:
+                zbior |= _warianty(s, bez_kropki=True)
+        per_jezyk[kod] = zbior
     licznik = {}
     for zbior in per_jezyk.values():
         for w in zbior:

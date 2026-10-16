@@ -11,6 +11,7 @@ alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ"
 diakrytyki: "äö"
 
 skrotowce: [esim., jne., ym., ns., tms., ko., po., vt., prof., dr., os., v.]
+skrotowce_kodu: []
 
 naglowki_struktury: [NÄYTÖS, KOHTAUS, LOPPU, EPILOGI, PROLOGI, LUKU, OSA, KIRJA, JAKSO]
 

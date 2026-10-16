@@ -23,9 +23,13 @@ diakrytyki: "ąćęłńóśźż"
 
 # Skrótowce w formie kanonicznej, każdy z kropką. Formy wieloczłonowe
 # (m.in., dr hab.) dostają wzorzec scalający rozstrzelony zapis („m. in.”);
-# wszystkie trafiają do listy, po której generate_report rozpoznaje język <code>.
+# wieloczłonowe rozpoznają też język fragmentu <code> w generate_report.
 # Kropka jest obowiązkowa: bez niej wzorzec trafiałby w zwykłe słowa prozy.
 skrotowce: [m.in., np., tzw., tzn., tj., itd., itp., ww., jw., dr hab., prof., inż., ul., al., pl., r., str.]
+# Jednoczłonowe skrótowce, które same w <code> rozstrzygają o języku
+# (generate_report). Wieloczłonowe wchodzą tam zawsze; jednoczłonowych
+# typu os., str., n. NIE wpisuj — wyglądają jak kod Pythona. ⊂ skrotowce.
+skrotowce_kodu: [np., tzw., tzn., tj., itd., itp., ww.]
 
 # Słowa otwierające linie-znaczniki struktury (akty, sceny, rozdziały) —
 # chronione przed usuwaniem jako powtarzający się nagłówek strony.

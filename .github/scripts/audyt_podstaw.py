@@ -22,14 +22,18 @@ zostało i żeby podstawy mówiły prawdę.
                  explosion/spacy-models, ten sam co `spacy download`) i na
                  dysku; znaleziony = błąd z poleceniem, co dopisać. Model
                  zadeklarowany musi w indeksie istnieć. Niczego nie instaluje.
-  5. NAWRÓT    — w żadnym `*.py` z korzenia nie wraca `Language.<NAZWA>` ani
-                 literał wyliczający języki (słownik z ≥2 kluczami-kodami,
-                 kolekcja z ≥3 kodami). Wyjątek punktowy: komentarz
-                 `# audyt-podstaw: ok — <powód>` na linii literału.
+  5. NAWRÓT    — w żadnym `*.py` z korzenia nie wraca wyliczenie języków:
+                 `Language.<NAZWA>` (także `lingua.Language.<NAZWA>`), słownik
+                 z ≥2 kluczami-kodami, kolekcja z ≥3 kodami, `"en pl ru".split()`
+                 z ≥3 kodami ani alternatywa w napisie/regexie („en|pl|ru”,
+                 „English|Polish|Russian”) z ≥3 kodami lub nazwami. Wyjątek
+                 punktowy: komentarz `# audyt-podstaw: ok — <powód>` na linii.
 
-Wynik: exit 0 = OK, exit 1 = błędy (każdy jako ::error), exit 2 = plik się nie
-parsuje, exit 3 = indeksu spaCy nie da się pobrać — „cannot verify”, które
-BLOKUJE wydanie (decyzja maintainera 2026-10-16: nigdy fałszywe zielone).
+Wynik: wszystkie błędy są wypisywane (::error), potem najwyższy kod: exit 0 =
+OK, exit 1 = błędy (także trwały problem z indeksem spaCy: 4xx albo zmieniony
+format), exit 2 = plik się nie parsuje, exit 3 = indeks spaCy chwilowo
+nieosiągalny (sieć) — „cannot verify”, które BLOKUJE wydanie do powtórki
+(decyzja maintainera 2026-10-16: nigdy fałszywe zielone).
 Uruchom:  .venv/Scripts/python .github/scripts/audyt_podstaw.py
 Wymaga PyYAML i lingua-language-detector.
 """
@@ -40,6 +44,7 @@ import importlib.util
 import json
 import re
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -61,7 +66,9 @@ class BladParsowania(Exception):
 
 
 class BladSondy(Exception):
-    pass
+    def __init__(self, komunikat: str, trwaly: bool):
+        super().__init__(komunikat)
+        self.trwaly = trwaly
 
 
 # ── 1–2. komplet i treść ──────────────────────────────────────────
@@ -105,6 +112,9 @@ def bledy_podstaw(katalog: Path) -> tuple[dict, list[str]]:
                 rozstrzelony = re.sub(r"\.(?=[^\s.])", ". ", s)
                 if re.sub(wzor, s, rozstrzelony) != s:
                     bledy.append(f"{gdzie}: pattern for {s!r} does not join {rozstrzelony!r}")
+        for s in p["skrotowce_kodu"]:
+            if s not in p["skrotowce"]:
+                bledy.append(f"{gdzie}: skrotowce_kodu entry {s!r} is not in skrotowce")
         for s in p["naglowki_struktury"]:
             if not isinstance(s, str) or s != s.upper() or not s.isalpha():
                 bledy.append(f"{gdzie}: naglowki_struktury entry {s!r} must be one UPPERCASE word")
@@ -130,18 +140,30 @@ def bledy_readme(korzen: Path, kody: set[str]) -> list[str]:
 # ── 4. sonda spaCy ────────────────────────────────────────────────
 
 def pobierz_indeks(url: str = INDEKS_SPACY) -> dict[str, set[str]]:
-    """{model: {wersje spaCy}}; każdy problem z siecią/formatem = BladSondy."""
+    """{model: {wersje spaCy}}.
+
+    Sieć (DNS, timeout, 5xx) = BladSondy(trwaly=False): powtórz przebieg.
+    4xx, niepoprawny JSON albo inny kształt = BladSondy(trwaly=True): indeks
+    przeniesiono albo zmienił format, powtórka nic nie da — popraw INDEKS_SPACY
+    albo parser. Oba blokują wydanie."""
     try:
         with urllib.request.urlopen(url, timeout=30) as r:
-            dane = json.load(r)
+            surowe = r.read()
+    except urllib.error.HTTPError as e:
+        raise BladSondy(f"cannot verify spaCy models: {url}: HTTP {e.code}",
+                        trwaly=400 <= e.code < 500) from e
+    except Exception as e:  # DNS, odmowa połączenia, timeout, TLS
+        raise BladSondy(f"cannot verify spaCy models: {url}: {e}", trwaly=False) from e
+    try:
         wynik: dict[str, set[str]] = {}
-        for wersja, modele in dane["spacy"].items():
+        for wersja, modele in json.loads(surowe)["spacy"].items():
             for m in modele:
                 wynik.setdefault(m, set()).add(wersja)
-    except Exception as e:  # sieć, HTTP, JSON, nieoczekiwany kształt
-        raise BladSondy(f"cannot verify spaCy models: {INDEKS_SPACY}: {e}") from e
+    except Exception as e:  # JSON, brak klucza, inny kształt
+        raise BladSondy(f"cannot verify spaCy models: {url}: unexpected index format: {e!r}",
+                        trwaly=True) from e
     if not wynik:
-        raise BladSondy(f"cannot verify spaCy models: {INDEKS_SPACY} lists no models")
+        raise BladSondy(f"cannot verify spaCy models: {url} lists no models", trwaly=True)
     return wynik
 
 
@@ -176,7 +198,20 @@ def bledy_spacy(podstawy: dict, indeks: dict[str, set[str]], zainstalowany=_zain
 
 # ── 5. nawrót wyliczeń ────────────────────────────────────────────
 
-def bledy_wyliczen(korzen: Path, kody: set[str]) -> list[str]:
+_ALTERNATYWA = re.compile(r"[A-Za-z]+(?:\|[A-Za-z]+)+")
+
+
+def _jest_language(n: ast.AST) -> bool:
+    """`Language.X` albo `<cokolwiek>.Language.X` (np. lingua.Language.POLISH)."""
+    if not (isinstance(n, ast.Attribute) and n.attr.isupper()):
+        return False
+    v = n.value
+    return ((isinstance(v, ast.Name) and v.id == "Language")
+            or (isinstance(v, ast.Attribute) and v.attr == "Language"))
+
+
+def bledy_wyliczen(korzen: Path, kody: set[str], nazwy: set[str] = frozenset()) -> list[str]:
+    """Wyliczenia języków w kodzie. `nazwy` — angielskie nazwy (małymi literami)."""
     bledy = []
     for plik in sorted(korzen.glob("*.py")):
         tekst = plik.read_text(encoding="utf-8")
@@ -190,46 +225,72 @@ def bledy_wyliczen(korzen: Path, kody: set[str]) -> list[str]:
             return any(_WYJATEK.search(linie[i - 1])
                        for i in range(wezel.lineno, (wezel.end_lineno or wezel.lineno) + 1))
 
+        def zglos(wezel, opis: str) -> None:
+            if not zwolniony(wezel):
+                bledy.append(f"{plik.name}:{wezel.lineno}: {opis} — move the data to "
+                             f"dictionaries/<code>/podstawy.yaml and derive it from "
+                             f"shamanic_locale (PODSTAWY, lingua_jezyki, kody_regex, nazwy_regex)")
+
         for n in ast.walk(drzewo):
-            if (isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
-                    and n.value.id == "Language" and n.attr.isupper()):
-                if not zwolniony(n):
-                    bledy.append(f"{plik.name}:{n.lineno}: Language.{n.attr} — derive it from "
-                                 f"podstawy (shamanic_locale.lingua_jezyki())")
+            if _jest_language(n):
+                zglos(n, f"Language.{n.attr}")
                 continue
             if isinstance(n, ast.Dict):
                 elementy, prog, co = n.keys, 2, "dict keyed by"
             elif isinstance(n, (ast.Set, ast.List, ast.Tuple)):
                 elementy, prog, co = n.elts, 3, "collection of"
+            elif (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                  and n.func.attr == "split" and isinstance(n.func.value, ast.Constant)
+                  and isinstance(n.func.value.value, str)):
+                trafione = sorted(set(n.func.value.value.split()) & kody)
+                if len(trafione) >= 3:
+                    zglos(n, f"'...'.split() of language codes {trafione}")
+                continue
+            elif isinstance(n, ast.Constant) and isinstance(n.value, str):
+                for run in _ALTERNATYWA.findall(n.value):
+                    czlony = set(run.split("|"))
+                    trafione = sorted((czlony & kody) | {c for c in czlony if c.lower() in nazwy})
+                    if len(trafione) >= 3:
+                        zglos(n, f"regex alternation of languages {trafione}")
+                continue
             else:
                 continue
             trafione = sorted({e.value for e in elementy if isinstance(e, ast.Constant)
                                and isinstance(e.value, str) and e.value in kody})
-            if len(trafione) >= prog and not zwolniony(n):
-                bledy.append(f"{plik.name}:{n.lineno}: {co} language codes {trafione} — "
-                             f"move the data to dictionaries/<code>/podstawy.yaml")
+            if len(trafione) >= prog:
+                zglos(n, f"{co} language codes {trafione}")
     return bledy
 
 
 def main() -> int:
+    """Wypisuje WSZYSTKIE błędy, potem zwraca najwyższy kod (sonda nie zasłania reszty)."""
     katalog = KORZEN / "dictionaries"
+    kod_wyjscia = 0
+    podstawy, bledy = bledy_podstaw(katalog)
+    kody = set(podstawy) or {p.name for p in sl._katalogi_jezykow(katalog)}
+    nazwy = {p["lingua"].lower() for p in podstawy.values()}
+    bledy += bledy_readme(KORZEN, kody)
     try:
-        podstawy, bledy = bledy_podstaw(katalog)
-        kody = set(podstawy) or {p.name for p in katalog.iterdir() if p.is_dir()}
-        bledy += bledy_readme(KORZEN, kody) + bledy_wyliczen(KORZEN, kody)
-        if podstawy:
-            bledy += bledy_spacy(podstawy, pobierz_indeks())
+        bledy += bledy_wyliczen(KORZEN, kody, nazwy)
     except BladParsowania as e:
-        print(f"::error::{e}")
-        return 2
-    except BladSondy as e:
-        print(f"::error::{e} — the release stays blocked until the index can be read")
-        return 3
+        bledy.append(str(e))
+        kod_wyjscia = 2
+    if podstawy:
+        try:
+            bledy += bledy_spacy(podstawy, pobierz_indeks())
+        except BladSondy as e:
+            if e.trwaly:
+                bledy.append(f"{e} — the index moved or changed format; fix INDEKS_SPACY "
+                             f"or the parser in audyt_podstaw.py")
+            else:
+                bledy.append(f"{e} — network problem; re-run the workflow, the release "
+                             f"stays blocked until the index can be read")
+                kod_wyjscia = max(kod_wyjscia, 3)
     for b in bledy:
         print(f"::error::{b}")
     print(f"Language basics ({', '.join(sorted(kody))}): "
           f"{'OK' if not bledy else f'{len(bledy)} problem(s)'}")
-    return 1 if bledy else 0
+    return kod_wyjscia or (1 if bledy else 0)
 
 
 if __name__ == "__main__":

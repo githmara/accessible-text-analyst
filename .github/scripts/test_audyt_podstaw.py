@@ -46,8 +46,9 @@ class TestAudytPodstaw(unittest.TestCase):
 
     def bledy(self, indeks=INDEKS, dysk=nic_na_dysku):
         podstawy, bledy = a.bledy_podstaw(self.k / "dictionaries")
-        kody = set(podstawy) or {p.name for p in (self.k / "dictionaries").iterdir() if p.is_dir()}
-        bledy += a.bledy_readme(self.k, kody) + a.bledy_wyliczen(self.k, kody)
+        kody = set(podstawy) or {p.name for p in sl._katalogi_jezykow(self.k / "dictionaries")}
+        nazwy = {p["lingua"].lower() for p in podstawy.values()}
+        bledy += a.bledy_readme(self.k, kody) + a.bledy_wyliczen(self.k, kody, nazwy)
         if podstawy:
             bledy += a.bledy_spacy(podstawy, indeks, dysk)
         return bledy
@@ -199,6 +200,126 @@ class TestAudytPodstaw(unittest.TestCase):
         self.assertFalse(any("prof." in w for w in warianty.values()))
         self.assertIn("m.in.", warianty["pl"])
         self.assertIn("т. е.", warianty["ru"])
+
+    # --- ustalenia audytu commita 2a6d54d ---
+
+    def test_kod_rozpoznaje_dawne_skroty_a_nie_python(self):
+        w = sl.warianty_skrotowcow()
+        for kod, zapisy in (("pl", ["np", "np.", "tzw", "itd", "itp", "tj", "tzn", "ww", "m.in"]),
+                            ("en", ["etc", "vs", "cf", "e.g"]), ("ru", ["напр."])):
+            for z in zapisy:
+                with self.subTest(kod=kod, zapis=z):
+                    self.assertIn(z, w[kod])
+        for z in ("os.", "str.", "n.", "v.", "r.", "p."):   # wygląda jak kod Pythona
+            with self.subTest(zapis=z):
+                self.assertFalse(any(z in zb for zb in w.values()))
+
+    def test_skrotowiec_kodu_spoza_skrotowcow(self):
+        self.popsuj("dictionaries/en/podstawy.yaml", "skrotowce_kodu: [etc.,", "skrotowce_kodu: [ibid.,")
+        self.zawiera("skrotowce_kodu entry 'ibid.' is not in skrotowce")
+
+    def test_wzorzec_tokenow_nie_gubi_slow(self):
+        tokeny = re.findall(sl.WZORZEC_TOKENOW, "tšekki šakki itä-suome müller gödel são "
+                            "dell'anno łódź jón-páll x2 _ab 1999 -kissa koira- ab")
+        for slowo in ("tšekki", "šakki", "itä-suome", "müller", "gödel", "são",
+                      "dell'anno", "łódź", "jón-páll", "kissa", "koira", "ab"):
+            with self.subTest(slowo=slowo):
+                self.assertIn(slowo, tokeny)
+        for smiec in ("x2", "_ab", "1999", "-kissa", "koira-"):
+            with self.subTest(smiec=smiec):
+                self.assertNotIn(smiec, tokeny)
+
+    def test_skrotowiec_nie_skleja_przez_pusta_linie(self):
+        wzory = dict((f, w) for w, f in sl.wzorce_skrotowcow("it"))
+        self.assertEqual(re.sub(wzory["ad es."], "ad es.", "ad\n\nes. x"), "ad\n\nes. x")
+        wzory = dict((f, w) for w, f in sl.wzorce_skrotowcow("pl"))
+        self.assertEqual(re.sub(wzory["m.in."], "m.in.", "m.\n\nin. x"), "m.\n\nin. x")
+        self.assertEqual(re.sub(wzory["m.in."], "m.in.", "m.\nin. x"), "m.in. x")
+
+    def test_nawrot_alternatywy_kodow_w_regexie(self):
+        self.popsuj("generate_report.py", '(r"(\\()(" + _KODY + r")(\\))",',
+                    '(r"(\\()(en|pl|ru|it|fi|is)(\\))",')
+        self.zawiera("regex alternation of languages ['en', 'fi', 'is', 'it', 'pl', 'ru']")
+
+    def test_nawrot_alternatywy_nazw_w_regexie(self):
+        self.popsuj("generate_report.py", 'nazwy_regex() + r"|"', 'r"English|Polish|Russian|"')
+        self.zawiera("regex alternation of languages ['English', 'Polish', 'Russian']")
+
+    def test_nawrot_lingua_language_przez_modul(self):
+        self.popsuj("shamanic_locale.py", "from_languages(*lingua_jezyki())",
+                    "from_languages(lingua.Language.POLISH)")
+        self.zawiera("Language.POLISH")
+
+    def test_nawrot_split_kodow(self):
+        self.popsuj("generate_report.py", "_SUPPORTED_LANGS = set(PODSTAWY)",
+                    '_SUPPORTED_LANGS = set("en pl ru".split())')
+        self.zawiera("'...'.split() of language codes ['en', 'pl', 'ru']")
+
+    def test_katalog_pomocniczy_nie_jest_jezykiem(self):
+        (self.k / "dictionaries/_szkice").mkdir()
+        (self.k / "dictionaries/.cache").mkdir()
+        self.assertEqual(self.bledy(), [])
+
+    def test_wartosc_bool_podpowiada_cudzyslow(self):
+        self.popsuj("dictionaries/fi/podstawy.yaml", "nazwa_ru: финский", "nazwa_ru: no")
+        self.zawiera("quote the value")
+
+    def test_lista_zamiast_mapy(self):
+        (self.k / "dictionaries/fi/podstawy.yaml").write_text("- jezyk: fi\n", encoding="utf-8")
+        self.zawiera("must be a mapping of fields, not list")
+
+    def test_sonda_rozroznia_siec_od_trwalego_bledu(self):
+        import io
+        import urllib.error
+        import urllib.request
+        oryginal = urllib.request.urlopen
+
+        def podmien(wyjatek=None, tresc=b""):
+            class Odp:
+                def __enter__(self): return self
+                def __exit__(self, *_): return False
+                def read(self): return tresc
+
+            def urlopen(*_a, **_k):
+                if wyjatek:
+                    raise wyjatek
+                return Odp()
+            urllib.request.urlopen = urlopen
+
+        try:
+            for opis, kw, trwaly in (
+                    ("404", {"wyjatek": urllib.error.HTTPError("u", 404, "nf", {}, io.BytesIO())}, True),
+                    ("503", {"wyjatek": urllib.error.HTTPError("u", 503, "x", {}, io.BytesIO())}, False),
+                    ("dns", {"wyjatek": urllib.error.URLError("dns")}, False),
+                    ("json", {"tresc": b"<html>"}, True),
+                    ("ksztalt", {"tresc": b'{"models": {}}'}, True)):
+                with self.subTest(opis=opis):
+                    podmien(**kw)
+                    with self.assertRaises(a.BladSondy) as k:
+                        a.pobierz_indeks("https://example.invalid/i.json")
+                    self.assertEqual(k.exception.trwaly, trwaly)
+                    self.assertIn("https://example.invalid/i.json", str(k.exception))
+        finally:
+            urllib.request.urlopen = oryginal
+
+    def test_siec_nie_zaslania_innych_bledow(self):
+        import contextlib
+        import io
+        (self.k / "README_fi.md").unlink()
+        stary_korzen, stara_sonda = a.KORZEN, a.pobierz_indeks
+
+        def bez_sieci(*_):
+            raise a.BladSondy("cannot verify spaCy models: x", trwaly=False)
+        a.KORZEN, a.pobierz_indeks = self.k, bez_sieci
+        try:
+            wyjscie = io.StringIO()
+            with contextlib.redirect_stdout(wyjscie):
+                kod = a.main()
+        finally:
+            a.KORZEN, a.pobierz_indeks = stary_korzen, stara_sonda
+        self.assertEqual(kod, 3)
+        self.assertIn("README_fi.md missing", wyjscie.getvalue())
+        self.assertIn("network problem", wyjscie.getvalue())
 
 
 if __name__ == "__main__":

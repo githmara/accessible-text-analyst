@@ -6,7 +6,8 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from shamanic_locale import PODSTAWY, get_ui_lang, lingua_jezyki, t, warianty_skrotowcow
+from shamanic_locale import (PODSTAWY, get_ui_lang, kody_regex, lingua_jezyki, nazwy_regex, t,
+                             warianty_skrotowcow)
 
 # Język UI (printy w konsoli) — odczytywany z config.json/ini, fallback 'en'.
 UI_LANG = get_ui_lang()
@@ -101,6 +102,7 @@ except ImportError:
 # ============================================================
 # Języki = dictionaries/<kod>/podstawy.yaml (shamanic_locale.PODSTAWY).
 _SUPPORTED_LANGS = set(PODSTAWY)
+_KODY = kody_regex()   # „en|fi|is|…” do wnętrza grup regexów niżej
 _LINGUA_DETECTOR = LanguageDetectorBuilder.from_languages(*lingua_jezyki()).build()
 
 
@@ -221,7 +223,8 @@ _TECH_ACRONYMS = (
 # tagujemy wprost.
 _NLP_DOMAIN_WORDS = (
     # Angielskie nazwy języków — w tabelach markdown ("| Italian | it |")
-    r"English|Polish|Russian|Italian|Finnish|Icelandic|"
+    # (nazwy języków z podstaw, potem inne częste w tabelach)
+    nazwy_regex() + r"|"
     r"Dutch|German|French|Spanish|Portuguese|Chinese|Japanese|"
     # NLP/ML słowa rozwiązane (w opisach algorytmów)
     r"Term|Frequency|Inverse|"
@@ -327,18 +330,18 @@ EN_HARDCODE_PATTERNS = [
      r'<span lang="en">\1</span>'),
 
     # ISO 639-1 kody w nawiasach: (fi), (en), (pl)
-    (r"(\()(en|pl|ru|it|fi|is)(\))",
+    (r"(\()(" + _KODY + r")(\))",
      r'\1<span lang="en">\2</span>\3'),
 
     # ISO 639-1 kody wewnątrz pojedynczych cudzysłowów: 'fi', 'en'.
     # Łapie zarówno dict-output ({&#x27;pl&#x27;: 5}) jak i samodzielne
     # wystąpienia z cell_multilang_pass ("Язык &#x27;fi&#x27; (финский)").
-    (r"(&#x27;)(en|pl|ru|it|fi|is)(&#x27;)",
+    (r"(&#x27;)(" + _KODY + r")(&#x27;)",
      r'\1<span lang="en">\2</span>\3'),
 
     # ISO 639-1 na początku wciętej linii w sekcji [ИТОГ] z
     # cell_multilang_pass: "  fi: предложений — 23".
-    (r"^(\s+)(en|pl|ru|it|fi|is)(:\s+предложений)",
+    (r"^(\s+)(" + _KODY + r")(:\s+предложений)",
      r'\1<span lang="en">\2</span>\3'),
 ]
 
@@ -708,13 +711,13 @@ def build_accessible_html():
         # ISO z grupy \2 i używa go DWA razy: raz jako wartość lang="en"
         # (sam kod jest anglojęzyczny), drugi raz jako lang="\2" dla tekstu.
         multilang_always_patterns = [
-            (r'^(\s+\[)(en|pl|ru|it|fi|is)(\]\s+\[)([A-Za-z_]+)(\]\s+&#x27;)(.+?)(&#x27;)\s*$',
+            (r'^(\s+\[)(' + _KODY + r')(\]\s+\[)([A-Za-z_]+)(\]\s+&#x27;)(.+?)(&#x27;)\s*$',
              r'\1<span lang="en">\2</span>\3<span lang="en">\4</span>\5<span lang="\2">\6</span>\7'),
             # cell_multilang_pass per-language лемма-сэмпл:
             # "      [fi] 'Oletko'                 → 'oletko'"
             # Tagujemy kod ISO jako en, a obie strony strzałki — jako ten
             # właśnie ISO (forma i lemma są w tym samym języku).
-            (r'^(\s+\[)(en|pl|ru|it|fi|is)(\]\s+&#x27;)(.+?)(&#x27;\s+→\s+&#x27;)(.+?)(&#x27;)\s*$',
+            (r'^(\s+\[)(' + _KODY + r')(\]\s+&#x27;)(.+?)(&#x27;\s+→\s+&#x27;)(.+?)(&#x27;)\s*$',
              r'\1<span lang="en">\2</span>\3<span lang="\2">\4</span>\5<span lang="\2">\6</span>\7'),
         ]
         lines0 = text.split('\n')
