@@ -4,6 +4,41 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.10.0 — every language defined in one place, and tokens that keep foreign letters
+
+**Theme.** Until now a language existed in about a dozen hand-written lists across the notebook, `generate_report.py` and `shamanic_locale.py`. Nothing connected them, so a seventh language would have passed the translation checks and then silently fallen back to English models and patterns. Each language is now described once, in `dictionaries/<code>/podstawy.yaml`, and every per-language map in the code is derived from it. Building that file showed that some of the old lists were themselves wrong. Minor bump: there is a new required data file per language, and the analysis of the same source can differ.
+
+### One file per language
+- `dictionaries/<code>/podstawy.yaml` holds the lingua detector name, the Russian display name used in the notebook output, the locale for `lang=` in the exports, the spaCy model, the alphabet, the diacritics, abbreviations, scene and chapter words, "related articles" stop phrases and the CSS words for web widgets.
+- Every field is required. An empty value (`""`, `[]`, `null`) declares that the language has nothing there; a missing field stops every script with a message naming the file and the field.
+- The prompts of the shamanic rituals take the language name from the same file, without the old fallback to English.
+- Adding a language now means copying a folder, filling in the files and passing the audit below. No Python file needs a new entry.
+
+### Language basics audit
+`.github/scripts/audyt_podstaw.py` runs before every release and blocks it on any problem:
+- the fields of each `podstawy.yaml`, a lingua name with the folder's ISO code, the locale, alphabet, diacritics and abbreviations, and a `README_<code>.md` for each language;
+- a guard that fails when a list of languages comes back into the code: `Language.POLISH`, a dictionary keyed by language codes, a regular expression such as `en|pl|ru`, or a list of language names;
+- a check of spaCy's model index for every language whose `spacy` field is `null` (today Icelandic). When spaCy publishes a model, the audit fails and says which line to add. Nothing is installed. If the index cannot be reached, the release waits; a missing index is never reported as a pass.
+
+### Changes in the analysis
+- **TF-IDF tokens** (keywords, theses, topic words) are now any run of at least two letters, with a hyphen or apostrophe allowed between letters, for every language. v1.9.1 used `a-z` for English and the Polish or Russian alphabet for those languages, so words with other letters disappeared. On the English Wikipedia article about Kurt Gödel the subject's own name was missing from the keywords, together with "Brünn" and "für". Italian, Finnish and Icelandic used `\S{2,}`, which also counted numbers and punctuation. Numbers no longer count in any language.
+- **Abbreviations** are normalised in all six languages, not only Polish, Russian and English. Only spaced multi-part abbreviations are joined ("m. in." → "m.in.", "u. þ. b." → "u.þ.b."), dots are required, and the rules no longer reach across a blank line. The old rules were not safe to repeat: Polish "m.in.:" gained a dot on every pass, Italian "pagg." (pages) was rewritten to "pag.", and rules with an optional dot added dots to ordinary words such as Finnish "v" or Italian "art".
+- **Code fragments in the HTML report** recognise Italian and Icelandic multi-part abbreviations. Short fragments such as `os.` or `str.` are not taken for any language.
+- **spaCy:** a language without a model gets an empty pipeline in its own language instead of the English model. A language that spaCy does not know at all gets the multilingual one, with a warning.
+
+### Verified
+Notebook cells 0–39 were run with v1.9.1 and with this release on one corpus each in Finnish, Polish, Italian and English.
+- Finnish: theses and keywords are identical; one topic's word list changed order.
+- Polish: apart from the repaired "m.in.", only the order of words in one topic changed.
+- Italian: keywords are identical, and 37 of 41 theses are the same. The rest moved because years and page numbers no longer add weight, and "pagg." is no longer rewritten.
+- English: keywords now include "Gödel", "Brünn" and "für"; 99 of 104 theses are the same.
+- A separate check ran the Italian and English spaCy lemmas, with apostrophes, hyphens, foreign letters and abbreviations, through the old and new token rules. No word was lost.
+
+### Distribution
+Source-only minor release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.9.1 — page numbers and headers are recognised by position, not by shape alone
 
 **Theme.** A pre-release audit of the Director, which shares this PDF logic, proved by execution that a line shaped like a page number was enough to delete it. v1.9.0 inherited that: a lone "II" chapter heading, the word "MIX" or a year in the top or bottom margin of a single page disappeared from the corpus. Patch bump: nothing new to configure, the corpus only keeps more of the source text.
