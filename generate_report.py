@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from shamanic_locale import get_ui_lang, t
+from shamanic_locale import PODSTAWY, get_ui_lang, lingua_jezyki, t, warianty_skrotowcow
 
 # Język UI (printy w konsoli) — odczytywany z config.json/ini, fallback 'en'.
 UI_LANG = get_ui_lang()
@@ -85,7 +85,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    from lingua import Language, LanguageDetectorBuilder
+    from lingua import LanguageDetectorBuilder
 except ImportError:
     print(t(UI_LANG, "deps.err_missing_lib", lib="lingua",
             pkg="lingua-language-detector"))
@@ -99,11 +99,9 @@ except ImportError:
 # z polskimi/fińskimi nazwami własnymi, kod inline w markdownie
 # (przykłady polskich/rosyjskich skrótowców) oraz tytuły dzieł.
 # ============================================================
-_SUPPORTED_LANGS = {"en", "pl", "ru", "it", "fi", "is"}
-_LINGUA_DETECTOR = LanguageDetectorBuilder.from_languages(
-    Language.ENGLISH, Language.POLISH, Language.RUSSIAN,
-    Language.ITALIAN, Language.FINNISH, Language.ICELANDIC,
-).build()
+# Języki = dictionaries/<kod>/podstawy.yaml (shamanic_locale.PODSTAWY).
+_SUPPORTED_LANGS = set(PODSTAWY)
+_LINGUA_DETECTOR = LanguageDetectorBuilder.from_languages(*lingua_jezyki()).build()
 
 
 @lru_cache(maxsize=8192)
@@ -518,24 +516,10 @@ _CODE_BLOCK_RE = re.compile(
 # fallback na "en" (krótkie ASCII), co psuje wymowę przykładów w narracji.
 # Wszystkie warianty bez końcowego przecinka — przecinek jest stripowany
 # przed lookupem, żeby pokryć "m.in,", "np.,", "т.д.,", "и т.д." itp.
-_ABBREV_BY_LANG = {
-    "pl": frozenset({
-        "m.in.", "m.in", "m. in.", "m. in", "np.", "np",
-        "tzw.", "tzw", "tzn.", "tzn", "tj.", "tj",
-        "itd.", "itd", "itp.", "itp", "ww.", "ww",
-        "tzn", "tzn.",
-    }),
-    "ru": frozenset({
-        "т.е.", "т. е.", "т.е", "т.д.", "т. д.", "т.д",
-        "т. наз.", "т.наз.", "напр.", "и др.", "и пр.",
-        "т. п.", "т.п.", "и т.д.", "и т. д.", "и т.п.", "и т. п.",
-    }),
-    "en": frozenset({
-        "e.g.", "e. g.", "e.g", "i.e.", "i. e.", "i.e",
-        "etc.", "etc", "vs.", "vs", "cf.", "cf",
-        "a.k.a.", "a.k.a", "n.b.", "viz.",
-    }),
-}
+# Zapisy skrótowców z pola `skrotowce` podstaw (forma kanoniczna, rozstrzelona,
+# a dla wieloczłonowych także bez kropki końcowej). Zapis wspólny dwóm
+# językom (prof., dr.) jest niejednoznaczny i wypada — decyduje wtedy lingua.
+_ABBREV_BY_LANG = warianty_skrotowcow()
 
 # Wygląd "kodu Python/HTML/CSS": nawiasy, podkreślenia jako separator
 # słów, kropki przed identyfikatorem (.method, module.attr), strzałki,

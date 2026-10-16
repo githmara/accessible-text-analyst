@@ -1,0 +1,34 @@
+# PODSTAWY JĘZYKA — opis pól w dictionaries/pl/podstawy.yaml.
+# Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
+
+jezyk: en
+lingua: ENGLISH
+nazwa_ru: английский
+locale: en-US
+spacy: en_core_web_lg
+
+alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+diakrytyki: ""
+
+skrotowce: [e.g., i.e., U.S., U.K., a.k.a., n.b., etc., vs., cf., viz., Dr., Mr., Mrs., Prof., St., Fig., No., p., pp.]
+
+# FADE IN / FADE OUT / CUT TO to konwencja scenariusza, nie język — zostają w kodzie.
+naglowki_struktury: [ACT, SCENE, EPILOGUE, PROLOGUE, FINALE, END, CHAPTER, PART, BOOK, SECTION]
+
+stopfrazy_powiazane:
+  - related articles
+  - related posts
+  - see also
+  - read also
+  - you may also like
+  - you might also like
+  - may also like
+  - more like this
+  - trending now
+  - recommended for you
+  - you might enjoy
+
+# Klasy CSS stron są zwykle angielskie niezależnie od języka treści —
+# kod stosuje sumę tych list ze WSZYSTKICH języków.
+nav_slowa: [related, comment, comments, social, share, sharing, advertisement, advert, banner, popup, widget, subscribe, newsletter, sidebar]
+nav_rdzenie: [related]

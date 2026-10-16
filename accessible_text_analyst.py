@@ -95,8 +95,10 @@ else:
     print("       Скопируйте config.example.json в config.json (или config.example.ini в config.ini)")
     print("       и задайте source_file.")
 
-# Wielkie litery sześciu języków korpusu (łacinka z diakrytykami + cyrylica).
-_WIELKIE = "A-ZĄĆĘŁŃÓŚŹŻÄÖÜÉÈÀÌÒÙÁÍÚÝÞÐÆÅА-ЯЁ"
+# Wielkie litery wszystkich języków korpusu — suma pól `alfabet` z
+# dictionaries/<kod>/podstawy.yaml (łacinka z diakrytykami + cyrylica).
+from shamanic_locale import wielkie_litery
+_WIELKIE = wielkie_litery()
 
 
 def clean_web_article_start(text, check_window=400):
@@ -141,34 +143,21 @@ def clean_pdf_text(s: str) -> str:
 # но НЕ являются колонтитулами и не должны удаляться эвристикой
 # strip_repeated_headers — иначе экранизация теряет границы сцен,
 # обозначение «[koniec]», «[napis na ekranie]» и подобное.
+from shamanic_locale import naglowki_struktury
+
 _STRUCTURAL_PATTERNS = [
     re.compile(r"^\s*\[[^\]]+\]\s*$"),   # [scena 1], [koniec], [napis na ekranie]
     re.compile(r"^\s*\([^)]+\)\s*$"),    # (didaskalia)
     # INT./EXT. poza grupą z końcowym \b: po kropce stoi spacja, więc \b nie
     # pasowało i „INT. KUCHNIA” nie było chronione (audyt 2026-10-15).
     re.compile(r"^\s*(?:INT|EXT)\.", re.IGNORECASE),
+    # Słowa scen/aktów/rozdziałów wszystkich języków — pole
+    # `naglowki_struktury` w dictionaries/<kod>/podstawy.yaml. FADE IN/OUT
+    # i CUT TO to konwencja scenariusza, nie język — zostają tutaj.
     re.compile(
-        r"^\s*(?:"
-        # ru (сцены/акты + главы/части)
-        r"АКТ|ДЕЙСТВИЕ|СЦЕНА|КАРТИНА|ЯВЛЕНИЕ|ЭПИЛОГ|ПРОЛОГ|ФИНАЛ|КОНЕЦ|"
-        r"ГЛАВА|ЧАСТЬ|КНИГА|РАЗДЕЛ|"
-        # pl (sceny/akty + rozdziały)
-        r"AKT|SCENA|OBRAZ|EPILOG|PROLOG|FINAŁ|KONIEC|"
-        r"ROZDZIAŁ|CZĘŚĆ|KSIĘGA|SEKCJA|"
-        # en (scenes/acts + chapters; screenplay headings)
-        r"ACT|SCENE|EPILOGUE|PROLOGUE|FINALE|END|"
-        r"CHAPTER|PART|BOOK|SECTION|"
-        r"FADE\s+IN|FADE\s+OUT|CUT\s+TO|"
-        # it (scene/atti + capitoli)
-        r"ATTO|EPILOGO|PROLOGO|FINE|"
-        r"CAPITOLO|PARTE|LIBRO|SEZIONE|"
-        # fi (näytökset/kohtaukset + luvut)
-        r"NÄYTÖS|KOHTAUS|LOPPU|EPILOGI|PROLOGI|"
-        r"LUKU|OSA|KIRJA|JAKSO|"
-        # is (þættir/atriði + kaflar)
-        r"ÞÁTTUR|ATRIÐI|ENDIR|EPILOGUR|FORLEIKUR|"
-        r"KAFLI|HLUTI|BÓK"
-        r")\b",
+        r"^\s*(?:FADE\s+IN|FADE\s+OUT|CUT\s+TO|"
+        + "|".join(re.escape(_w) for _w in naglowki_struktury())
+        + r")\b",
         re.IGNORECASE,
     ),
 ]
@@ -609,33 +598,12 @@ def load_docx(path, page_size=2000):
 
 # ============================================================
 # Стоп-фразы для отсечения блоков «Похожие статьи» / «Read also» и т.п.
-# Покрывают все поддерживаемые языки: pl, ru, en, it, fi, is.
+# Списки по языкам — поле `stopfrazy_powiazane` в
+# dictionaries/<kod>/podstawy.yaml; здесь объединение всех языков.
 # ============================================================
-RELATED_ARTICLES_STOPWORDS = [
-    # Polski
-    "podobne artykuły", "podobne wpisy", "powiązane artykuły", "powiązane wpisy",
-    "polecane artykuły", "polecamy", "czytaj też", "czytaj także",
-    "również cię zainteresuje", "może cię zainteresować", "zobacz również",
-    "zobacz też", "więcej na ten temat",
-    # Русский
-    "похожие статьи", "похожие материалы", "подобные статьи",
-    "читайте также", "смотрите также", "вам также может понравиться",
-    "рекомендуем", "ещё по теме",
-    # English
-    "related articles", "related posts", "see also", "read also",
-    "you may also like", "you might also like", "may also like",
-    "more like this", "trending now",
-    "recommended for you", "you might enjoy",
-    # Italiano
-    "articoli correlati", "leggi anche", "potrebbe interessarti anche",
-    "scopri di più", "ti potrebbe interessare", "altri articoli",
-    # Suomi
-    "aiheeseen liittyviä artikkeleita", "lue myös", "lisää aiheesta",
-    "saatat pitää myös", "katso myös", "lisää aiheeseen liittyen",
-    # Íslenska
-    "tengdar greinar", "lesa meira", "sjá einnig", "tengt efni",
-    "þér gæti einnig líkað",
-]
+from shamanic_locale import nav_rdzenie, nav_slowa, stopfrazy_powiazane
+
+RELATED_ARTICLES_STOPWORDS = stopfrazy_powiazane()
 # Stop-fraza musi być CAŁYM tekstem elementu (po zdjęciu „:”, „»”, „…” z końca).
 # Do 2026-10-15 wystarczało, że element ją ZAWIERA, i to w każdym <div>/<section>:
 # wrapper z całym artykułem pasował pierwszy i artykuł znikał w całości, a zdanie
@@ -648,13 +616,10 @@ _RELATED_TAGS = ["h2", "h3", "h4", "h5", "h6", "p", "strong", "b", "span", "li"]
 # Klasy/id elementów-śmieci wewnątrz treści — dopasowanie po TOKENACH, nie po
 # podciągu: „share” trafiało w „shared-content”, „widget” w „widget_text”,
 # „sidebar” w „content-with-sidebar” i usuwało wrapper artykułu.
-_NAV_INNER_WORDS = frozenset({
-    "related", "podobne", "powiązane", "comment", "comments", "komentarz",
-    "komentarze", "social", "share", "sharing", "advertisement", "advert",
-    "reklama", "banner", "popup", "widget", "subscribe", "newsletter",
-    "sidebar", "correlati",
-})
-_NAV_INNER_STEMS = ("liittyv", "tengd", "related")   # tylko jako POCZĄTEK tokenu
+# Pola `nav_slowa` / `nav_rdzenie` podstaw, suma wszystkich języków: klasy
+# CSS bywają angielskie niezależnie od języka treści.
+_NAV_INNER_WORDS = nav_slowa()
+_NAV_INNER_STEMS = nav_rdzenie()   # tylko jako POCZĄTEK tokenu
 
 _STRIP_TAGS = ["script", "style", "nav", "header", "footer", "aside",
                "noscript", "form", "button", "iframe", "figure"]
@@ -964,15 +929,17 @@ warnings.filterwarnings("ignore")
 from lingua import Language, LanguageDetectorBuilder
 from collections import Counter
 
-LANG_NAMES = {"en": "английский", "pl": "польский", "ru": "русский",
-              "it": "итальянский", "fi": "финский", "is": "исландский"}
+# Языки — каталоги dictionaries/<kod>/ с podstawy.yaml (единственный
+# источник); названия для stdout — поле `nazwa_ru`.
+from shamanic_locale import PODSTAWY, lingua_jezyki
+
+LANG_NAMES = {_k: _p["nazwa_ru"] for _k, _p in PODSTAWY.items()}
 SUPPORTED_LANGS = set(LANG_NAMES.keys())
 
-# Lingua: статичный набор поддерживаемых языков.
+# Lingua: статичный набор поддерживаемых языков (поле `lingua` основ).
 # Точность детектора заметно выше langdetect на коротких фрагментах
 # и при частых переключениях языка внутри документа.
-_LINGUA_LANGS = [Language.ENGLISH, Language.POLISH, Language.RUSSIAN,
-                 Language.ITALIAN, Language.FINNISH, Language.ICELANDIC]
+_LINGUA_LANGS = lingua_jezyki()
 LANG_DETECTOR = LanguageDetectorBuilder.from_languages(*_LINGUA_LANGS).build()
 
 
@@ -1062,13 +1029,11 @@ print(f"\n[РЕЗУЛЬТАТ] Выбран язык: {LANG_NAMES.get(LANG, LANG
 import spacy
 from functools import lru_cache
 
-MODEL_BY_LANG = {
-    "en": "en_core_web_lg",
-    "pl": "pl_core_news_lg",
-    "ru": "ru_core_news_lg",
-    "it": "it_core_news_lg",
-    "fi": "fi_core_news_lg",
-}
+# Поле `spacy` основ; null (исландский) = spaCy не имеет модели —
+# для него ниже строится конвейер Hugging Face.
+from shamanic_locale import PODSTAWY
+
+MODEL_BY_LANG = {_k: _p["spacy"] for _k, _p in PODSTAWY.items() if _p["spacy"]}
 
 # Hugging Face модели для исландского (нет в spaCy):
 HF_IS_VECTORS = "mideind/IceBERT-base"
@@ -1296,6 +1261,13 @@ def _load_nlp_model_uncached(lang):
             nlp_.add_pipe("sentencizer")
         nlp_ = _build_icelandic_pipeline(nlp_)
         return nlp_
+    if lang in SUPPORTED_LANGS and lang not in MODEL_BY_LANG:
+        # Язык из основ с `spacy: null` и без собственной ветки (как is выше):
+        # пустой конвейер своего языка, а не английская модель.
+        print(f"[ВНИМАНИЕ] Для языка '{lang}' нет модели spaCy (spacy: null в podstawy.yaml) — используется spacy.blank.")
+        nlp_ = spacy.blank(lang)
+        nlp_.add_pipe("sentencizer")
+        return nlp_
     model_name = MODEL_BY_LANG.get(lang, "en_core_web_lg")
     try:
         nlp_ = spacy.load(model_name)
@@ -1308,13 +1280,9 @@ def _load_nlp_model_uncached(lang):
         print(f"[ВНИМАНИЕ] Модель '{model_name}' не установлена.")
         print(f"  Установите: python -m spacy download {model_name}")
         print(f"  Доступные модели (lg):")
-        print(f"    python -m spacy download en_core_web_lg")
-        print(f"    python -m spacy download pl_core_news_lg")
-        print(f"    python -m spacy download ru_core_news_lg")
-        print(f"    python -m spacy download it_core_news_lg")
-        print(f"    python -m spacy download fi_core_news_lg")
-        valid_blanks = {"en", "pl", "ru", "it", "fi"}
-        nlp_ = spacy.blank(lang if lang in valid_blanks else "en")
+        for _m in MODEL_BY_LANG.values():
+            print(f"    python -m spacy download {_m}")
+        nlp_ = spacy.blank(lang if lang in SUPPORTED_LANGS else "en")
         if "sentencizer" not in nlp_.pipe_names:
             nlp_.add_pipe("sentencizer")
         return nlp_
@@ -1391,128 +1359,14 @@ corpus_issues = []
 import re
 
 # ── Паттерны аббревиатур по языкам ────────────────────────────────
-ABBREV_BY_LANG = {
-    "pl": [
-        # m.in. – między innymi (różne zapisy z brakiem lub nadmiarem kropek/spacji)
-        (r"\bm\.\s*in\.?,?\b",        "m.in."),
-        (r"\bmi\.in\.?\b",              "m.in."),
-        (r"\bm\.\s+in\.",               "m.in."),
-        # np. – na przykład
-        (r"\bnp\.?,?\s",                 "np. "),
-        (r"\bn\.\s*p\.\b",             "np."),
-        # tzw. – tak zwany
-        (r"\btzw\.?,?\s",                "tzw. "),
-        (r"\bt\.\s*z\.\s*w\.\b",    "tzw."),
-        # tzn. – to znaczy
-        (r"\btzn\.?,?\s",                "tzn. "),
-        (r"\bt\.\s*z\.\s*n\.\b",    "tzn."),
-        # tj. – to jest
-        (r"\bt\.\s*j\.\b",             "tj."),
-        # itd. / itp.
-        (r"\bi\.\s*t\.\s*d\.\b",    "itd."),
-        (r"\bi\.\s*t\.\s*p\.\b",    "itp."),
-        # ww. – wyżej wymieniony
-        (r"\bww\.?,?\s",                 "ww. "),
-        # jw. – jak wyżej
-        (r"\bjw\.?,?\s",                 "jw. "),
-        # dr / prof / mgr / inż – tytuły
-        (r"\bdr\s+hab\.?\s",            "dr hab. "),
-        (r"\bdr\.?\s",                   "dr "),
-        (r"\bprof\.?\s",                 "prof. "),
-        (r"\bmgr\.?\s",                  "mgr "),
-        (r"\bin\u017c\.?\s",            "in\u017c. "),
-        # ul. / al. / pl. – adresy
-        (r"\bul\.?,?\s",                 "ul. "),
-        (r"\bal\.?,?\s",                 "al. "),
-        (r"\bpl\.?,?\s",                 "pl. "),
-        # r. – rok; nr – numer; str. – strona
-        (r"\br\.?,?\s",                  "r. "),
-        (r"\bnr\s*\.?,?\s",             "nr "),
-        (r"\bstr\.?,?\s",                "str. "),
-    ],
-    "ru": [
-        (r"\b\u0442\.\s+\u0435\.",             "\u0442.\u0435."),    # т. е. → т.е.
-        (r"\b\u0442\.\s+\u0434\.",             "\u0442.\u0434."),    # т. д. → т.д.
-        (r"\b\u0442\.\s+\u043f\.",             "\u0442.\u043f."),    # т. п. → т.п.
-        (r"\b\u0442\.\s+\u043a\.",             "\u0442.\u043a."),    # т. к. → т.к.
-        (r"\b\u0442\.\s+\u043d\.",             "\u0442.\u043d."),    # т. н. → т.н.
-        (r"\b\u0438\.\s+\u043e\.",             "\u0438.\u043e."),    # и. о. → и.о.
-        (r"\b\u0441\.\s+\u0433\.",             "\u0441.\u0433."),    # с. г. → с.г.
-        (r"\b\u043d\.\s+\u044d\.",             "\u043d.\u044d."),    # н. э. → н.э.
-        (r"\b\u0432\.\s+\u0442\.\s+\u0447\.", "\u0432.\u0442.\u0447."),  # в. т. ч. → в.т.ч.
-        # и т.д. / и т.п. – с пробелом внутри
-        (r"\u0438\s+\u0442\.\s*\u0434\.",     "\u0438 \u0442.\u0434."),   # и т.д.
-        (r"\u0438\s+\u0442\.\s*\u043f\.",     "\u0438 \u0442.\u043f."),   # и т.п.
-        # проф. / акад. / др. – титулы
-        (r"\b\u043f\u0440\u043e\u0444\.?,?\s", "\u043f\u0440\u043e\u0444. "),  # проф.
-        (r"\b\u0430\u043a\u0430\u0434\.?,?\s", "\u0430\u043a\u0430\u0434. "), # акад.
-        (r"\b\u0434\u043e\u0446\.?,?\s",        "\u0434\u043e\u0446. "),         # доц.
-        # ул. / пр. / пер. – адреса
-        (r"\b\u0443\u043b\.?,?\s",               "\u0443\u043b. "),    # ул.
-        (r"\b\u043f\u0440\.?,?\s",               "\u043f\u0440. "),    # пр.
-        (r"\b\u043f\u0435\u0440\.?,?\s",        "\u043f\u0435\u0440. "),  # пер.
-    ],
-    "en": [
-        (r"\be\.\s+g\.",       "e.g."),    # e. g. → e.g.
-        (r"\be\.g,",             "e.g.,"),   # e.g, → e.g.,
-        (r"\bi\.\s+e\.",       "i.e."),    # i. e. → i.e.
-        (r"\bi\.e,",             "i.e.,"),   # i.e, → i.e.,
-        (r"\bU\.\s+S\.",       "U.S."),    # U. S. → U.S.
-        (r"\bU\.\s+K\.",       "U.K."),    # U. K. → U.K.
-        (r"\betc\s+\.",         "etc."),    # etc . → etc.
-        (r"\bvs\.\s+",          "vs. "),    # vs.  → vs. (normalizacja)
-        (r"\bDr\.\s+",          "Dr. "),    # Dr.  (tytuł)
-        (r"\bMr\.\s{2,}",       "Mr. "),    # Mr.  (tytuł)
-        (r"\bMrs\.\s{2,}",      "Mrs. "),   # Mrs. (tytuł)
-        (r"\bProf\.\s+",        "Prof. "),  # Prof.
-        (r"\bSt\.\s+",          "St. "),    # St. (Saint / Street)
-        (r"\bFig\.\s+",         "Fig. "),   # Fig. (Figure)
-        (r"\bNo\.\s+",          "No. "),    # No. (Number)
-        (r"\bp\.\s+",           "p. "),     # p. (page)
-        (r"\bpp\.\s+",          "pp. "),    # pp. (pages)
-    ],
-    "it": [
-        (r"\bad\s+es\.?,?\b",  "ad es."),  # ad esempio
-        (r"\becc\.?,?\b",       "ecc."),    # eccetera
-        (r"\bdott\.?,?\s",      "dott. "),  # dottore
-        (r"\bprof\.?,?\s",      "prof. "),  # professore
-        (r"\bpagg?\.?,?\s",     "pag. "),   # pagina
-        (r"\bsig\.?,?\s",       "sig. "),   # signore
-        (r"\bsig\.?ra\.?,?\s", "sig.ra "), # signora
-        (r"\bart\.?,?\s",       "art. "),   # articolo
-        (r"\bcap\.?,?\s",       "cap. "),   # capitolo
-        (r"\bn\.\s*ro?\.?\b", "n."),      # numero
-        (r"\bcfr\.?,?\s",       "cfr. "),   # confronta
-        (r"\bvol\.?,?\s",       "vol. "),   # volume
-        (r"\bpag\.?,?\s",       "pag. "),   # pagina (alias)
-    ],
-    "fi": [
-        (r"\besim\.?,?\s",      "esim. "),  # esimerkiksi
-        (r"\bjne\.?,?\b",       "jne."),    # ja niin edelleen
-        (r"\bym\.?,?\b",        "ym."),     # ynnä muuta
-        (r"\bns\.?,?\s",        "ns. "),    # niin sanottu
-        (r"\btms\.?,?\b",       "tms."),    # tai muuta sellaista
-        (r"\bko\.?,?\s",        "ko. "),    # kyseinen / kyseessä oleva
-        (r"\bpo\.?,?\s",        "po. "),    # pohjoiseen / pohjoinen
-        (r"\bvt\.?,?\s",        "vt. "),    # virkaatekevä
-        (r"\bprof\.?,?\s",      "prof. "),  # professori
-        (r"\bdr\.?,?\s",        "dr. "),    # tohtori
-        (r"\bos\.?,?\s",        "os. "),    # osasto
-        (r"\bv\.?,?\s",         "v. "),     # vuosi / versus
-    ],
-    "is": [
-        (r"\bt\.\s*d\.?,?\b",             "t.d."),      # til dæmis
-        (r"\b\u00fe\.\s*e\.?,?\b",        "\u00fe.e."),  # þ.e. – það er
-        (r"\bm\.\s*a\.?,?\b",             "m.a."),      # meðal annars
-        (r"\bu\.\s*\u00fe\.\s*b\.?,?\b", "u.\u00fe.b."),  # u.þ.b. – um það bil
-        (r"\bo\.\s*s\.\s*frv\.?,?\b",  "o.s.frv."),  # og svo framvegis
-        (r"\bdr\.?,?\s",                    "dr. "),       # doktor
-        (r"\bprof\.?,?\s",                  "prof. "),     # prófessor
-        (r"\bbls\.?,?\s",                   "bls. "),      # blaðsíða (strona)
-        (r"\bskv\.?,?\s",                   "skv. "),      # samkvæmt (zgodnie z)
-        (r"\bfh\.?,?\s",                    "fh. "),       # fyrir hönd (w imieniu)
-    ],
-}
+# Строятся из поля `skrotowce` основ (dictionaries/<kod>/podstawy.yaml):
+# многочленная аббревиатура получает шаблон, склеивающий разрядку
+# («m. in.» → «m.in.», «т. е.» → «т.е.»). Точка ОБЯЗАТЕЛЬНА: прежние
+# шаблоны с необязательной точкой (\bv\.?,?\s, \bart\.?,?\s) дописывали
+# точку к обычным словам прозы (решение 2026-10-16).
+from shamanic_locale import PODSTAWY, wzorce_skrotowcow
+
+ABBREV_BY_LANG = {_k: wzorce_skrotowcow(_k) for _k in PODSTAWY}
 abbrev_patterns = ABBREV_BY_LANG.get(LANG, [])
 
 corrected = []
@@ -1918,11 +1772,10 @@ df_sent = pd.DataFrame({"sent_id": range(1, len(all_sents)+1), "sentence": all_s
 df_para = pd.DataFrame({"para_id": range(1, len(paragraphs)+1), "paragraph": paragraphs})
 
 # Языково-специфичный паттерн токенов для CountVectorizer / TF-IDF
-TOKEN_PAT = {
-    "pl": r"(?u)\b[a-ząćęłńóśźż]{2,}\b",
-    "ru": r"(?u)\b[а-яё]{2,}\b",
-    "en": r"(?u)\b[a-z]{2,}\b",
-}.get(LANG, r"(?u)\b\S{2,}\b")
+# Буквы — поле `alfabet` основ (у каждого языка; прежний fallback \S{2,}
+# для it/fi/is пропускал в TF-IDF цифры и знаки).
+from shamanic_locale import wzorzec_tokenow
+TOKEN_PAT = wzorzec_tokenow(LANG)
 
 # Лемматизируем абзацы (понадобится для TF-IDF)
 def to_lemma_str(text):
@@ -1947,14 +1800,11 @@ print("\nДетекция языка по абзацам и предложени
 # характерный для основного языка корпуса (например, финские ä/ö),
 # почти наверняка оно тоже на этом языке — даже если lingua ошибочно
 # классифицирует его на основе вкраплённых иноязычных слов.
-_LANG_DIACRITICS = {
-    "fi": "äöÄÖ",
-    "pl": "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
-    "is": "áéíóúýæöþðÁÉÍÓÚÝÆÖÞÐ",
-    "it": "àèéìòùÀÈÉÌÒÙ",
-    # ru — авто-детекция по кириллическому Unicode-блоку в lingua
-    # en — без диакритик
-}
+# Поле `diakrytyki` основ; "" (ru — кириллица по блоку Unicode в lingua,
+# en — без диакритик) = язык без «защитника».
+from shamanic_locale import PODSTAWY, diakrytyki
+
+_LANG_DIACRITICS = {_k: diakrytyki(_k) for _k in PODSTAWY if diakrytyki(_k)}
 
 # Минимальная длина предложения, при которой можно доверять lingua.
 # На фрагментах короче ~30 символов lingua часто ошибается на проприальных
@@ -2862,10 +2712,10 @@ if all_ents:
 # собственный lang-атрибут, благодаря которому NVDA/JAWS/Narrator
 # и встроенные TTS-движки автоматически выбирают правильный голос.
 # ============================================================
-LANG_TO_LOCALE = {
-    "en": "en-US", "pl": "pl-PL", "ru": "ru-RU",
-    "it": "it-IT", "fi": "fi-FI", "is": "is-IS",
-}
+# Поле `locale` основ.
+from shamanic_locale import PODSTAWY
+
+LANG_TO_LOCALE = {_k: _p["locale"] for _k, _p in PODSTAWY.items()}
 
 # --- HTML с p/span lang ---
 try:

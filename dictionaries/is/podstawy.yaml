@@ -1,0 +1,29 @@
+# PODSTAWY JĘZYKA — opis pól w dictionaries/pl/podstawy.yaml.
+# Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
+
+jezyk: is
+lingua: ICELANDIC
+nazwa_ru: исландский
+locale: is-IS
+# spaCy nie ma dziś modelu islandzkiego: notatnik buduje potok Hugging Face
+# (IceBERT + MIM-GOLD-22). Audyt sonduje indeks spaCy i pada, gdy model się
+# pojawi — wtedy wpisz jego nazwę tutaj i rozważ, czy gałąź HF jest jeszcze potrzebna.
+spacy: null
+
+# Pełna łacinka (C, Q, W, Z w zapożyczeniach) + litery islandzkie.
+alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÐÉÍÓÚÝÞÆÖ"
+diakrytyki: "áéíóúýæöþð"
+
+skrotowce: [t.d., þ.e., m.a., u.þ.b., o.s.frv., dr., prof., bls., skv., fh.]
+
+naglowki_struktury: [ÞÁTTUR, ATRIÐI, ENDIR, EPILOGUR, FORLEIKUR, KAFLI, HLUTI, BÓK]
+
+stopfrazy_powiazane:
+  - tengdar greinar
+  - lesa meira
+  - sjá einnig
+  - tengt efni
+  - þér gæti einnig líkað
+
+nav_slowa: []
+nav_rdzenie: [tengd]

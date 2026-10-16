@@ -1,0 +1,28 @@
+# PODSTAWY JĘZYKA — opis pól w dictionaries/pl/podstawy.yaml.
+# Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
+
+jezyk: ru
+lingua: RUSSIAN
+nazwa_ru: русский
+locale: ru-RU
+spacy: ru_core_news_lg
+
+alfabet: "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
+diakrytyki: ""               # cyrylicę lingua rozpoznaje po bloku Unicode
+
+skrotowce: [т.е., т.д., т.п., т.к., т.н., т.наз., и.о., с.г., н.э., в.т.ч., и т.д., и т.п., и др., и пр., напр., проф., акад., доц., ул., пр., пер.]
+
+naglowki_struktury: [АКТ, ДЕЙСТВИЕ, СЦЕНА, КАРТИНА, ЯВЛЕНИЕ, ЭПИЛОГ, ПРОЛОГ, ФИНАЛ, КОНЕЦ, ГЛАВА, ЧАСТЬ, КНИГА, РАЗДЕЛ]
+
+stopfrazy_powiazane:
+  - похожие статьи
+  - похожие материалы
+  - подобные статьи
+  - читайте также
+  - смотрите также
+  - вам также может понравиться
+  - рекомендуем
+  - ещё по теме
+
+nav_slowa: []
+nav_rdzenie: []

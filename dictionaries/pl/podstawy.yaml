@@ -1,0 +1,52 @@
+# PODSTAWY JĘZYKA — jedyne źródło prawdy o języku w kodzie ATA (od 2026-10-16).
+#
+# Zbiór obsługiwanych języków = katalogi dictionaries/<kod>/ z tym plikiem.
+# Notatnik, generate_report.py i shamanic_locale.py NIE trzymają już własnych
+# map per język — liczą je stąd (shamanic_locale.PODSTAWY). Audyt
+# `.github/scripts/audyt_podstaw.py` blokuje wydanie, gdy pola brakuje.
+#
+# Każde pole jest OBOWIĄZKOWE. Pusta wartość ("", [], null) to DEKLARACJA
+# „ten język tego nie ma” — brak klucza to błąd, nie cichy fallback.
+
+jezyk: pl                    # == nazwa katalogu
+lingua: POLISH               # nazwa członka enuma lingua.Language; .title() = nazwa języka w promptach rytuałów
+nazwa_ru: польский           # nazwa w stdout notatnika (celowo po rosyjsku)
+locale: pl-PL                # atrybut lang= w eksporcie HTML/DOCX
+spacy: pl_core_news_lg       # null = spaCy nie ma modelu → audyt sonduje indeks spaCy
+
+# Litery słów korpusu, WIELKIE. Z nich: wzorzec tokenów TF-IDF (małymi)
+# i klasa wielkich liter dla heurystyk czyszczenia (suma wszystkich języków).
+alfabet: "AĄBCĆDEĘFGHIJKLŁMNŃOÓPQRSŚTUVWXYZŹŻ"
+# Znaki typowe dla języka (małe; wielkie liczy kod) — „obrońca” języka
+# zdania przy detekcji. "" = język bez diakrytyk.
+diakrytyki: "ąćęłńóśźż"
+
+# Skrótowce w formie kanonicznej, każdy z kropką. Formy wieloczłonowe
+# (m.in., dr hab.) dostają wzorzec scalający rozstrzelony zapis („m. in.”);
+# wszystkie trafiają do listy, po której generate_report rozpoznaje język <code>.
+# Kropka jest obowiązkowa: bez niej wzorzec trafiałby w zwykłe słowa prozy.
+skrotowce: [m.in., np., tzw., tzn., tj., itd., itp., ww., jw., dr hab., prof., inż., ul., al., pl., r., str.]
+
+# Słowa otwierające linie-znaczniki struktury (akty, sceny, rozdziały) —
+# chronione przed usuwaniem jako powtarzający się nagłówek strony.
+naglowki_struktury: [AKT, SCENA, OBRAZ, EPILOG, PROLOG, FINAŁ, KONIEC, ROZDZIAŁ, CZĘŚĆ, KSIĘGA, SEKCJA]
+
+# CAŁY tekst elementu, który otwiera blok „podobne artykuły” na stronie WWW.
+stopfrazy_powiazane:
+  - podobne artykuły
+  - podobne wpisy
+  - powiązane artykuły
+  - powiązane wpisy
+  - polecane artykuły
+  - polecamy
+  - czytaj też
+  - czytaj także
+  - również cię zainteresuje
+  - może cię zainteresować
+  - zobacz również
+  - zobacz też
+  - więcej na ten temat
+
+# Tokeny klas/id elementów-śmieci w treści strony (całe tokeny / początki tokenów).
+nav_slowa: [podobne, powiązane, komentarz, komentarze, reklama]
+nav_rdzenie: []

@@ -1,0 +1,27 @@
+# PODSTAWY JĘZYKA — opis pól w dictionaries/pl/podstawy.yaml.
+# Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
+
+jezyk: it
+lingua: ITALIAN
+nazwa_ru: итальянский
+locale: it-IT
+spacy: it_core_news_lg
+
+# Pełna łacinka (J, K, W, X, Y w zapożyczeniach) + samogłoski z akcentem.
+alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZÀÈÉÌÒÙ"
+diakrytyki: "àèéìòù"
+
+skrotowce: [ad es., sig.ra, ecc., dott., prof., pag., pagg., sig., art., cap., n., cfr., vol.]
+
+naglowki_struktury: [ATTO, SCENA, EPILOGO, PROLOGO, FINE, CAPITOLO, PARTE, LIBRO, SEZIONE]
+
+stopfrazy_powiazane:
+  - articoli correlati
+  - leggi anche
+  - potrebbe interessarti anche
+  - scopri di più
+  - ti potrebbe interessare
+  - altri articoli
+
+nav_slowa: [correlati]
+nav_rdzenie: []

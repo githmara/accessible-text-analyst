@@ -1,0 +1,26 @@
+# PODSTAWY JĘZYKA — opis pól w dictionaries/pl/podstawy.yaml.
+# Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
+
+jezyk: fi
+lingua: FINNISH
+nazwa_ru: финский
+locale: fi-FI
+spacy: fi_core_news_lg
+
+alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ"
+diakrytyki: "äö"
+
+skrotowce: [esim., jne., ym., ns., tms., ko., po., vt., prof., dr., os., v.]
+
+naglowki_struktury: [NÄYTÖS, KOHTAUS, LOPPU, EPILOGI, PROLOGI, LUKU, OSA, KIRJA, JAKSO]
+
+stopfrazy_powiazane:
+  - aiheeseen liittyviä artikkeleita
+  - lue myös
+  - lisää aiheesta
+  - saatat pitää myös
+  - katso myös
+  - lisää aiheeseen liittyen
+
+nav_slowa: []
+nav_rdzenie: [liittyv]
