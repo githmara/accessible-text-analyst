@@ -235,6 +235,8 @@ Skriftunum hér að neðan er ætlað að keyra **í röð**: hver tekur við gr
 ```bash
 jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
+# Án viðmóts (CI): hólf 0-39 með nbclient, án gagnvirka hólfsins cell_qa_rag
+python -c "import nbformat as f; from nbclient import NotebookClient as C; nb=f.read('accessible_text_analyst.ipynb',4); c=C(nb,timeout=None); c.create_kernel_manager(); c.start_new_kernel(); c.start_new_kernel_client(); [c.execute_cell(x,i) for i,x in enumerate(nb.cells[:40])]; f.write(nb,'accessible_text_analyst.ipynb'); c.km.shutdown_kernel(now=True)"
 ```
 
 Þetta er raðleiðsla með sameiginlegri hnattrænni stöðu. **Ekki endurraða hólfum og ekki keyra þau úr röð.** Minnisbókin skrifar `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` og `theses.txt`.

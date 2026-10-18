@@ -1,6 +1,7 @@
 # Granice wersji (od v1.8.0): górna granica = następny minor ponad wersją PRZETESTOWANĄ.
 # Zestaw przetestowany na Pythonie 3.14.3 (2026-10-15): notatnik komórki 0–39 (w tym
 # sentyment i omorfi), shamanic_pipeline.py, pełny cykl ksiega_niedomowien.py.
+# nbclient 0.11.0: komórki 0–39 wykonane przez nbclient (2026-10-18, v1.10.1).
 # Minimalny Python wynika z zależności: 3.12 (numpy 2.5, lingua 2.2).
 # Nowsze wydania sprawdza `python audyt_zaleznosci.py` (tylko ostrzega).
 
@@ -8,6 +9,10 @@
 ipykernel<7.5
 nbstripout<0.10
 jupytext<1.20
+# Wykonanie notatnika bez interfejsu (CI / skrypty): komórki 0–39, z pominięciem
+# interaktywnej cell_qa_rag, która w trybie wsadowym pada na EOF przy input().
+# Sposób uruchomienia — CLAUDE.md, sekcja "Headless execution (nbclient)".
+nbclient<0.12
 pyyaml<6.1
 
 # Parsowanie plików i ekstrakcja tekstu
@@ -37,7 +42,9 @@ tqdm<4.71
 # (~130 MB plików *.hfst rozpakowanych do bieżącego katalogu; są w .gitignore).
 # Pakiet od wersji 0.10 jest czysto pythonowy (zależność pyhfst), działa też na
 # Windowsie. Komponent omorfi_lemmas nadpisuje lematy i cechy morfologiczne
-# fińskich tokenów tam, gdzie analiza słownikowa zgadza się z UPOS taggera spaCy.
+# fińskich tokenów tam, gdzie analiza słownikowa zgadza się z UPOS taggera spaCy,
+# a przy niezgodności UPOS — sam lemat, gdy lemat spaCy nie jest słownikowy, a omorfi
+# daje jeden lemat (blokkaa -> blokata zamiast *blokka).
 # Brak pakietu lub automatów => cell_model zostaje przy lematyzatorze spaCy.
 # omorfi<0.11
 

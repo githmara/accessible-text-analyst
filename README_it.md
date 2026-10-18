@@ -235,6 +235,8 @@ Gli script numerati di seguito sono pensati per essere eseguiti **in ordine**: o
 ```bash
 jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
+# Senza interfaccia (CI): celle 0-39 con nbclient, senza la cella interattiva cell_qa_rag
+python -c "import nbformat as f; from nbclient import NotebookClient as C; nb=f.read('accessible_text_analyst.ipynb',4); c=C(nb,timeout=None); c.create_kernel_manager(); c.start_new_kernel(); c.start_new_kernel_client(); [c.execute_cell(x,i) for i,x in enumerate(nb.cells[:40])]; f.write(nb,'accessible_text_analyst.ipynb'); c.km.shutdown_kernel(now=True)"
 ```
 
 Questa è una pipeline sequenziale con stato globale condiviso. **Non riordinare le celle, e non eseguirle fuori sequenza.** Il notebook scrive `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` e `theses.txt`.

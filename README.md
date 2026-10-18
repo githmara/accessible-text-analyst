@@ -235,6 +235,8 @@ The numbered scripts below are intended to be run **in order**: each one consume
 ```bash
 jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
+# Headless (CI): cells 0-39 via nbclient, skipping the interactive cell_qa_rag
+python -c "import nbformat as f; from nbclient import NotebookClient as C; nb=f.read('accessible_text_analyst.ipynb',4); c=C(nb,timeout=None); c.create_kernel_manager(); c.start_new_kernel(); c.start_new_kernel_client(); [c.execute_cell(x,i) for i,x in enumerate(nb.cells[:40])]; f.write(nb,'accessible_text_analyst.ipynb'); c.km.shutdown_kernel(now=True)"
 ```
 
 This is a sequential pipeline with shared global state. **Do not reorder cells, and do not run them out of order.** The notebook writes `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx`, and `theses.txt`.

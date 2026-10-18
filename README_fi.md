@@ -235,6 +235,8 @@ Alla olevat skriptit on tarkoitettu ajettaviksi **järjestyksessä**: jokainen k
 ```bash
 jupyter notebook accessible_text_analyst.ipynb
 # (Cell → Run All)
+# Ilman käyttöliittymää (CI): solut 0-39 nbclientillä, ilman interaktiivista cell_qa_rag-solua
+python -c "import nbformat as f; from nbclient import NotebookClient as C; nb=f.read('accessible_text_analyst.ipynb',4); c=C(nb,timeout=None); c.create_kernel_manager(); c.start_new_kernel(); c.start_new_kernel_client(); [c.execute_cell(x,i) for i,x in enumerate(nb.cells[:40])]; f.write(nb,'accessible_text_analyst.ipynb'); c.km.shutdown_kernel(now=True)"
 ```
 
 Tämä on peräkkäinen putki, jolla on jaettu globaali tila. **Älä järjestä soluja uudelleen äläkä aja niitä järjestyksen ulkopuolella.** Notebook kirjoittaa `export_results/<project>/sentences.csv`, `paragraphs.csv`, `theses.csv`, `keywords_tfidf.csv`, `paragraphs_with_topics.csv`, `topic_keywords.json`, `entities.csv`, `accessible_text.html`, `accessible_text.docx` ja `theses.txt`.

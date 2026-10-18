@@ -1175,8 +1175,9 @@ def _build_finnish_omorfi(fi_nlp):
     """Добавляет к финской модели компонент omorfi_lemmas: леммы и UD-морфология
     из словарного анализатора omorfi. В pip-версии omorfi нет контекстной
     дизамбигуации, поэтому кандидаты фильтруются по UPOS от теггера spaCy;
-    если ни один анализ не совпал по UPOS, токен не трогаем — остаётся
-    значение spaCy. Любая проблема (нет пакета, нет автоматов, ошибка
+    если ни один анализ не совпал по UPOS, остаётся значение spaCy — кроме
+    случая, когда лемма spaCy не словарная, а omorfi однозначен (тогда
+    берётся только лемма omorfi). Любая проблема (нет пакета, нет автоматов, ошибка
     загрузки) — возврат модели без изменений.
     """
     from pathlib import Path
@@ -1226,13 +1227,49 @@ def _build_finnish_omorfi(fi_nlp):
                         a.weight))
         return tuple(out)
 
+    def _om_mixed_case(a, surf):
+        """Лемма с прописными буквами в середине (LuuLIT, maniEK) у словоформы
+        без них — артефакт recased-автомата, а не аббревиатура вроде PiS."""
+        return any(c.isupper() for c in a[1][1:]) and not any(c.isupper() for c in surf[1:])
+
+    def _om_plausible(surf):
+        """Анализы без двух артефактов автомата: «догадки» для незнакомых слов
+        (X, лемма = сама строка, вес inf) и выдуманные recased-автоматом
+        прописные леммы у строчной словоформы (luulit -> Luul, luuLIT)."""
+        low = surf.islower()
+        return [a for a in _om_lookup(surf)
+                if a[3] != float("inf") and not (low and a[1] != a[1].lower())]
+
+    def _om_is_base(lemma):
+        """True, если omorfi признаёт строку леммой (словарной формой) самой себя."""
+        if not lemma:
+            return False
+        return any(a[1].lower() == lemma.lower() for a in _om_plausible(lemma))
+
     def _omorfi_lemmas_pipe(doc):
         for tok in doc:
             if not tok.is_alpha:
                 continue
-            matching = [a for a in _om_lookup(tok.text) if a[0] == tok.pos_]
+            matching = [a for a in _om_lookup(tok.text)
+                        if a[0] == tok.pos_ and not _om_mixed_case(a, tok.text)]
             if not matching:
-                continue  # словарь и теггер разошлись — доверяем spaCy
+                # Словарь и теггер разошлись. По умолчанию доверяем spaCy, но
+                # только пока его лемма — настоящая словарная форма. Если omorfi
+                # её не знает как лемму (мусор вроде *blokka* <- blokkaa) или она
+                # совпадает с непрошедшей лемматизацию словоформой (luulit), а ВСЕ
+                # правдоподобные анализы omorfi дают ОДНУ лемму — берём её. Только
+                # лемму: UPOS и морфологию оставляем от spaCy. Имена не трогаем
+                # (PROPN или прописная буква не в начале предложения): omorfi их
+                # часто не знает и подставил бы нарицательное (Tuskia -> *tuska*).
+                is_name = tok.pos_ == "PROPN" or (tok.text[:1].isupper() and not tok.is_sent_start)
+                if not is_name and not _om_is_base(tok.lemma_):
+                    # Только словарные анализы (вес 0): угаданные omorfi сложные
+                    # слова (tapa+maa, sama+laki) имеют вес >= 10.
+                    om_lemmas = {a[1] for a in _om_plausible(tok.text) if a[3] == 0}
+                    # Прописная лемма = имя (Valensa -> *Vale* в начале предложения).
+                    if len(om_lemmas) == 1 and not next(iter(om_lemmas))[:1].isupper():
+                        tok.lemma_ = next(iter(om_lemmas))
+                continue
             _upos, lemma, feats, _w = min(matching, key=lambda a: a[3])
             tok.lemma_ = lemma
             if feats:

@@ -4,6 +4,27 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.10.1 — Finnish lemmas no longer fall back to spaCy's garbage when the tagger and omorfi disagree
+
+**Theme.** A colloquial Finnish Whisper transcript about the Polish constitutional court was refused by the Book of the Unsaid for a grammar leak (2.17, limit 1.0), although omorfi was active in the notebook. Two keywords caused it: *blokka* and *luulit*. spaCy tagged `blokkaa` ("blocks") and `luulit` ("you thought") as nouns, while omorfi knows them only as verbs. The `omorfi_lemmas` component treated that disagreement as "trust spaCy", so spaCy's garbage lemma *blokka* survived, and for `luulit` the recased automaton offered an invented noun compound *LuuLIT*, which matched the noun tag. Patch bump: nothing to configure; Finnish lemmas get more accurate.
+
+### What changed in `cell_model` (Finnish with omorfi only)
+- **Lemma fallback.** When no omorfi reading matches spaCy's part of speech, the token used to keep spaCy's lemma. Now omorfi's lemma replaces it if spaCy's lemma is not a dictionary form according to omorfi and every remaining omorfi dictionary reading gives the same lemma. Only the lemma changes; the part of speech and morphology stay spaCy's.
+- **Names are left alone.** The fallback skips proper nouns, capitalized words in mid-sentence and capitalized omorfi lemmas, because omorfi often does not know a name and would substitute a common noun (*Tuskia* → *tuska*, *Valensa* → *Vale*).
+- **Automaton artefacts are ignored.** omorfi's guess for an unknown word (part of speech X, lemma equal to the word, infinite weight) no longer makes garbage such as *blokka* look like a dictionary word. Compounds that omorfi guesses productively (weight 10 or more: *tapa+maa*, *sama+laki*) are not used by the fallback. Lemmas with capitals in the middle of a lowercase word (*LuuLIT*, *maniEK*) are dropped everywhere; abbreviations such as *PiS* keep their reading because the word itself has the capital.
+
+### Headless execution with nbclient
+`nbclient` is now listed in `requirements.txt` as a CI-friendly tool, and the READMEs show how to execute cells 0–39 without Jupyter's interface. The interactive question-and-answer cell is excluded because it ends with an EOF error when nobody can type.
+
+### Verified
+- The old and new `cell_model` were run on all 32 Finnish transcripts that have an export folder (84,427 alphabetic tokens). 387 tokens changed lemma, 0.46%. Almost all changes replace a broken lemma with the dictionary one: *kene* → *kuka*, *kritiso* → *kritisoida*, *miljarde* → *miljardi*, *tarvii* → *tarvita*, *eiks* → *ei*, *kanssamme* → *kanssa*. A few colloquial homographs can now get the wrong dictionary word (*kaos* → *kakoa*, *törmät* → *törmä*); before, these had no dictionary lemma at all.
+- Notebook cells 0–39 (with sentiment), `generate_report.py` and `shamanic_pipeline.py` were run on the refused corpus. Its keywords now contain *blokata* and *luulla*, the grammar leak is 0.0, and a full Book of the Unsaid cycle produced an entry.
+
+### Distribution
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.10.0 — every language defined in one place, and tokens that keep foreign letters
 
 **Theme.** Until now a language existed in about a dozen hand-written lists across the notebook, `generate_report.py` and `shamanic_locale.py`. Nothing connected them, so a seventh language would have passed the translation checks and then silently fallen back to English models and patterns. Each language is now described once, in `dictionaries/<code>/podstawy.yaml`, and every per-language map in the code is derived from it. Building that file showed that some of the old lists were themselves wrong. Minor bump: there is a new required data file per language, and the analysis of the same source can differ.
