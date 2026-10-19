@@ -327,6 +327,8 @@ A standalone, run-once script that reads the four narrative artefacts produced b
 
 ```bash
 python ksiega_niedomowien.py scan              # which export_results/ folders qualify
+python ksiega_niedomowien.py scan --blocks     # also blocks done / open / left (slow; automatic with --folder)
+python ksiega_niedomowien.py status            # progress per folder: entries, obvious blocks, open packets
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
 python ksiega_niedomowien.py draft <id>        # optional: draft via API + seal, up to 2 retries

@@ -583,6 +583,62 @@ def done_ids(exp):
     return ids
 
 
+_BOOK_COMMENT_RE = re.compile(r"kirja:id=([0-9a-f]{10}) \| folder=(.+?) \| block=\d+")
+
+
+def book_progress(exp):
+    """Co z każdego folderu jest już w Księdze, wśród bloków oczywistych i w otwartych pakietach.
+
+    {folder (NFC): {"entries": [nr wpisu], "obvious": n, "done": {id bloku}, "open": [(katalog, packet)]}}.
+    Bez omorfi i bez build_blocks — tanie, więc `scan` i `status` mogą to pokazywać zawsze.
+    Wpis obecny w Księdze, ale bez rekordu w tila.json, liczy się jako zrobiony (numer "?").
+    """
+    book, state_p, _, _ = book_paths(exp)
+    prog = {}
+
+    def slot(folder):
+        return prog.setdefault(unicodedata.normalize("NFC", folder),
+                               {"entries": [], "obvious": 0, "done": set(), "open": []})
+
+    for bid, rec in load_json(state_p, {}).get("blocks", {}).items():
+        sl = slot(rec.get("folder", "?"))
+        sl["done"].add(bid)
+        if rec.get("status") == "obvious":
+            sl["obvious"] += 1
+        else:
+            sl["entries"].append(rec.get("entry", "?"))
+    if book.exists():
+        for bid, folder in _BOOK_COMMENT_RE.findall(book.read_text(encoding="utf-8")):
+            sl = slot(folder)
+            if bid not in sl["done"]:
+                sl["done"].add(bid)
+                sl["entries"].append("?")
+    for d, pk in _open_packets(exp):
+        slot(pk.get("folder", "?"))["open"].append((d, pk))
+    return prog
+
+
+def _entry_numbers(p):
+    nums = sorted(e for e in p["entries"] if isinstance(e, int))
+    rest = [str(e) for e in p["entries"] if not isinstance(e, int)]
+    return ", ".join([str(n) for n in nums] + rest) or "-"
+
+
+def _open_summary(p):
+    return "; ".join(f"{d.name} [{_packet_files(d)}]" for d, _ in p["open"]) or "-"
+
+
+def _scan_target(exp, name):
+    """Folder dla `scan --folder`: dokładna nazwa albo jednoznaczny początek nazwy (jak w `prepare`)."""
+    cand = exp / name
+    if cand.is_dir():
+        return cand
+    low = unicodedata.normalize("NFC", name).lower()
+    matches = [d for d in exp.iterdir()
+               if d.is_dir() and unicodedata.normalize("NFC", d.name).lower().startswith(low)]
+    return matches[0] if len(matches) == 1 else cand
+
+
 def resolve_folder(exp, name):
     cand = exp / name
     if not cand.is_dir():
@@ -602,9 +658,25 @@ def resolve_folder(exp, name):
 
 def cmd_scan(args):
     exp = export_dir(args)
-    folders = [exp / args.folder] if args.folder else sorted(d for d in exp.iterdir() if d.is_dir())
+    folders = [_scan_target(exp, args.folder)] if args.folder else sorted(d for d in exp.iterdir() if d.is_dir())
     verdicts = [evaluate_folder(f) if f.is_dir() else
                 {"folder": f.name, "ok": False, "reasons": [tr(UI_LANG, "kirja.reason_missing")]} for f in folders]
+    # Postęp w Księdze: bez tego scan nie mówił, że folder ma już wpisy albo otwarty pakiet,
+    # i łatwo było wracać do wyczerpanych folderów. Bloki liczymy tylko na życzenie
+    # (--folder albo --blocks), bo build_blocks kosztuje kilka sekund na folder.
+    prog = book_progress(exp)
+    count_blocks = bool(args.folder or args.blocks)
+    for v in verdicts:
+        p = prog.get(unicodedata.normalize("NFC", v["folder"]))
+        info = {"entries": list(p["entries"]) if p else [], "obvious": p["obvious"] if p else 0,
+                "open_packets": [d.name for d, _ in p["open"]] if p else []}
+        if v["ok"] and count_blocks:
+            ids = {b["id"] for b in build_blocks(exp / v["folder"])[0]}
+            done = len(ids & (p["done"] if p else set()))
+            opened = len(ids & set(info["open_packets"]))
+            info.update(blocks_total=len(ids), blocks_done=done, blocks_open=opened,
+                        blocks_left=len(ids) - done - opened)
+        v["book"] = info
     if args.json:
         print(json.dumps(verdicts, ensure_ascii=False, indent=2))
         return 0 if all(v["ok"] for v in verdicts) or not args.folder else 2
@@ -618,6 +690,15 @@ def cmd_scan(args):
             print(f"       - {r}")
         if v.get("warning"):
             print(f"       ! {v['warning']}")
+        p, b = prog.get(unicodedata.normalize("NFC", v["folder"])), v["book"]
+        if p:
+            print(tr(UI_LANG, "kirja.scan_book", entries=len(p["entries"]), numbers=_entry_numbers(p),
+                     obvious=p["obvious"], open=_open_summary(p)))
+        elif v["ok"]:
+            print(tr(UI_LANG, "kirja.scan_book_none"))
+        if "blocks_total" in b:
+            print(tr(UI_LANG, "kirja.scan_blocks", done=b["blocks_done"], total=b["blocks_total"],
+                     open=b["blocks_open"], left=b["blocks_left"]))
     return 0 if all(v["ok"] for v in verdicts) or not args.folder else 2
 
 
@@ -1141,12 +1222,17 @@ def cmd_status(args):
     print(tr(UI_LANG, "kirja.status_book", path=book, state=exists))
     print(tr(UI_LANG, "kirja.status_counts", entries=state.get("entries", 0),
              obvious=sum(1 for b in blocks.values() if b.get("status") == "obvious")))
-    if work.exists():
-        for d in sorted(work.iterdir()):
-            if d.is_dir() and d.name not in blocks:
-                have = [n for n in ("draft.json", "blind.json", "guesses.json") if (d / n).exists()]
-                print(tr(UI_LANG, "kirja.status_open", id=d.name,
-                         files=", ".join(have) or tr(UI_LANG, "kirja.status_only_packet")))
+    prog = book_progress(exp)
+    if prog:
+        print(tr(UI_LANG, "kirja.status_folders_header"))
+        for folder in sorted(prog):
+            p = prog[folder]
+            print(tr(UI_LANG, "kirja.status_folder_line", folder=folder, entries=len(p["entries"]),
+                     numbers=_entry_numbers(p), obvious=p["obvious"]))
+            for d, pk in p["open"]:
+                print(tr(UI_LANG, "kirja.status_open", id=d.name, block=pk.get("block_no", "?"),
+                         files=_packet_files(d)))
+        print(tr(UI_LANG, "kirja.status_hint"))
     return 0
 
 
@@ -1238,6 +1324,7 @@ def main(argv=None):
     ap.add_argument("--root", help=argparse.SUPPRESS)  # testy: inny katalog z export_results/
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("scan"); s.add_argument("--folder"); s.add_argument("--json", action="store_true")
+    s.add_argument("--blocks", action="store_true")
     s.add_argument("folder_pos", nargs="?", metavar="FOLDER")
     s = sub.add_parser("prepare"); s.add_argument("--folder"); s.add_argument("--limit", type=int, default=1)
     s.add_argument("folder_pos", nargs="?", metavar="FOLDER")

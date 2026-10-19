@@ -4,6 +4,28 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.10.2 — the Book of the Unsaid shows how far each folder has got
+
+**Theme.** `ksiega_niedomowien.py scan` listed which folders pass the filters but said nothing about the Book itself, and `status` listed open packets without naming their folder. A folder that already had an entry, or a packet waiting to be judged, looked exactly like a fresh one, so it was easy to work a finished folder again. Patch bump: two commands print more, one new optional flag, nothing to configure.
+
+### What changed
+- **`scan`** now prints a Book line under every folder: entries (with their numbers), obvious blocks and open packets with their stage. It reads the Book's state file, the Book itself and the work folder, without omorfi, so it costs nothing.
+- **`scan --folder X`** also counts blocks: done, in open packets and left to prepare. The folder name may be given by its start, as in `prepare`. **`scan --blocks`** does the same for every folder; it is opt-in because building the blocks takes a few seconds per folder. `--json` carries all of it under `book`.
+- **`status`** groups progress by folder: entries, obvious blocks, and each open packet with its block number and the files it already has. It ends with a hint pointing to `scan --folder` and `scan --blocks`.
+- The skill (`skills/ksiega-niedomowien/SKILL.md`) tells the agent to check this progress before `prepare`, and to finish an open packet instead of preparing a new one.
+
+### Note
+Blocks are identified by their roots. If a folder's chant changes after an entry was written (for example after re-running the notebook with better lemmas), the old entry still counts under "entries", but its block no longer appears among the current ones, so `scan` can show one entry and 0 blocks done.
+
+### Verified
+- Translation parity, the console hard-code gate and the language basics audit pass; the release-script tests pass.
+- `status`, `scan --folder` with a name prefix and `scan --blocks` were run on all 29 Finnish export folders.
+
+### Distribution
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.10.1 — Finnish lemmas no longer fall back to spaCy's garbage when the tagger and omorfi disagree
 
 **Theme.** A colloquial Finnish Whisper transcript about the Polish constitutional court was refused by the Book of the Unsaid for a grammar leak (2.17, limit 1.0), although omorfi was active in the notebook. Two keywords caused it: *blokka* and *luulit*. spaCy tagged `blokkaa` ("blocks") and `luulit` ("you thought") as nouns, while omorfi knows them only as verbs. The `omorfi_lemmas` component treated that disagreement as "trust spaCy", so spaCy's garbage lemma *blokka* survived, and for `luulit` the recased automaton offered an invented noun compound *LuuLIT*, which matched the noun tag. Patch bump: nothing to configure; Finnish lemmas get more accurate.

@@ -38,6 +38,9 @@ kirja:
   reason_missing: 'mappan er ekki til'
   scan_ok: '[OK ] {folder} (málfræðileki {rate}, haus: {header})'
   scan_rejected: '[NEI] {folder}'
+  scan_book: '       Bók: færslur {entries} (nr. {numbers}), augljósar blokkir {obvious}, opnir pakkar: {open}'
+  scan_book_none: '       Bók: engar færslur né pakkar úr þessari möppu enn'
+  scan_blocks: '       Blokkir: {done} af {total} búnar, {open} í opnum pökkum, {left} eftir að undirbúa'
   header_stripped: 'fjarlægður'
   header_none: 'enginn'
   err_ambiguous_folder: 'Engin ótvíræð mappa "{name}" í export_results/.'
@@ -94,8 +97,11 @@ kirja:
   status_exists: 'til'
   status_missing: 'ekki enn til'
   status_counts: 'Færslur: {entries}; augljósar blokkir: {obvious}'
-  status_open: '  opinn pakki {id}: {files}'
+  status_open: '    opinn pakki {id} (blokk {block}): {files}'
   status_only_packet: 'aðeins packet.json'
+  status_folders_header: 'Framvinda eftir möppum:'
+  status_folder_line: '  {folder}: færslur {entries} (nr. {numbers}), augljósar blokkir {obvious}'
+  status_hint: 'Blokkir sem eftir eru í möppu: scan --folder <nafn>; í öllum möppum: scan --blocks'
 
 llm:
   info_provider: '[LLM] Þjónusta {provider}, líkan {model}, slóð {endpoint}.'

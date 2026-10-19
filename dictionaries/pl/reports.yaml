@@ -38,6 +38,9 @@ kirja:
   reason_missing: 'folder nie istnieje'
   scan_ok: '[OK ] {folder} (przeciek gramatyki {rate}, nagłówek: {header})'
   scan_rejected: '[NIE] {folder}'
+  scan_book: '       Księga: wpisy {entries} (nr {numbers}), bloki oczywiste {obvious}, otwarte pakiety: {open}'
+  scan_book_none: '       Księga: z tego folderu nie ma jeszcze wpisów ani pakietów'
+  scan_blocks: '       Bloki: {done} z {total} zrobione, {open} w otwartych pakietach, {left} do przygotowania'
   header_stripped: 'usunięty'
   header_none: 'brak'
   err_ambiguous_folder: 'Nie ma jednoznacznego folderu "{name}" w export_results/.'
@@ -94,8 +97,11 @@ kirja:
   status_exists: 'istnieje'
   status_missing: 'jeszcze nie istnieje'
   status_counts: 'Wpisy: {entries}; bloki oczywiste: {obvious}'
-  status_open: '  otwarty pakiet {id}: {files}'
+  status_open: '    otwarty pakiet {id} (blok {block}): {files}'
   status_only_packet: 'tylko packet.json'
+  status_folders_header: 'Postęp według folderów:'
+  status_folder_line: '  {folder}: wpisy {entries} (nr {numbers}), bloki oczywiste {obvious}'
+  status_hint: 'Pozostałe bloki folderu: scan --folder <nazwa>; wszystkich folderów: scan --blocks'
 
 llm:
   info_provider: '[LLM] Provider {provider}, model {model}, endpoint {endpoint}.'

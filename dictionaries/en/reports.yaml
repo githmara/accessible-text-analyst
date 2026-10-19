@@ -38,6 +38,9 @@ kirja:
   reason_missing: 'the folder does not exist'
   scan_ok: '[OK ] {folder} (grammar leak {rate}, header {header})'
   scan_rejected: '[NO ] {folder}'
+  scan_book: '       Book: entries {entries} (no. {numbers}), obvious blocks {obvious}, open packets: {open}'
+  scan_book_none: '       Book: no entries or packets from this folder yet'
+  scan_blocks: '       Blocks: {done} of {total} done, {open} in open packets, {left} left to prepare'
   header_stripped: 'stripped'
   header_none: 'none'
   err_ambiguous_folder: 'No unambiguous folder "{name}" in export_results/.'
@@ -94,8 +97,11 @@ kirja:
   status_exists: 'exists'
   status_missing: 'does not exist yet'
   status_counts: 'Entries: {entries}; obvious blocks: {obvious}'
-  status_open: '  open packet {id}: {files}'
+  status_open: '    open packet {id} (block {block}): {files}'
   status_only_packet: 'packet.json only'
+  status_folders_header: 'Progress by folder:'
+  status_folder_line: '  {folder}: entries {entries} (no. {numbers}), obvious blocks {obvious}'
+  status_hint: 'Blocks left in a folder: scan --folder <name>; in all folders: scan --blocks'
 
 llm:
   info_provider: '[LLM] Provider {provider}, model {model}, endpoint {endpoint}.'

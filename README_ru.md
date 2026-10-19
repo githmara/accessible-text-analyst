@@ -327,6 +327,8 @@ python shamanic_voice.py
 
 ```bash
 python ksiega_niedomowien.py scan              # какие каталоги export_results/ подходят
+python ksiega_niedomowien.py scan --blocks     # плюс готовые / открытые / оставшиеся блоки (медленно; с --folder автоматически)
+python ksiega_niedomowien.py status            # ход работы по каталогам: записи, очевидные блоки, открытые пакеты
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
 python ksiega_niedomowien.py draft <id>        # опционально: черновик через API + seal, до 2 повторов

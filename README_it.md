@@ -327,6 +327,8 @@ Uno script autonomo a esecuzione singola che legge i quattro artefatti narrativi
 
 ```bash
 python ksiega_niedomowien.py scan              # quali cartelle di export_results/ sono idonee
+python ksiega_niedomowien.py scan --blocks     # anche blocchi fatti / aperti / rimasti (lento; automatico con --folder)
+python ksiega_niedomowien.py status            # avanzamento per cartella: voci, blocchi ovvi, pacchetti aperti
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
 python ksiega_niedomowien.py draft <id>        # opzionale: bozza via API + seal, fino a 2 riprove

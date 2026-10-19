@@ -38,6 +38,9 @@ kirja:
   reason_missing: 'kansiota ei ole olemassa'
   scan_ok: '[OK ] {folder} (kielioppivuoto {rate}, otsikko: {header})'
   scan_rejected: '[EI ] {folder}'
+  scan_book: '       Kirja: merkintöjä {entries} (nro {numbers}), ilmeisiä lohkoja {obvious}, avoimet paketit: {open}'
+  scan_book_none: '       Kirja: tästä kansiosta ei vielä ole merkintöjä eikä paketteja'
+  scan_blocks: '       Lohkot: {done}/{total} tehty, {open} avoimissa paketeissa, {left} valmistelematta'
   header_stripped: 'poistettu'
   header_none: 'ei ole'
   err_ambiguous_folder: 'export_results/-kansiosta ei löydy yksiselitteistä kansiota "{name}".'
@@ -94,8 +97,11 @@ kirja:
   status_exists: 'olemassa'
   status_missing: 'ei vielä olemassa'
   status_counts: 'Merkintöjä: {entries}; ilmeisiä lohkoja: {obvious}'
-  status_open: '  avoin paketti {id}: {files}'
+  status_open: '    avoin paketti {id} (lohko {block}): {files}'
   status_only_packet: 'vain packet.json'
+  status_folders_header: 'Edistyminen kansioittain:'
+  status_folder_line: '  {folder}: merkintöjä {entries} (nro {numbers}), ilmeisiä lohkoja {obvious}'
+  status_hint: 'Kansion jäljellä olevat lohkot: scan --folder <nimi>; kaikkien kansioiden: scan --blocks'
 
 llm:
   info_provider: '[LLM] Palveluntarjoaja {provider}, malli {model}, osoite {endpoint}.'

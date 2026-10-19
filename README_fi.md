@@ -327,6 +327,8 @@ Itsenäinen, kertasuoritteinen skripti, joka lukee `shamanic_ai.py`:n tuottamat 
 
 ```bash
 python ksiega_niedomowien.py scan              # mitkä export_results/-kansiot kelpaavat
+python ksiega_niedomowien.py scan --blocks     # lisäksi tehdyt / avoimet / jäljellä olevat lohkot (hidas; --folder-valitsimella automaattisesti)
+python ksiega_niedomowien.py status            # edistyminen kansioittain: merkinnät, ilmeiset lohkot, avoimet paketit
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
 python ksiega_niedomowien.py draft <id>        # valinnainen: luonnos API:n kautta + seal, enintään 2 uusintaa

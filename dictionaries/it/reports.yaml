@@ -38,6 +38,9 @@ kirja:
   reason_missing: 'la cartella non esiste'
   scan_ok: '[OK ] {folder} (perdita grammaticale {rate}, intestazione: {header})'
   scan_rejected: '[NO ] {folder}'
+  scan_book: '       Libro: voci {entries} (n. {numbers}), blocchi ovvi {obvious}, pacchetti aperti: {open}'
+  scan_book_none: '       Libro: ancora nessuna voce né pacchetto da questa cartella'
+  scan_blocks: '       Blocchi: {done} su {total} fatti, {open} in pacchetti aperti, {left} da preparare'
   header_stripped: 'rimossa'
   header_none: 'assente'
   err_ambiguous_folder: 'Nessuna cartella univoca "{name}" in export_results/.'
@@ -94,8 +97,11 @@ kirja:
   status_exists: 'esiste'
   status_missing: 'non esiste ancora'
   status_counts: 'Voci: {entries}; blocchi ovvi: {obvious}'
-  status_open: '  pacchetto aperto {id}: {files}'
+  status_open: '    pacchetto aperto {id} (blocco {block}): {files}'
   status_only_packet: 'solo packet.json'
+  status_folders_header: 'Avanzamento per cartella:'
+  status_folder_line: '  {folder}: voci {entries} (n. {numbers}), blocchi ovvi {obvious}'
+  status_hint: 'Blocchi rimasti in una cartella: scan --folder <nome>; in tutte: scan --blocks'
 
 llm:
   info_provider: '[LLM] Fornitore {provider}, modello {model}, endpoint {endpoint}.'

@@ -38,6 +38,9 @@ kirja:
   reason_missing: 'каталог не существует'
   scan_ok: '[OK ] {folder} (утечка грамматики {rate}, заголовок: {header})'
   scan_rejected: '[НЕТ] {folder}'
+  scan_book: '       Книга: записей {entries} (№ {numbers}), очевидных блоков {obvious}, открытые пакеты: {open}'
+  scan_book_none: '       Книга: из этого каталога пока нет ни записей, ни пакетов'
+  scan_blocks: '       Блоки: готово {done} из {total}, в открытых пакетах {open}, осталось подготовить {left}'
   header_stripped: 'удалён'
   header_none: 'нет'
   err_ambiguous_folder: 'В export_results/ нет однозначного каталога "{name}".'
@@ -94,8 +97,11 @@ kirja:
   status_exists: 'существует'
   status_missing: 'ещё не существует'
   status_counts: 'Записей: {entries}; очевидных блоков: {obvious}'
-  status_open: '  открытый пакет {id}: {files}'
+  status_open: '    открытый пакет {id} (блок {block}): {files}'
   status_only_packet: 'только packet.json'
+  status_folders_header: 'Ход работы по каталогам:'
+  status_folder_line: '  {folder}: записей {entries} (№ {numbers}), очевидных блоков {obvious}'
+  status_hint: 'Оставшиеся блоки каталога: scan --folder <имя>; всех каталогов: scan --blocks'
 
 llm:
   info_provider: '[LLM] Провайдер {provider}, модель {model}, адрес {endpoint}.'
