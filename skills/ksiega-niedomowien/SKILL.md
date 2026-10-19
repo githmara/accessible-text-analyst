@@ -20,7 +20,7 @@ python ksiega_niedomowien.py <command>
 
 If the agent's shell is a different OS than the venv (e.g. a Linux sandbox over a Windows checkout), omorfi and pyhfst are pure Python, so `PYTHONPATH=.venv/Lib/site-packages python3 ksiega_niedomowien.py …` works for every command except `draft` and `fill` (the `openai` SDK has compiled dependencies).
 
-Commands: `scan [--folder X] [--blocks] [--json]`, `prepare [--folder X] [--limit N] [--verbose]`, `draft <id> [--force] [--provider P] [--model M]`, `seal <id>`, `fill <id> [--provider P] [--model M]`, `judge <id>`, `status`.
+Commands: `scan [--folder X] [--blocks] [--json]`, `prepare [--folder X] [--limit N] [--verbose]`, `draft <id> [--force] [--provider P] [--model M]`, `seal <id>`, `fill <id> [--provider P] [--model M]`, `judge <id>`, `status`, `tidy [--apply]`.
 `<id>` is the packet id printed by `prepare` (or its start), the start of the folder name (the next packet of that folder at the right stage is taken), or the packet folder path.
 Exit codes: 0 OK, 1 error, 3 refusal (folder fails the filters), 4 draft rejected. Rely on exit codes, not on message text — console output follows `ui_lang` from `config.json`.
 
@@ -33,6 +33,7 @@ When the user asks to process anything else — a thesis, Polish or Russian docu
 ## Flow
 
 1. `scan` — show which folders qualify (only when the user asks or names no folder). Each folder also shows its Book progress (entries, obvious blocks, open packets); `scan --folder X` adds blocks done / open / left. Check it before `prepare` so a folder with no blocks left, or with an open packet waiting, is not worked again — finish the open packet instead. `status` gives the same progress for every folder at once.
+   If `status` marks an entry as replaced (the folder's chant changed, so the same block got a newer entry), tell the user and run `tidy --apply` only when they agree: the newer entry takes the old one's place and number, the old block leaves the state, the key and its packet folder, and backups go to `*.bak`. `tidy` without `--apply` is a preview.
 2. `prepare --folder <name or prefix> --limit N` (default 1). Creates packets in `export_results/_kirja_tyotila/<id>/packet.json` for blocks not yet in the Book. A block is 3–6 consecutive content roots from the chant (fillers such as OKEI, SÄ, NIMENOMAAN are dropped); the cuts are chosen so the truth for a block sits in as few places of the source as possible. `truth.sentences` are the accessible_text sentences in which the roots occur.
 3. For each packet write `draft.json` (rules below) and run `seal <id>`. If rejected, fix exactly the listed fragments and repeat until accepted. `seal` writes `blind.json` (no answers).
    The script also has `draft <id>`, which asks an API model for the draft and retries twice with the validator's objections. It exists for users without an agent; you are the drafter here, so do not call it unless the user asks. It sends verbatim source sentences to the configured provider. If the user ran it and it ended with exit code 4, the last rejected `draft.json` is in the packet — fix it and run `seal`.

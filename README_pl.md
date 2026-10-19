@@ -329,6 +329,7 @@ Samodzielny skrypt jednorazowy, który czyta cztery artefakty narracyjne wytworz
 python ksiega_niedomowien.py scan              # które foldery export_results/ się kwalifikują
 python ksiega_niedomowien.py scan --blocks     # do tego bloki zrobione / otwarte / pozostałe (wolne; z --folder automatycznie)
 python ksiega_niedomowien.py status            # postęp według folderów: wpisy, bloki oczywiste, otwarte pakiety
+python ksiega_niedomowien.py tidy              # wpisy zastąpione nowszym wpisem tego samego bloku (podgląd; --apply porządkuje)
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
 python ksiega_niedomowien.py draft <id>        # opcjonalnie: szkic przez API + seal, do 2 powtórek

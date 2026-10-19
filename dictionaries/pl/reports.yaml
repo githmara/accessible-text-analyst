@@ -40,7 +40,7 @@ kirja:
   scan_rejected: '[NIE] {folder}'
   scan_book: '       Księga: wpisy {entries} (nr {numbers}), bloki oczywiste {obvious}, otwarte pakiety: {open}'
   scan_book_none: '       Księga: z tego folderu nie ma jeszcze wpisów ani pakietów'
-  scan_blocks: '       Bloki: {done} z {total} zrobione, {open} w otwartych pakietach, {left} do przygotowania'
+  scan_blocks: '       Bloki: {done} z {total} zrobione, {open} w otwartych pakietach, {left} do przygotowania, nieaktualne wpisy {stale}'
   header_stripped: 'usunięty'
   header_none: 'brak'
   err_ambiguous_folder: 'Nie ma jednoznacznego folderu "{name}" w export_results/.'
@@ -102,6 +102,14 @@ kirja:
   status_folders_header: 'Postęp według folderów:'
   status_folder_line: '  {folder}: wpisy {entries} (nr {numbers}), bloki oczywiste {obvious}'
   status_hint: 'Pozostałe bloki folderu: scan --folder <nazwa>; wszystkich folderów: scan --blocks'
+  label_obvious: 'blok oczywisty'
+  superseded_mark: '{old} (zastąpiony przez {new})'
+  status_tidy_hint: 'Wpisy zastąpione nowszym wpisem tego samego bloku: {count}. Podgląd porządków: tidy; wykonanie: tidy --apply'
+  tidy_none: 'Nie ma zastąpionych wpisów do uporządkowania.'
+  tidy_line: '  {folder}, blok {block}: wpis {old} ({old_chant}) zastąpiony przez {new} ({new_chant})'
+  tidy_dry: 'Tylko podgląd, nic nie zmieniono. Nowszy wpis zajmie miejsce i numer starego, wpisy zostaną ponumerowane od nowa, a stary blok zniknie ze stanu, klucza i folderu roboczego. Wykonanie: tidy --apply'
+  tidy_err_book: 'Nie da się podzielić {book} na wpisy (sekcja bez id albo powtórzone id). Nic nie zmieniono.'
+  tidy_done: 'Uporządkowano zastąpione wpisy: {count}; w Księdze jest teraz {entries} wpisów. Poprzednie pliki zapisano jako *.bak.'
 
 llm:
   info_provider: '[LLM] Provider {provider}, model {model}, endpoint {endpoint}.'

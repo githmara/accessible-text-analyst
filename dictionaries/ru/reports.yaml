@@ -40,7 +40,7 @@ kirja:
   scan_rejected: '[НЕТ] {folder}'
   scan_book: '       Книга: записей {entries} (№ {numbers}), очевидных блоков {obvious}, открытые пакеты: {open}'
   scan_book_none: '       Книга: из этого каталога пока нет ни записей, ни пакетов'
-  scan_blocks: '       Блоки: готово {done} из {total}, в открытых пакетах {open}, осталось подготовить {left}'
+  scan_blocks: '       Блоки: готово {done} из {total}, в открытых пакетах {open}, осталось подготовить {left}, устаревших записей {stale}'
   header_stripped: 'удалён'
   header_none: 'нет'
   err_ambiguous_folder: 'В export_results/ нет однозначного каталога "{name}".'
@@ -102,6 +102,14 @@ kirja:
   status_folders_header: 'Ход работы по каталогам:'
   status_folder_line: '  {folder}: записей {entries} (№ {numbers}), очевидных блоков {obvious}'
   status_hint: 'Оставшиеся блоки каталога: scan --folder <имя>; всех каталогов: scan --blocks'
+  label_obvious: 'очевидный блок'
+  superseded_mark: '{old} (заменена записью {new})'
+  status_tidy_hint: 'Записей, замененных более новой записью того же блока: {count}. Предпросмотр уборки: tidy; выполнение: tidy --apply'
+  tidy_none: 'Замененных записей для уборки нет.'
+  tidy_line: '  {folder}, блок {block}: запись {old} ({old_chant}) заменяется записью {new} ({new_chant})'
+  tidy_dry: 'Только предпросмотр, ничего не изменено. Новая запись займет место и номер старой, записи будут перенумерованы, старый блок исчезнет из состояния, ключа и рабочего каталога. Выполнение: tidy --apply'
+  tidy_err_book: 'Не удается разделить {book} на записи (раздел без id или повторный id). Ничего не изменено.'
+  tidy_done: 'Убрано замененных записей: {count}; в Книге теперь {entries} записей. Прежние файлы сохранены как *.bak.'
 
 llm:
   info_provider: '[LLM] Провайдер {provider}, модель {model}, адрес {endpoint}.'

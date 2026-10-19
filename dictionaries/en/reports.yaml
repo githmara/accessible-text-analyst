@@ -40,7 +40,7 @@ kirja:
   scan_rejected: '[NO ] {folder}'
   scan_book: '       Book: entries {entries} (no. {numbers}), obvious blocks {obvious}, open packets: {open}'
   scan_book_none: '       Book: no entries or packets from this folder yet'
-  scan_blocks: '       Blocks: {done} of {total} done, {open} in open packets, {left} left to prepare'
+  scan_blocks: '       Blocks: {done} of {total} done, {open} in open packets, {left} left to prepare, stale entries {stale}'
   header_stripped: 'stripped'
   header_none: 'none'
   err_ambiguous_folder: 'No unambiguous folder "{name}" in export_results/.'
@@ -102,6 +102,14 @@ kirja:
   status_folders_header: 'Progress by folder:'
   status_folder_line: '  {folder}: entries {entries} (no. {numbers}), obvious blocks {obvious}'
   status_hint: 'Blocks left in a folder: scan --folder <name>; in all folders: scan --blocks'
+  label_obvious: 'obvious block'
+  superseded_mark: '{old} (replaced by {new})'
+  status_tidy_hint: 'Entries replaced by a newer entry of the same block: {count}. Preview the clean-up: tidy; apply it: tidy --apply'
+  tidy_none: 'No replaced entries to clean up.'
+  tidy_line: '  {folder}, block {block}: entry {old} ({old_chant}) is replaced by {new} ({new_chant})'
+  tidy_dry: 'Preview only, nothing changed. The newer entry takes the old one''s place and number, entries are renumbered, the old block leaves the state, the key and the work folder. Apply: tidy --apply'
+  tidy_err_book: 'Cannot split {book} into entries (a section without an id or a repeated id). Nothing changed.'
+  tidy_done: 'Cleaned up {count} replaced entries; the Book now has {entries} entries. Previous files saved as *.bak.'
 
 llm:
   info_provider: '[LLM] Provider {provider}, model {model}, endpoint {endpoint}.'

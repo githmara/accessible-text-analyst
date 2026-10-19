@@ -40,7 +40,7 @@ kirja:
   scan_rejected: '[NO ] {folder}'
   scan_book: '       Libro: voci {entries} (n. {numbers}), blocchi ovvi {obvious}, pacchetti aperti: {open}'
   scan_book_none: '       Libro: ancora nessuna voce né pacchetto da questa cartella'
-  scan_blocks: '       Blocchi: {done} su {total} fatti, {open} in pacchetti aperti, {left} da preparare'
+  scan_blocks: '       Blocchi: {done} su {total} fatti, {open} in pacchetti aperti, {left} da preparare, voci superate {stale}'
   header_stripped: 'rimossa'
   header_none: 'assente'
   err_ambiguous_folder: 'Nessuna cartella univoca "{name}" in export_results/.'
@@ -102,6 +102,14 @@ kirja:
   status_folders_header: 'Avanzamento per cartella:'
   status_folder_line: '  {folder}: voci {entries} (n. {numbers}), blocchi ovvi {obvious}'
   status_hint: 'Blocchi rimasti in una cartella: scan --folder <nome>; in tutte: scan --blocks'
+  label_obvious: 'blocco ovvio'
+  superseded_mark: '{old} (sostituita da {new})'
+  status_tidy_hint: 'Voci sostituite da una voce più recente dello stesso blocco: {count}. Anteprima della pulizia: tidy; esecuzione: tidy --apply'
+  tidy_none: 'Nessuna voce sostituita da sistemare.'
+  tidy_line: '  {folder}, blocco {block}: la voce {old} ({old_chant}) è sostituita da {new} ({new_chant})'
+  tidy_dry: 'Solo anteprima, nulla è cambiato. La voce più recente prende posto e numero della vecchia, le voci vengono rinumerate e il vecchio blocco esce da stato, chiave e cartella di lavoro. Esecuzione: tidy --apply'
+  tidy_err_book: 'Impossibile dividere {book} in voci (sezione senza id o id ripetuto). Nulla è cambiato.'
+  tidy_done: 'Voci sostituite sistemate: {count}; il Libro ha ora {entries} voci. I file precedenti sono salvati come *.bak.'
 
 llm:
   info_provider: '[LLM] Fornitore {provider}, modello {model}, endpoint {endpoint}.'

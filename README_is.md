@@ -329,6 +329,7 @@ Sjálfstætt skript sem keyrir einu sinni, les frásagnargripina fjóra sem `sha
 python ksiega_niedomowien.py scan              # hvaða export_results/-möppur uppfylla skilyrðin
 python ksiega_niedomowien.py scan --blocks     # einnig búnar / opnar / eftirstandandi blokkir (hægt; sjálfvirkt með --folder)
 python ksiega_niedomowien.py status            # framvinda eftir möppum: færslur, augljósar blokkir, opnir pakkar
+python ksiega_niedomowien.py tidy              # færslur sem nýrri færsla sömu blokkar leysir af (forskoðun; --apply tekur til)
 python ksiega_niedomowien.py prepare --folder <name> --limit 3
 #   → export_results/_kirja_tyotila/<id>/packet.json
 python ksiega_niedomowien.py draft <id>        # valfrjálst: drög gegnum API + seal, allt að 2 endurtekningar

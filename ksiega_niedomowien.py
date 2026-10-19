@@ -41,6 +41,7 @@ import html as html_lib
 import json
 import os
 import re
+import shutil
 import sys
 import unicodedata
 import zipfile
@@ -583,45 +584,72 @@ def done_ids(exp):
     return ids
 
 
-_BOOK_COMMENT_RE = re.compile(r"kirja:id=([0-9a-f]{10}) \| folder=(.+?) \| block=\d+")
+_BOOK_COMMENT_RE = re.compile(r"kirja:id=([0-9a-f]{10}) \| folder=(.+?) \| block=(\d+)")
 
 
 def book_progress(exp):
     """Co z każdego folderu jest już w Księdze, wśród bloków oczywistych i w otwartych pakietach.
 
-    {folder (NFC): {"entries": [nr wpisu], "obvious": n, "done": {id bloku}, "open": [(katalog, packet)]}}.
+    {folder (NFC): {"entries": [nr wpisu], "obvious": n, "done": {id bloku}, "open": [(katalog, packet)],
+                    "recs": {id: rekord}, "superseded": {stary id: nowy id}}}.
     Bez omorfi i bez build_blocks — tanie, więc `scan` i `status` mogą to pokazywać zawsze.
     Wpis obecny w Księdze, ale bez rekordu w tila.json, liczy się jako zrobiony (numer "?").
+
+    Zastąpiony = starszy rekord tego samego folderu i numeru bloku. Id bloku to skrót jego
+    korzeni, więc gdy refren folderu się zmieni (np. po ponownym przebiegu notatnika z lepszymi
+    lematami), ten sam blok wraca pod nowym id i dostaje drugi wpis. Kolejność chronologiczna
+    = kolejność w tila.json (judge tylko dopisuje); wpisy znane wyłącznie z Księgi są najstarsze.
     """
     book, state_p, _, _ = book_paths(exp)
     prog = {}
 
     def slot(folder):
         return prog.setdefault(unicodedata.normalize("NFC", folder),
-                               {"entries": [], "obvious": 0, "done": set(), "open": []})
+                               {"entries": [], "obvious": 0, "done": set(), "open": [],
+                                "recs": {}, "superseded": {}})
 
-    for bid, rec in load_json(state_p, {}).get("blocks", {}).items():
+    tila = load_json(state_p, {}).get("blocks", {})
+    if book.exists():
+        for bid, folder, block in _BOOK_COMMENT_RE.findall(book.read_text(encoding="utf-8")):
+            if bid not in tila:
+                sl = slot(folder)
+                sl["done"].add(bid)
+                sl["entries"].append("?")
+                sl["recs"][bid] = {"block_no": int(block), "entry": "?", "status": "in_book"}
+    for bid, rec in tila.items():
         sl = slot(rec.get("folder", "?"))
         sl["done"].add(bid)
+        sl["recs"][bid] = rec
         if rec.get("status") == "obvious":
             sl["obvious"] += 1
         else:
             sl["entries"].append(rec.get("entry", "?"))
-    if book.exists():
-        for bid, folder in _BOOK_COMMENT_RE.findall(book.read_text(encoding="utf-8")):
-            sl = slot(folder)
-            if bid not in sl["done"]:
-                sl["done"].add(bid)
-                sl["entries"].append("?")
+    for sl in prog.values():
+        last = {}
+        for bid, rec in sl["recs"].items():
+            last.setdefault(rec.get("block_no"), []).append(bid)
+        for chain in last.values():
+            for old in chain[:-1]:
+                sl["superseded"][old] = chain[-1]
     for d, pk in _open_packets(exp):
         slot(pk.get("folder", "?"))["open"].append((d, pk))
     return prog
 
 
+def _entry_label(rec):
+    return str(rec.get("entry")) if rec.get("status") != "obvious" else tr(UI_LANG, "kirja.label_obvious")
+
+
 def _entry_numbers(p):
-    nums = sorted(e for e in p["entries"] if isinstance(e, int))
-    rest = [str(e) for e in p["entries"] if not isinstance(e, int)]
-    return ", ".join([str(n) for n in nums] + rest) or "-"
+    """Numery wpisów folderu; zastąpione z dopiskiem, przez co (inaczej "nr 12, 16" nic nie mówi)."""
+    ids = [b for b, r in p["recs"].items() if r.get("status") != "obvious"]
+    ids.sort(key=lambda b: (0, p["recs"][b]["entry"]) if isinstance(p["recs"][b].get("entry"), int) else (1, 0))
+    out = []
+    for b in ids:
+        lab = _entry_label(p["recs"][b])
+        new = p["superseded"].get(b)
+        out.append(tr(UI_LANG, "kirja.superseded_mark", old=lab, new=_entry_label(p["recs"][new])) if new else lab)
+    return ", ".join(out) or "-"
 
 
 def _open_summary(p):
@@ -669,13 +697,16 @@ def cmd_scan(args):
     for v in verdicts:
         p = prog.get(unicodedata.normalize("NFC", v["folder"]))
         info = {"entries": list(p["entries"]) if p else [], "obvious": p["obvious"] if p else 0,
-                "open_packets": [d.name for d, _ in p["open"]] if p else []}
+                "open_packets": [d.name for d, _ in p["open"]] if p else [],
+                "superseded": sorted(p["superseded"]) if p else []}
         if v["ok"] and count_blocks:
             ids = {b["id"] for b in build_blocks(exp / v["folder"])[0]}
             done = len(ids & (p["done"] if p else set()))
             opened = len(ids & set(info["open_packets"]))
+            # nieaktualne = zrobione bloki, których nie ma w obecnym refrenie folderu
             info.update(blocks_total=len(ids), blocks_done=done, blocks_open=opened,
-                        blocks_left=len(ids) - done - opened)
+                        blocks_left=len(ids) - done - opened,
+                        blocks_stale=len((p["done"] if p else set()) - ids))
         v["book"] = info
     if args.json:
         print(json.dumps(verdicts, ensure_ascii=False, indent=2))
@@ -698,7 +729,7 @@ def cmd_scan(args):
             print(tr(UI_LANG, "kirja.scan_book_none"))
         if "blocks_total" in b:
             print(tr(UI_LANG, "kirja.scan_blocks", done=b["blocks_done"], total=b["blocks_total"],
-                     open=b["blocks_open"], left=b["blocks_left"]))
+                     open=b["blocks_open"], left=b["blocks_left"], stale=b["blocks_stale"]))
     return 0 if all(v["ok"] for v in verdicts) or not args.folder else 2
 
 
@@ -1233,6 +1264,91 @@ def cmd_status(args):
                 print(tr(UI_LANG, "kirja.status_open", id=d.name, block=pk.get("block_no", "?"),
                          files=_packet_files(d)))
         print(tr(UI_LANG, "kirja.status_hint"))
+        stale = sum(len(p["superseded"]) for p in prog.values())
+        if stale:
+            print(tr(UI_LANG, "kirja.status_tidy_hint", count=stale))
+    return 0
+
+
+_SECTION_SEP = "\n---\n\n## "
+
+
+def cmd_tidy(args):
+    """Usuwa wpisy zastąpione nowszym wpisem tego samego bloku (zob. book_progress).
+
+    Nowszy wpis zajmuje miejsce starego w Księdze, wpisy są numerowane od nowa, a z tila.json,
+    avain.json i _kirja_tyotila/ znika wszystko po starym bloku. Bez --apply tylko podgląd.
+    Przed zapisem kopie trzech plików idą do *.bak obok nich.
+    """
+    exp = export_dir(args)
+    book, state_p, key_p, work = book_paths(exp)
+    prog = book_progress(exp)
+    target = {old: new for p in prog.values() for old, new in p["superseded"].items()}
+    if not target:
+        print(tr(UI_LANG, "kirja.tidy_none"))
+        return 0
+    for folder in sorted(prog):
+        p = prog[folder]
+        for old, new in p["superseded"].items():
+            ro, rn = p["recs"][old], p["recs"][new]
+            print(tr(UI_LANG, "kirja.tidy_line", folder=folder, block=ro.get("block_no", "?"),
+                     old=_entry_label(ro), old_chant=ro.get("chant", "?"),
+                     new=_entry_label(rn), new_chant=rn.get("chant", "?")))
+    if not args.apply:
+        print(tr(UI_LANG, "kirja.tidy_dry"))
+        return 0
+
+    raw = book.read_bytes().decode("utf-8") if book.exists() else ""
+    # judge dopisuje w trybie tekstowym, więc Księga bywa mieszana (Windows + sandbox Linuksa);
+    # przepisując ją, ujednolicamy do przeważającego końca linii
+    crlf = raw.count("\r\n")
+    nl = "\r\n" if crlf >= raw.count("\n") - crlf else "\n"
+    head, *secs = raw.replace("\r\n", "\n").split(_SECTION_SEP)
+    order = []
+    for sec in secs:
+        m = _BOOK_COMMENT_RE.search(sec)
+        order.append(m.group(1) if m else None)
+    if None in order or len(set(order)) != len(order):
+        print(tr(UI_LANG, "kirja.tidy_err_book", book=book.name))
+        return 1
+    by_id = dict(zip(order, secs))
+    # nowszy wpis wskakuje na miejsce pierwszego zastąpionego; pozostałe zastąpione wypadają
+    new_order, placed = [], set()
+    for bid in order:
+        cur = target.get(bid, bid)
+        if cur in by_id and cur not in placed:
+            new_order.append(cur)
+            placed.add(cur)
+    num = {}
+    for no, bid in enumerate(new_order, 1):
+        heading, rest = by_id[bid].split("\n", 1)
+        folder = _BOOK_COMMENT_RE.search(rest).group(2)
+        by_id[bid] = tr(BOOK_LANG, "book.entry_heading", no=no, title=folder.replace("_", " ")) + "\n" + rest
+        num[bid] = no
+
+    state = load_json(state_p, {"blocks": {}, "entries": 0})
+    key = load_json(key_p, {})
+    for old, new in target.items():
+        state["blocks"].pop(old, None)
+        key.pop(old, None)
+        if new in state["blocks"]:
+            state["blocks"][new].setdefault("replaces", []).append(old)
+    for store in (state["blocks"], key):
+        for bid, rec in store.items():
+            if bid in num:
+                rec["entry"] = num[bid]
+    state["entries"] = len(new_order)
+
+    for p in (book, state_p, key_p):
+        if p.exists():
+            shutil.copy2(p, p.with_name(p.name + ".bak"))
+    book.write_bytes((head + "".join(_SECTION_SEP + by_id[b] for b in new_order)).replace("\n", nl).encode("utf-8"))
+    save_json(state_p, state)
+    save_json(key_p, key)
+    for old in target:
+        if (work / old).is_dir():
+            shutil.rmtree(work / old)
+    print(tr(UI_LANG, "kirja.tidy_done", count=len(target), entries=len(new_order)))
     return 0
 
 
@@ -1336,6 +1452,7 @@ def main(argv=None):
     s.add_argument("--provider", choices=sorted(llm_klient.PROVIDERS)); s.add_argument("--model")
     s = sub.add_parser("judge"); s.add_argument("packet", nargs="*", metavar="ID")
     sub.add_parser("status")
+    s = sub.add_parser("tidy"); s.add_argument("--apply", action="store_true")
     args = ap.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -1348,7 +1465,7 @@ def main(argv=None):
         args.packet = str(found)
     try:
         return {"scan": cmd_scan, "prepare": cmd_prepare, "draft": cmd_draft, "seal": cmd_seal, "fill": cmd_fill,
-                "judge": cmd_judge, "status": cmd_status}[args.cmd](args)
+                "judge": cmd_judge, "status": cmd_status, "tidy": cmd_tidy}[args.cmd](args)
     except Refusal as e:
         print(tr(UI_LANG, "kirja.refusal", message=e))
         return 3

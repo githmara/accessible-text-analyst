@@ -4,6 +4,26 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.10.3 — replaced entries in the Book of the Unsaid are marked and can be cleaned up
+
+**Theme.** v1.10.2 noted that a folder whose chant changed after an entry was written gets its block back under a new id. That happened: the Polish constitutional court corpus got entry 16 for the same block 1 as entry 12, and `status` printed only "entries 2 (no. 12, 16)", which did not say that 12 was out of date. Patch bump: clearer output and one new command.
+
+### What changed
+- **Replaced entries are marked.** When a folder has two records for the same block number, the older one is replaced by the newer one. `status` and `scan` now print it as `12 (replaced by 16)`, or `(replaced by obvious block)` when the newer block was guessed completely. `status` ends with a line that counts them and points to `tidy`.
+- **New command `tidy`.** Without options it only lists what it would do. With `--apply`, the newer entry takes the old one's place and number in the Book, all entries are renumbered, the old block is removed from the state file, the key file and the work folder, and the newer record keeps a `replaces` field naming it. Before writing, the Book, the state file and the key file are copied to `*.bak`.
+- **Line endings.** The Book is rewritten with its dominant line ending, because entries appended from different systems can mix them.
+- **`scan --folder` and `scan --blocks`** also count done blocks that are no longer in the folder's current chant.
+
+### Verified
+- On a copy of the real Book: `tidy --apply` moved entry 16 into place 12, the Book had 15 entries numbered 1–15, the state and key files agreed with it, the old packet folder was gone, and a second `tidy` found nothing. The same check with a newer block judged obvious removed the old entry and renumbered the rest.
+- Then on the real Book: `status` shows the folder with entry 12 only, and `scan --folder` shows 1 of 9 blocks done with 0 stale entries.
+- Translation parity, the console hard-code gate and the language basics audit pass.
+
+### Distribution
+Source-only patch release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.10.2 — the Book of the Unsaid shows how far each folder has got
 
 **Theme.** `ksiega_niedomowien.py scan` listed which folders pass the filters but said nothing about the Book itself, and `status` listed open packets without naming their folder. A folder that already had an entry, or a packet waiting to be judged, looked exactly like a fresh one, so it was easy to work a finished folder again. Patch bump: two commands print more, one new optional flag, nothing to configure.

@@ -40,7 +40,7 @@ kirja:
   scan_rejected: '[EI ] {folder}'
   scan_book: '       Kirja: merkintöjä {entries} (nro {numbers}), ilmeisiä lohkoja {obvious}, avoimet paketit: {open}'
   scan_book_none: '       Kirja: tästä kansiosta ei vielä ole merkintöjä eikä paketteja'
-  scan_blocks: '       Lohkot: {done}/{total} tehty, {open} avoimissa paketeissa, {left} valmistelematta'
+  scan_blocks: '       Lohkot: {done}/{total} tehty, {open} avoimissa paketeissa, {left} valmistelematta, vanhentuneita merkintöjä {stale}'
   header_stripped: 'poistettu'
   header_none: 'ei ole'
   err_ambiguous_folder: 'export_results/-kansiosta ei löydy yksiselitteistä kansiota "{name}".'
@@ -102,6 +102,14 @@ kirja:
   status_folders_header: 'Edistyminen kansioittain:'
   status_folder_line: '  {folder}: merkintöjä {entries} (nro {numbers}), ilmeisiä lohkoja {obvious}'
   status_hint: 'Kansion jäljellä olevat lohkot: scan --folder <nimi>; kaikkien kansioiden: scan --blocks'
+  label_obvious: 'ilmeinen lohko'
+  superseded_mark: '{old} (korvattu: {new})'
+  status_tidy_hint: 'Saman lohkon uudemmalla merkinnällä korvattuja merkintöjä: {count}. Siivouksen esikatselu: tidy; toteutus: tidy --apply'
+  tidy_none: 'Ei korvattuja merkintöjä siivottavaksi.'
+  tidy_line: '  {folder}, lohko {block}: merkinnän {old} ({old_chant}) korvaa {new} ({new_chant})'
+  tidy_dry: 'Pelkkä esikatselu, mitään ei muutettu. Uudempi merkintä saa vanhan paikan ja numeron, merkinnät numeroidaan uudelleen ja vanha lohko poistuu tilasta, avaimesta ja työkansiosta. Toteutus: tidy --apply'
+  tidy_err_book: 'Tiedostoa {book} ei voi jakaa merkintöihin (osio ilman tunnusta tai toistuva tunnus). Mitään ei muutettu.'
+  tidy_done: 'Korvattuja merkintöjä siivottu: {count}; kirjassa on nyt {entries} merkintää. Aiemmat tiedostot tallennettu nimellä *.bak.'
 
 llm:
   info_provider: '[LLM] Palveluntarjoaja {provider}, malli {model}, osoite {endpoint}.'

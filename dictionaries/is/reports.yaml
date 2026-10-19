@@ -40,7 +40,7 @@ kirja:
   scan_rejected: '[NEI] {folder}'
   scan_book: '       Bók: færslur {entries} (nr. {numbers}), augljósar blokkir {obvious}, opnir pakkar: {open}'
   scan_book_none: '       Bók: engar færslur né pakkar úr þessari möppu enn'
-  scan_blocks: '       Blokkir: {done} af {total} búnar, {open} í opnum pökkum, {left} eftir að undirbúa'
+  scan_blocks: '       Blokkir: {done} af {total} búnar, {open} í opnum pökkum, {left} eftir að undirbúa, úreltar færslur {stale}'
   header_stripped: 'fjarlægður'
   header_none: 'enginn'
   err_ambiguous_folder: 'Engin ótvíræð mappa "{name}" í export_results/.'
@@ -102,6 +102,14 @@ kirja:
   status_folders_header: 'Framvinda eftir möppum:'
   status_folder_line: '  {folder}: færslur {entries} (nr. {numbers}), augljósar blokkir {obvious}'
   status_hint: 'Blokkir sem eftir eru í möppu: scan --folder <nafn>; í öllum möppum: scan --blocks'
+  label_obvious: 'augljós blokk'
+  superseded_mark: '{old} (í stað hennar: {new})'
+  status_tidy_hint: 'Færslur sem nýrri færsla sömu blokkar kemur í stað fyrir: {count}. Forskoða tiltekt: tidy; framkvæma: tidy --apply'
+  tidy_none: 'Engar úreltar færslur til að taka til í.'
+  tidy_line: '  {folder}, blokk {block}: í stað færslu {old} ({old_chant}) kemur {new} ({new_chant})'
+  tidy_dry: 'Aðeins forskoðun, engu breytt. Nýrri færslan fær stað og númer þeirrar gömlu, færslur eru endurnúmeraðar og gamla blokkin hverfur úr stöðu, lykli og vinnumöppu. Framkvæma: tidy --apply'
+  tidy_err_book: 'Ekki er hægt að skipta {book} í færslur (hluti án auðkennis eða endurtekið auðkenni). Engu breytt.'
+  tidy_done: 'Úreltum færslum tekið til í: {count}; í bókinni eru nú {entries} færslur. Fyrri skrár vistaðar sem *.bak.'
 
 llm:
   info_provider: '[LLM] Þjónusta {provider}, líkan {model}, slóð {endpoint}.'
