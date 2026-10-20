@@ -303,6 +303,8 @@ class SeriaRozstrzelona(NamedTuple):
     poczatek_linii: bool = False   # przed serią nie ma słowa w tej linii
     nastepny: str | None = None    # słowo za serią w tej linii; None = koniec linii
     odstep_po: float | None = None # odstęp w pt do `nastepny`
+    przed_odstep: bool = False     # `przed` był osobnym tokenem („« л …”)
+    po_odstep: bool = False        # `po` był osobnym tokenem („з о́ н а .”)
 
     def slowa(self) -> list[str]:
         """Słowa wg geometrii: [„Жёлтая”, „зо́на”]."""
@@ -318,7 +320,8 @@ class SeriaRozstrzelona(NamedTuple):
 
     def tekst(self) -> str:
         """Tak, jak seria stoi w `extract_text`: litery przez pojedynczą spację."""
-        return self.przed + " ".join(self.litery) + self.po
+        return (self.przed + (" " if self.przed_odstep else "") + " ".join(self.litery)
+                + (" " if self.po_odstep else "") + self.po)
 
 
 def _granice_serii(litery: list, odstepy: list) -> tuple:
@@ -341,8 +344,16 @@ def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona
     slowa = strona.extract_words(x_tolerance=x_tolerance)
     serie: list[SeriaRozstrzelona] = []
     run: list[dict] = []
-    brzegi = {"przed": "", "po": "", "start": False}
+    brzegi = {"przed": "", "po": "", "start": False, "przed_odstep": None, "po_odstep": False}
     poprzednie = [None]          # słowo przed bieżącym (do „początku linii”)
+    otwierajacy = [None]         # token interpunkcji otwierającej czekający na literę
+
+    def prog(odstepy) -> float:
+        import statistics
+        return PROG_GRANICY_ROZSTRZELENIA * statistics.median(odstepy)
+
+    def interpunkcja(tekst, zbior) -> bool:
+        return bool(tekst) and all(z in zbior for z in tekst)
 
     def linia(a, b) -> bool:
         return a is not None and abs(b["top"] - a["top"]) <= 1 and b["x0"] >= a["x0"]
@@ -352,23 +363,56 @@ def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona
             litery = [w["text"] for w in run]
             odstepy = [round(b["x0"] - a["x1"], 2) for a, b in zip(run, run[1:])]
             obok = nastepny is not None and linia(run[-1], nastepny)
+            przed, przed_odstep = brzegi["przed"], brzegi["przed_odstep"] is not None
+            if przed_odstep and brzegi["przed_odstep"] > prog(odstepy):
+                # „«” za daleko od pierwszej litery: nie należy do serii.
+                przed, przed_odstep = "", False
             serie.append(SeriaRozstrzelona(
                 tuple(litery), _granice_serii(litery, odstepy), tuple(odstepy),
-                run[0]["top"], run[0]["x0"], run[-1]["x1"], brzegi["przed"], brzegi["po"],
+                run[0]["top"], run[0]["x0"], run[-1]["x1"], przed, brzegi["po"],
                 brzegi["start"], nastepny["text"] if obok else None,
-                round(nastepny["x0"] - run[-1]["x1"], 2) if obok else None))
+                round(nastepny["x0"] - run[-1]["x1"], 2) if obok else None,
+                przed_odstep, brzegi["po_odstep"]))
         run.clear()
         brzegi["przed"] = brzegi["po"] = ""
+        brzegi["przed_odstep"], brzegi["po_odstep"] = None, False
 
     def otworz(w):
         if not run:
             brzegi["start"] = not linia(poprzednie[0], w)
 
-    for w in slowa:
+    for i_w, w in enumerate(slowa):
         tekst = w["text"]
         if run and brzegi["po"]:          # „и,” zamknęło serię; `w` to jej sąsiad
             zamknij(w)
         ta_sama_linia = bool(run) and linia(run[-1], w)
+        # Rozstrzelona interpunkcja zamykająca jako osobny token („з о́ н а .”):
+        # odstęp nie większy niż próg granicy serii → należy do ostatniej
+        # litery (moduł widzi „…а.” i stosuje regułę ogona). Dywiz („к о в и́ д -”)
+        # do zbioru nie należy i zamyka serię jak zwykły sąsiad.
+        za = slowa[i_w + 1] if i_w + 1 < len(slowa) else None
+        akcent = (tekst in _ct.APOSTROFY and za is not None and linia(w, za)
+                  and _ct.litera_pojedyncza(za["text"]))     # „К о в и ' д н а я”
+        if (run and ta_sama_linia and len(run) >= 2 and interpunkcja(tekst, _ct.ZAMYKAJACE)
+                and not akcent and w["x0"] - run[-1]["x1"]
+                <= prog([b["x0"] - a["x1"] for a, b in zip(run, run[1:])])):
+            brzegi["po"], brzegi["po_odstep"] = tekst, True
+            poprzednie[0] = w
+            continue
+        oczekujacy, otwierajacy[0] = otwierajacy[0], None
+        if oczekujacy is not None:
+            if not run and _ct.litera_pojedyncza(tekst) and linia(oczekujacy, w):
+                otworz(w)                 # początek linii liczony sprzed „«”
+                run.append(w)
+                brzegi["przed"] = oczekujacy["text"]
+                brzegi["przed_odstep"] = w["x0"] - oczekujacy["x1"]
+                poprzednie[0] = w
+                continue
+            poprzednie[0] = oczekujacy
+        if interpunkcja(tekst, _ct.OTWIERAJACE):
+            zamknij(w)
+            otwierajacy[0] = w            # „« л …”: czeka na pierwszą literę
+            continue
         if run and ta_sama_linia and tekst and all(unicodedata.combining(z) for z in tekst):
             run[-1] = {**run[-1], "text": run[-1]["text"] + tekst}   # położenie litery, nie akcentu
             continue
