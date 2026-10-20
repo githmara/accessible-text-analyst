@@ -10,6 +10,7 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 
 - `accessible_text_analyst.ipynb` — Jupyter-notebook, joka sisältää koko analyysiputken (42 solua: 21 koodia + 21 markdown; sisäinen kerronta on venäjäksi). Kirjoittaa kaksi saavutettavuusartefaktia (`accessible_text.html`, `accessible_text.docx`), joissa jokainen kappale ja jokainen vieraskielinen lause sisältää oman `lang`-attribuuttinsa — ruudunlukijat ja TTS-moottorit vaihtavat ääntä automaattisesti, jopa offline-tilassa.
 - `generate_report.py` — jälkikäsittelyskripti, joka muuntaa suoritetun notebookin yhdeksi saavutettavaksi HTML-tiedostoksi (`analysis_report.html`). Se kääräisee vieraskieliset katkelmat tagiin `<span lang="target_lang">` ja — korpuksen kielestä riippumatta — pakottaa `<span lang="en">` teknisen englannin sisältöön (POS-tagit, NER-tunnisteet, spaCyn/Hugging Facen mallien tunnisteet, ASCII-polut). Kerronnan inline-koodi ja koodilohkot saavat poikkeuksetta `lang="en"`. Lukutilassa (`remove_noise: true`) se lyhentää notebookin dokumenttikohtaiset diagnostiikkasilmukat ensimmäisiin muutamaan dokumenttiin satojen tulostamisen sijaan.
+- `run_all.py` — koko maksuttoman paikallisen ketjun käynnistin: rekisteröi Jupyter-ytimen `analyst_env`, jos se puuttuu, ajaa notebookin ilman käyttöliittymää (ilman interaktiivista kysymyssolua) ja tallentaa sen tulosteet `.ipynb`-tiedostoon, sitten ajaa `generate_report.py`:n, `shamanic_pipeline.py`:n ja suomenkieliselle korpukselle Sanomattomien kirjan `scan`-komennon. Maksullisia vaiheita (LLM-rituaalit, ElevenLabs-äänet, kirjan `draft`/`fill`) se ei koskaan käynnistä.
 - `generate_diagnostic.py` — riippumaton täyden **diagnostiikkaraportin** (`diagnostic_report.html`) luoja, joka rakennetaan suoraan notebookin CSV/JSON-vienneistä (ei `generate_report.py`:n ulostulosta). Navigoitava, ruudunlukijoille suunniteltu rakenne: sisällysluettelo `<nav>` ja osiot — kullakin oma otsikko ja listat — yleiskatsaukselle, aiheille kappaleineen, teeseille, nimetyille entiteeteille tyypeittäin ja tärkeimmille avainsanoille. Rakenteelliset tekstit seuraavat `ui_lang`-asetusta; korpuksen katkelmat saavat `<span lang="…">`, NER-tunnisteet `<span lang="en">`.
 - `generate_md.py` — muuntaa `analysis_report.html`-tiedoston Markdown-muotoon (`gemini_notebook_report.md`) Gemini Notebookia (entinen NotebookLM) varten. Saavutettavuus-spanit puretaan, koska Gemini Notebook ei käytä niitä.
 - `shamanic_pipeline.py` *(valinnainen)* — ei-LLM-jälkikäsittelijä, joka muuntaa notebookin CSV/JSON-viennit rituaalisiksi tekstiartefakteiksi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` ja — kun valinnainen sentimenttianalyysi on käytössä — `emotional_undertow.txt`) ja on täysin lokalisoitu kaikille kuudelle tuetulle kielelle.
@@ -230,6 +231,17 @@ Sisältö:
 
 Alla olevat skriptit on tarkoitettu ajettaviksi **järjestyksessä**: jokainen käyttää edellisen vaiheen tuottamia artefakteja.
 
+### Oikotie: koko paikallinen ketju (`run_all.py`)
+
+```bash
+# notebook -> generate_report.py -> shamanic_pipeline.py -> kirjan scan (vain suomi)
+python run_all.py
+# käytä notebookiin jo tallennettuja tulosteita
+python run_all.py --skip-notebook
+```
+
+Alla olevat vaiheet 1, 2 ja 4 sekä suomenkieliselle korpukselle Sanomattomien kirjan `scan` yhdellä komennolla. Aja se repon `.venv`-ympäristön Pythonilla: jos ydin `analyst_env` puuttuu, se rekisteröidään tälle tulkille. Ketju pysähtyy ensimmäiseen epäonnistuvaan vaiheeseen; paluukoodi 3 tarkoittaa, että raportin lähdetarkistus hylkäsi ajon (ks. vaihe 2).
+
 ### 1. Notebook (pakollinen)
 
 ```bash
@@ -249,6 +261,8 @@ python generate_report.py
 ```
 
 `generate_report.py` lukee solujen ulostulot suoraan `.ipynb`-tiedostosta, joten HTML-raportti on luotava **juuri suoritetusta** notebookista. `requirements.txt` listaa `nbstripout`:n — jos se on aktivoitu paikallisessa git-konfiguraatiossa, notebookin ulostulot riisutaan commitilla. Luo raportti _ennen_ commitia tai poista nbstripout käytöstä työnkulustasi.
+
+**Lähteen tarkistus.** Ennen kuin `generate_report.py` kirjoittaa mitään, se tarkistaa, että notebookin tulosteet kuuluvat asetusten `source_file`-lähteeseen, ja muuten kieltäytyy (paluukoodi 3, mitään ei kirjoiteta). Kolme tarkistusta: notebookin tulostaman lähdepolun ja vientikansion on vastattava asetuksia, ja tallennetun ajon on täytynyt päästä vientisolun loppuun; `paragraphs.csv` ja `sentences.csv` eivät saa olla `.ipynb`-tiedostoa uudempia (muuten viimeisimmän ajon tulosteita ei tallennettu — tyypillistä, kun notebook ajetaan VS Codessa tallentamatta); ja notebookin tulostamien sivujen alkujen on esiinnyttävä lähdetiedostossa (verrataan pelkkien kirjainten jonona, joten yhdistetyt tavutukset, poistetut sivunumerot ja ylä- ja alatunnisteet eivät haittaa). Kun sisältöä ei voi verrata — OCR:llä luetut skannaukset, kuvat, URL-osoitteet, vääristynyt PDF-tekstikerros — ratkaisevat kaksi ensimmäistä tarkistusta, ja konsoli kertoo sen. Raportti kirjaa myös, oliko omorfi mukana ajossa (`<meta name="ata-omorfi">`); Sanomattomien kirja lukee sen.
 
 Jäsenneltyä, täyttä **diagnostista** näkymää varten, joka rakennetaan suoraan CSV/JSON-vienneistä:
 
@@ -343,7 +357,7 @@ Peli, joka rakentuu `raw_roots_chant.txt`-tiedoston päälle. Jokaisesta 3–6 p
 
 Skripti on deterministinen puolikas (suodattimet, lohkot, totuuden lähde, tarkistus, arviointi, Kirja). Luovan puolikkaan — `draft.json`-tiedoston kirjoittamisen — tekee joko agentti ohjeen `skills/ksiega-niedomowien/SKILL.md` mukaan tai API:n malli komennolla `draft`.
 
-**Syötteen suodattimet.** Kelpaavat vain ne `export_results/`-alikansiot, joilla on suomenkielinen nimi, `<html lang="fi">`, suomenkielinen loitsu eikä kielioppivuotoa; kaikki muu hylätään syyn kera. Rivi `roots.header` poistetaan, jos se on mukana. *Kielioppivuodon* tarkistus havaitsee korpukset, jotka on käsitelty ennen omorfin käyttöönottoa (v1.5.0): se laskee koko `keywords_tfidf.csv`-tiedostosta lemmatisoinnista selvinneet taivutusmuodot sekä spaCyn roskalemmat ja hylkää kansion, jos niitä on yli 1,0 sataa termiä kohden. Vaatii omorfin (asennuksen vaihe 5).
+**Syötteen suodattimet.** Kelpaavat vain ne `export_results/`-alikansiot, joilla on suomenkielinen nimi, `<html lang="fi">`, suomenkielinen loitsu eikä kielioppivuotoa; kaikki muu hylätään syyn kera. Rivi `roots.header` poistetaan, jos se on mukana. *Kielioppivuodon* tarkistus havaitsee korpukset, jotka on käsitelty ennen omorfin käyttöönottoa (v1.5.0): se laskee koko `keywords_tfidf.csv`-tiedostosta lemmatisoinnista selvinneet taivutusmuodot sekä spaCyn roskalemmat ja hylkää kansion, jos niitä on yli 1,0 sataa termiä kohden. Vaatii omorfin (asennuksen vaihe 5). Kun kansiossa on ajantasainen `analysis_report.html`, kielioppivuodon vuoksi annettu hylkäys kertoo, mitä raportti tietää: omorfi oli mukana ajossa (silloin korjattavaa voi olla itse moottorissa — notebookin suomen lemmojen korjauksessa; ilmoita esimerkit), omorfi puuttui (asenna se ja aja notebook uudelleen) tai ajossa ei ollut omorfi-vaihetta lainkaan. Ilman ajantasaista raporttia se kertoo, ettei tätä tiedetä.
 
 **Miksi vain suomi.** Peli elää siitä, mitä lemmatisointi jättää sanomatta, joten se on mielekäs vain siellä, missä sanan palauttaminen perusmuotoon vie siltä todellista merkitystä. Suomi on agglutinoiva kieli: sen, minkä puola tai venäjä ilmaisevat osin erillisillä prepositioilla ja englanti enimmäkseen sanajärjestyksellä ja funktiosanoilla, suomi pakkaa itse sanaan — viisitoista sijamuotoa (`talossa`, `talosta`, `taloon`, `talolle`, `talotta`), possessiivisuffiksit (`taloni`, `talonsa`), liitepartikkelit (`-ko` kysymys, `-kin` ”myös”, `-han` korostus) ja verbimuodot, jotka kantavat yhtä aikaa persoonaa, aikamuotoa, tapaluokkaa ja passiivia (`tehtäisiinkö`). Loitsu supistaa kaiken tämän muotoihin `TALO` ja `TEHDÄ`: kuka, missä, mistä, mihin, kenen ja onko katoavat — juuri ne aukot, jotka kuulijan on täytettävä. Puolassa ja venäjässä perusmuoto menettää taivutuspäätteen, mutta suuri osa suhteesta on erillisessä sanassa (prepositiossa), joten perusmuoto ei koskaan kantanut sitä yksin; englanti menettää vain vähän luvun ja aikamuodon lisäksi. Islanti (neljä sijaa, joita prepositiot pitkälti hallitsevat) ja italia (prepositiot ja artikkelit, niukka nominitaivutus) ovat lähempänä vastaavasti puolan ja venäjän sekä englannin mallia. Teknisesti työkalu tarvitsee myös sanakirjapohjaisen analysaattorin todistaakseen, että loitsu on kieliopiton, ja yhdistääkseen juuret takaisin taivutettuun tekstiin; tässä putkessa sellainen on vain suomelle (omorfi), ja kynnysarvot on kalibroitu oikeilla suomenkielisillä korpuksilla.
 

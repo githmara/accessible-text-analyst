@@ -343,6 +343,45 @@ def grammar_leak(folder, para_tokens):
     return rate, B, sorted(G)
 
 
+_OMORFI_META_RE = re.compile(r'<meta name="ata-omorfi" content="(\w+)">')
+
+
+def omorfi_in_report(folder):
+    """Czy omorfi poprawiał lematy w przebiegu, z którego są eksporty folderu.
+
+    Świadek: znacznik `ata-omorfi` w analysis_report.html, który generate_report.py
+    pisze dopiero po bramce źródła (wyjścia notatnika = źródło z configu = ten
+    folder). 'active' | 'inactive' | 'absent' — z raportu; None — raportu brak,
+    jest sprzed znacznika albo starszy niż keywords_tfidf.csv (notatnik puszczono
+    ponownie bez raportu), więc nic o tym przebiegu nie mówi.
+    """
+    rep, kw = folder / "analysis_report.html", folder / "keywords_tfidf.csv"
+    if not rep.is_file():
+        return None
+    if kw.is_file() and kw.stat().st_mtime > rep.stat().st_mtime:
+        return None
+    with rep.open(encoding="utf-8", errors="replace") as f:
+        m = _OMORFI_META_RE.search(f.read(4096))
+    return m.group(1) if m else None
+
+
+def leak_reason(folder, rate, examples):
+    """Powód odmowy za przeciek gramatyki — ton zależy od tego, co wie raport.
+
+    omorfi był w przebiegu, a przeciek jest: winny może być silnik (korekta
+    lematów w notatniku), nie wiek danych. omorfi nie było: wiadomo, co zrobić.
+    Brak świadka: dawny komunikat plus uczciwe „nie wiadomo”.
+    """
+    kw = {"rate": f"{rate:.2f}", "max": GRAMMAR_LEAK_MAX, "examples": examples}
+    status = omorfi_in_report(folder)
+    if status == "active":
+        return tr(UI_LANG, "kirja.reason_grammar_leak_engine", **kw)
+    if status == "inactive":
+        return tr(UI_LANG, "kirja.reason_grammar_leak_no_omorfi", **kw)
+    note = "kirja.leak_omorfi_absent" if status == "absent" else "kirja.leak_omorfi_unknown"
+    return tr(UI_LANG, "kirja.reason_grammar_leak", **kw) + " " + tr(UI_LANG, note)
+
+
 def tokens_of(text):
     out = []
     for m in WORD_RE.finditer(text):
@@ -397,9 +436,9 @@ def evaluate_folder(folder):
         rate, B, G = grammar_leak(folder, para_tokens)
         v["grammar_leak"] = round(rate, 2)
         v["leak_examples"] = (B + G)[:8]
+        v["omorfi_report"] = omorfi_in_report(folder)
         if rate > GRAMMAR_LEAK_MAX:
-            v["reasons"].append(tr(UI_LANG, "kirja.reason_grammar_leak", rate=f"{rate:.2f}",
-                                   max=GRAMMAR_LEAK_MAX, examples=", ".join((B + G)[:6])))
+            v["reasons"].append(leak_reason(folder, rate, ", ".join((B + G)[:6])))
     v["ok"] = not v["reasons"]
     return v
 

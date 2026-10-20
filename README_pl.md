@@ -10,6 +10,7 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 
 - `accessible_text_analyst.ipynb` — notatnik Jupyter z kompletnym potokiem analizy (42 komórki: 21 kodu + 21 markdown; narracja w środku notatnika jest po rosyjsku). Zapisuje dwa artefakty dostępnościowe (`accessible_text.html`, `accessible_text.docx`), w których każdy akapit i każde zdanie obcojęzyczne ma własny atrybut `lang` — czytniki ekranu i syntezatory TTS przełączają głos automatycznie, nawet offline.
 - `generate_report.py` — skrypt post-procesujący, który zamienia wykonany notatnik w jeden dostępny plik HTML (`analysis_report.html`). Fragmenty obcojęzyczne owija w `<span lang="target_lang">`, a — niezależnie od języka korpusu — twardo oznacza `<span lang="en">` przy treściach technicznie angielskich (tagi POS, etykiety NER, identyfikatory modeli spaCy/Hugging Face, ścieżki ASCII). Kod inline i bloki kodu w narracji dostają hurtem `lang="en"`. W trybie czytelnika (`remove_noise: true`) skraca diagnostyczne pętle „per dokument" do pierwszych kilku dokumentów, zamiast wypisywać setki.
+- `run_all.py` — launcher całego darmowego łańcucha lokalnego: rejestruje jądro Jupytera `analyst_env`, jeśli go brakuje, uruchamia notatnik bez interfejsu (bez interaktywnej komórki pytań) i zapisuje jego wyjścia w `.ipynb`, a potem uruchamia `generate_report.py`, `shamanic_pipeline.py` i — dla korpusu fińskiego — `scan` Księgi Niedomówień. Nigdy nie uruchamia kroku płatnego (rytuały LLM, głosy ElevenLabs, `draft`/`fill` Księgi).
 - `generate_diagnostic.py` — niezależny generator pełnego raportu **diagnostycznego** (`diagnostic_report.html`) budowanego wprost z eksportów CSV/JSON notatnika (nie z wyjścia `generate_report.py`). Nawigowalna, dostępna dla czytników ekranu struktura: spis treści `<nav>` plus sekcje — każda z własnym nagłówkiem i listami — dla przeglądu, tematów z akapitami, tez, nazwanych encji wg typu i najważniejszych słów kluczowych. Etykiety strukturalne podążają za `ui_lang`; fragmenty korpusu dostają `<span lang="…">`, etykiety NER — `<span lang="en">`.
 - `generate_md.py` — konwertuje `analysis_report.html` na `gemini_notebook_report.md` do Gemini Notebook (dawniej NotebookLM). Spany dostępnościowe są rozpakowywane, bo Gemini Notebook ich nie konsumuje.
 - `shamanic_pipeline.py` *(opcjonalny)* — post-procesor bez LLM, który zamienia eksportowane przez notatnik pliki CSV/JSON w rytualne artefakty tekstowe (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, a — gdy włączona jest opcjonalna analiza sentymentu — także `emotional_undertow.txt`), w pełni zlokalizowane we wszystkich sześciu wspieranych językach.
@@ -230,6 +231,17 @@ Zawartość:
 
 Skrypty numerowane poniżej są uruchamiane **po kolei**: każdy konsumuje artefakty wyprodukowane przez poprzedni.
 
+### Skrót: cały łańcuch lokalny (`run_all.py`)
+
+```bash
+# notatnik -> generate_report.py -> shamanic_pipeline.py -> scan Księgi (tylko fiński)
+python run_all.py
+# użyj wyjść już zapisanych w notatniku
+python run_all.py --skip-notebook
+```
+
+Kroki 1, 2 i 4 poniżej, a dla korpusu fińskiego także `scan` Księgi Niedomówień, jednym poleceniem. Uruchamiaj go Pythonem z `.venv` repo: jeśli brakuje jądra `analyst_env`, zostanie zarejestrowane dla tego interpretera. Łańcuch zatrzymuje się na pierwszym kroku, który się wywróci; kod wyjścia 3 oznacza, że odmówiła bramka źródła raportu (patrz krok 2).
+
 ### 1. Notatnik (obowiązkowy)
 
 ```bash
@@ -249,6 +261,8 @@ python generate_report.py
 ```
 
 `generate_report.py` czyta wyjścia komórek bezpośrednio z pliku `.ipynb`, więc raport HTML musi być generowany ze **świeżo wykonanego** notatnika. `requirements.txt` listuje `nbstripout` — jeśli został aktywowany w lokalnej konfiguracji git, wyjścia notatnika są usuwane przy commicie. Generuj raport _przed_ commitem albo wyłącz nbstripout dla swojego workflow.
+
+**Bramka źródła.** Zanim cokolwiek zapisze, `generate_report.py` sprawdza, czy wyjścia notatnika należą do `source_file` z configu, i w przeciwnym razie odmawia (kod wyjścia 3, nic nie jest zapisywane). Trzy kontrole: ścieżka źródła i folder eksportu wydrukowane przez notatnik muszą zgadzać się z configiem, a zapisany przebieg musi dojść do końca komórki eksportu; `paragraphs.csv` i `sentences.csv` nie mogą być nowsze niż `.ipynb` (inaczej wyjścia ostatniego przebiegu nie zostały zapisane — typowe przy uruchamianiu notatnika w VS Code bez zapisu); a początki stron wydrukowane przez notatnik muszą występować w pliku źródłowym (porównanie jako ciąg samych liter, więc sklejone przeniesienia, usunięte numery stron i kolontytuły nie mają znaczenia). Gdy treści nie da się porównać — skany czytane przez OCR, obrazy, adresy URL, zniekształcona warstwa tekstu PDF — decydują dwie pierwsze kontrole, a konsola to mówi. Raport zapisuje też, czy omorfi brał udział w przebiegu (`<meta name="ata-omorfi">`); czyta to Księga Niedomówień.
 
 Dla ustrukturyzowanego, pełnego widoku **diagnostycznego** budowanego wprost z eksportów CSV/JSON:
 
@@ -343,7 +357,7 @@ Gra zbudowana na `raw_roots_chant.txt`. Dla każdego bloku 3–6 kolejnych korze
 
 Skrypt to połowa deterministyczna (filtry, bloki, źródło prawdy, walidacja, ocena, Księga). Połowę twórczą — napisanie `draft.json` — wykonuje agent według `skills/ksiega-niedomowien/SKILL.md` albo model przez API w trybie `draft`.
 
-**Filtry wejścia.** Kwalifikują się tylko podfoldery `export_results/` z fińską nazwą, `<html lang="fi">`, fińskim chantem i bez przecieku gramatyki; wszystko inne jest odrzucane z podaniem powodu. Linia `roots.header` jest usuwana, jeśli występuje. Test *przecieku gramatyki* wyłapuje korpusy przetworzone przed włączeniem omorfi (v1.5.0): na pełnym `keywords_tfidf.csv` liczy formy odmienione, które przetrwały lematyzację, oraz śmieciowe lematy spaCy, i odrzuca folder powyżej 1,0 na 100 terminów. Wymaga omorfi (krok 5 instalacji).
+**Filtry wejścia.** Kwalifikują się tylko podfoldery `export_results/` z fińską nazwą, `<html lang="fi">`, fińskim chantem i bez przecieku gramatyki; wszystko inne jest odrzucane z podaniem powodu. Linia `roots.header` jest usuwana, jeśli występuje. Test *przecieku gramatyki* wyłapuje korpusy przetworzone przed włączeniem omorfi (v1.5.0): na pełnym `keywords_tfidf.csv` liczy formy odmienione, które przetrwały lematyzację, oraz śmieciowe lematy spaCy, i odrzuca folder powyżej 1,0 na 100 terminów. Wymaga omorfi (krok 5 instalacji). Gdy folder ma aktualny `analysis_report.html`, odmowa za przeciek gramatyki mówi, co wie raport: omorfi brał udział w przebiegu (wtedy poprawki może wymagać sam silnik — korekta fińskich lematów w notatniku; zgłoś przykłady), omorfi zabrakło (zainstaluj go i puść notatnik ponownie) albo przebieg nie miał żadnego kroku omorfi. Bez aktualnego raportu mówi, że tego nie wiadomo.
 
 **Dlaczego tylko fiński.** Gra żyje z tego, czego lematyzacja nie dopowiada, więc ma sens tylko tam, gdzie sprowadzenie słowa do lematu odbiera mu realną treść. Fiński jest aglutynacyjny: to, co polski czy rosyjski wyrażają częściowo osobnymi przyimkami, a angielski głównie szykiem i słowami funkcyjnymi, fiński zamyka w samym słowie — piętnaście przypadków (`talossa` „w domu”, `talosta` „z domu”, `taloon` „do domu”, `talolle` „ku domowi”, `talotta` „bez domu”), sufiksy dzierżawcze (`taloni` „mój dom”, `talonsa` „jego/jej/ich dom”), klityki (`-ko` pytanie, `-kin` „też”, `-han` emfaza) i formy czasownika niosące naraz osobę, czas, tryb i stronę bierną (`tehtäisiinkö` „czy zostałoby to zrobione?”). Chant sprowadza to wszystko do `TALO` i `TEHDÄ`: znika kto, gdzie, skąd, dokąd, czyje i czy — dokładnie te luki, które słuchacz musi wypełnić. W polskim i rosyjskim lemat traci końcówkę fleksyjną, ale spora część relacji siedzi w osobnym słowie (przyimku), więc lemat nigdy nie niósł jej sam; angielski traci niewiele poza liczbą i czasem. Islandzki (cztery przypadki, w dużej mierze rządzone przez przyimki) i włoski (przyimki i rodzajniki, słaba fleksja imienna) są bliżsi odpowiednio wzorcowi polsko-rosyjskiemu i angielskiemu. Technicznie narzędzie potrzebuje też słownikowego analizatora, żeby wykazać, że chant jest pozbawiony gramatyki, i dopasować korzenie z powrotem do odmienionego tekstu; w tym pipeline'ie ma go tylko fiński (omorfi), a progi skalibrowano na prawdziwych fińskich korpusach.
 

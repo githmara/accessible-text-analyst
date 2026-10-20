@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from shamanic_locale import (PODSTAWY, get_ui_lang, kody_regex, lingua_jezyki, nazwy_regex, t,
                              warianty_skrotowcow)
+import zrodlo_raportu
 
 # Język UI (printy w konsoli) — odczytywany z config.json/ini, fallback 'en'.
 UI_LANG = get_ui_lang()
@@ -55,15 +56,18 @@ def _slugify(s, maxlen=80):
     return s[:maxlen] or "_default"
 
 
-def _resolve_project_dir(config_path=None):
+def _load_source(config_path=None):
     if config_path is None:
         config_path = CONFIG_PATH
     try:
         with open(config_path, "r", encoding="utf-8-sig") as f:
-            source = (json.load(f).get("source_file") or "").strip()
+            return (json.load(f).get("source_file") or "").strip()
     except (FileNotFoundError, json.JSONDecodeError):
-        source = ""
+        return ""
 
+
+def _resolve_project_dir(config_path=None):
+    source = _load_source(config_path)
     if not source:
         name = "_default"
     elif source.startswith(("http://", "https://")):
@@ -681,9 +685,25 @@ def _truncate_rank_rows(lines, keep=KEEP_RANK_ROWS):
     return lines[:cut] + [formula]
 
 
+def _gate(nb):
+    """Bramka źródła (zrodlo_raportu.py): raport tylko z wyjść notatnika, które
+    pochodzą ze źródła z configu i zostały zapisane po ostatnim przebiegu.
+    Zwraca True albo drukuje powód odmowy i zwraca False."""
+    w = zrodlo_raportu.sprawdz(nb, _load_source(), PROJECT_DIR, Path(NOTEBOOK_PATH))
+    args = dict(w.argumenty)
+    if "reason" in args:
+        args["reason"] = t(UI_LANG, f"generate_report.gate_reason_{args['reason']}")
+    print(t(UI_LANG, f"generate_report.{w.klucz}", **args))
+    return w.ok
+
+
 def build_accessible_html():
     with open(NOTEBOOK_PATH, 'r', encoding='utf-8') as f:
         nb = json.load(f)
+
+    if not _gate(nb):
+        return False
+    omorfi = zrodlo_raportu.omorfi_status(nb)
 
     # 1. Znajdź język docelowy analizowanego tekstu
     target_lang = "ru" 
@@ -839,6 +859,10 @@ def build_accessible_html():
         '<html lang="ru">', 
         "<head>",
         '  <meta charset="utf-8">',
+        # Dla ksiega_niedomowien.py: czy omorfi poprawiał lematy w tym przebiegu
+        # (active | inactive | absent). Raport powstaje tylko po bramce źródła,
+        # więc znacznik dotyczy eksportów z tego samego folderu.
+        f'  <meta name="ata-omorfi" content="{omorfi}">',
         "  <title>Отчёт: Анализ текста</title>",
         "  <style>",
         "    body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #333; }",
@@ -953,6 +977,11 @@ def build_accessible_html():
     print(t(UI_LANG, 'generate_report.info_target_lang', language=target_lang))
     if REMOVE_NOISE:
         print(t(UI_LANG, 'generate_report.info_remove_noise_active'))
+    if omorfi != "absent":
+        print(t(UI_LANG, f'generate_report.info_omorfi_{omorfi}'))
+    return True
+
 
 if __name__ == "__main__":
-    build_accessible_html()
+    # 3 = odmowa bramki źródła (jak w ksiega_niedomowien.py); raport nie powstał.
+    sys.exit(0 if build_accessible_html() else 3)
