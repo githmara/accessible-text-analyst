@@ -221,7 +221,24 @@
    "liczniki": {
     "1": 0,
     "3": 0,
-    "3_bez_reguly_1": 2
+    "3_bez_reguly_1": 1,
+    "4": 1
+   }
+  },
+  {
+   "nazwa": "złożenie z łącznikiem: człon na samogłoskę, L+R dłuższe od najdłuższego słowa (etap 6)",
+   "akapity": [
+    "Урок он- лайн. Онлайн.",
+    "Система выполняет поисково- информационную функцию."
+   ],
+   "oczekiwane": [
+    "Урок онлайн. Онлайн.",
+    "Система выполняет поисково- информационную функцию."
+   ],
+   "liczniki": {
+    "1": 1,
+    "3": 0,
+    "4": 1
    }
   },
   {
@@ -386,6 +403,22 @@
    }
   },
   {
+   "nazwa": "pierwszy token z interpunkcją otwierającą ((р а з б о р), etap 6)",
+   "akapity": [
+    "Разбор слова.",
+    "Анализ  (р а з б о р)  слова."
+   ],
+   "granica": null,
+   "oczekiwane": [
+    "Разбор слова.",
+    "Анализ  (разбор)  слова."
+   ],
+   "liczniki": {
+    "sklejone": 1,
+    "przyklejone": 0
+   }
+  },
+  {
    "nazwa": "pdf: granice z geometrii jako znacznik",
    "akapity": [
     "Социальное дистанцирование.",
@@ -507,6 +540,34 @@
    ],
    "oczekiwany": "Библиотека литературы Древней Руси. XVII век. Повесть о Горе-Злочастии",
    "kodowanie": "latin-1>cp1251"
+  },
+  {
+   "nazwa": "ATA bez es: poprawny hiszpański bez zmian (ñ → ń to litera za literę, etap 6)",
+   "tekst": "Señor, año, niño, señora, mañana, España, añadidura.",
+   "alfabety": [
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzîèéàçôûêâ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÅÄÖåäö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÐÉÍÓÚÝÞÆÖáðéíóúýþæö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÈÉÌÍÎÒÓÙÚàèéìíîòóùú",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż"
+   ],
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "ATA: polski cp1250 odczytany jako Latin-1 naprawiony (³ → ł: symbol w literę)",
+   "tekst": "£ód, ¿ó³æ, lêczeæ, ksi¹¿k¹, gêl¹ jañ, db³o, ³¹ka, m¹¿, piêæ.",
+   "alfabety": [
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzîèéàçôûêâ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÅÄÖåäö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÐÉÍÓÚÝÞÆÖáðéíóúýþæö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÈÉÌÍÎÒÓÙÚàèéìíîòóùú",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż"
+   ],
+   "oczekiwany": "Łódź, żółć, ślęczeć, książką, gęślą jaźń, źdźbło, łąka, mąż, pięść.",
+   "kodowanie": "latin-1>cp1250"
   },
   {
    "nazwa": "za krótki tekst nie jest oceniany",

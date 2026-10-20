@@ -97,6 +97,15 @@ def _pismo(z: str) -> str:
     return unicodedata.name(z, "?").split(" ")[0]
 
 
+#: Samogłoski, na które kończy się pierwszy człon złożenia z łącznikiem
+#: („поисково-”, „научно-”) — dane pisma, nie lista języków.
+_SAMOGLOSKI_ZLOZEN = frozenset("aeiouyаеёиоуыэюяіїє")
+#: Najkrótszy pierwszy człon złożenia: przedrostek („по-”, „при-”, „пере-”)
+#: to przeniesienie, a w krótkim dokumencie najdłuższe słowo bywa krótsze
+#: od „посвященного” — bez tego bariera łapała zwykłe „по- священного”.
+MIN_CZLON_ZLOZENIA = 5
+
+
 def _rdzen_lewy(fragment: str) -> str | None:
     """Słowo przed „-” (z łącznikami w środku); `None` = kandydat wykluczony."""
     m = re.search(r"[^\W\d_]+(?:-[^\W\d_]+)*$", fragment)
@@ -127,6 +136,13 @@ def napraw_przeniesienia(akapity: list[str]) -> tuple[list[str], dict[str, int]]
          w notatkach pisanych ręcznie „- ” bywa myślnikiem („Плохой- хуже
          всех”), a reguła 1 nigdy tam nie trafia (zmierzone na 380 plikach
          `.docx`: ok. 15 zniszczonych, wszystkie z zerem trafień reguły 1);
+         Złożenie z łącznikiem nie jest przeniesieniem: gdy L kończy się
+         samogłoską (łącznik złożenia „-о-”, „-е-”), ma co najmniej
+         `MIN_CZLON_ZLOZENIA` liter, a L+R jest dłuższe od
+         najdłuższego słowa dokumentu w tym samym piśmie (bez łączników),
+         reguła 3 nie działa — „поисково- информационную” (22 litery przy
+         najdłuższym 18) traciło łącznik; na 380 plikach `.docx` to jedyny
+         z 1540 kandydatów reguły 3, którego bariera dotyka (etap 6);
       4. inaczej bez zmian („бело- голубых” przy słowie „голубых”; wiszące
          „двух- и …”, bo „и” jest słowem).
     Przeniesienia PRZEZ granicę akapitu zostają (liczba akapitów stała).
@@ -136,12 +152,18 @@ def napraw_przeniesienia(akapity: list[str]) -> tuple[list[str], dict[str, int]]
         (kandydaci reguły 3 zatrzymani bramką; zostali bez zmian).
     """
     slowa = slownik_dokumentu(akapity)
+    najdluzsze: dict[str, int] = {}
+    for slowo in slowa:
+        if slowo and "-" not in slowo:
+            pismo = _pismo(slowo[0])
+            najdluzsze[pismo] = max(najdluzsze.get(pismo, 0), len(slowo))
     liczniki = {"1": 0, "2": 0, "3": 0, "4": 0, "wykluczone": 0, "3_bez_reguly_1": 0}
     # Przebieg 1: decyzje dla wszystkich kandydatów (bramka reguły 3 zależy
     # od całego dokumentu). Przebieg 2: zastosowanie.
     decyzje: list[list[tuple[int, str, str]]] = []
     for akapit in akapity:
-        decyzje.append(_decyzje_akapitu(akapit, slowa, liczniki) if "- " in akapit else [])
+        decyzje.append(_decyzje_akapitu(akapit, slowa, liczniki, najdluzsze)
+                       if "- " in akapit else [])
     regula_1 = any(regula == "1" for lista in decyzje for _, regula, _ in lista)
     wynik: list[str] = []
     for akapit, lista in zip(akapity, decyzje):
@@ -159,8 +181,8 @@ def napraw_przeniesienia(akapity: list[str]) -> tuple[list[str], dict[str, int]]
     return wynik, liczniki
 
 
-def _decyzje_akapitu(akapit: str, slowa: dict[str, int],
-                     liczniki: dict[str, int]) -> list[tuple[int, str, str]]:
+def _decyzje_akapitu(akapit: str, slowa: dict[str, int], liczniki: dict[str, int],
+                     najdluzsze: dict[str, int] | None = None) -> list[tuple[int, str, str]]:
     """(pozycja w podziale na białe znaki, reguła, nowy fragment) — bez zmian w tekście.
 
     Liczy od razu `"4"` i `"wykluczone"`; reguły 1–3 liczy dopiero przebieg 2.
@@ -186,7 +208,9 @@ def _decyzje_akapitu(akapit: str, slowa: dict[str, int],
             lista.append((i, "1", lewy_f[:-1] + prawy_f))
         elif slowa.get(f"{lewy}-{prawy}".casefold(), 0):
             lista.append((i, "2", lewy_f + prawy_f))
-        elif slowa.get(prawy.casefold(), 0) - wlasne_r <= 0:
+        elif slowa.get(prawy.casefold(), 0) - wlasne_r <= 0 and not (
+                len(lewy) >= MIN_CZLON_ZLOZENIA and lewy[-1].casefold() in _SAMOGLOSKI_ZLOZEN
+                and len(lewy + prawy) > (najdluzsze or {}).get(_pismo(lewy[0]), len(lewy + prawy))):
             lista.append((i, "3", lewy_f[:-1] + prawy_f))
         else:
             liczniki["4"] += 1
@@ -262,7 +286,14 @@ def _scal_ciagi(czesci: list[str], slowa: dict[str, int], liczniki: dict[str, in
     nowe: list[str] = []
     i = 0
     while i < len(czesci):
-        if i % 2 or not litera_pojedyncza(czesci[i]):
+        # Pierwszy token ciągu może nieść interpunkcję otwierającą, symetrycznie
+        # do ogona: „(р а з б о р)” → „(разбор)” (etap 6, Земская).
+        glowa = ""
+        if not i % 2 and not litera_pojedyncza(czesci[i]):
+            rdzen = czesci[i].lstrip(OTWIERAJACE)
+            if rdzen != czesci[i] and litera_pojedyncza(rdzen):
+                glowa = czesci[i][:len(czesci[i]) - len(rdzen)]
+        if i % 2 or not (glowa or litera_pojedyncza(czesci[i])):
             nowe.append(czesci[i])
             i += 1
             continue
@@ -286,6 +317,7 @@ def _scal_ciagi(czesci: list[str], slowa: dict[str, int], liczniki: dict[str, in
             przyklejony = (i >= 2 and pojedyncza(i - 1) and czesci[i - 2]) or \
                 (j + 2 < len(czesci) and pojedyncza(j + 1) and czesci[j + 2])
             litery = czesci[i:j + 1:2]
+            litery[0] = litery[0][len(glowa):]
             if ogon:
                 litery[-1] = litery[-1][:-len(ogon)]
             sklejone = "".join(litery)
@@ -294,7 +326,7 @@ def _scal_ciagi(czesci: list[str], slowa: dict[str, int], liczniki: dict[str, in
                 nowe.extend(czesci[i:j + 1])
             elif slowa.get(klucz_slowa(sklejone), 0):
                 liczniki["sklejone"] += 1
-                nowe.append(sklejone + ogon)
+                nowe.append(glowa + sklejone + ogon)
             else:
                 liczniki["bez_zmian"] += 1
                 nowe.extend(czesci[i:j + 1])
@@ -341,18 +373,33 @@ def przekoduj(tekst: str, zrodlo: str, cel: str) -> str:
     return "".join(wynik)
 
 
+_JEDNOBAJTOWE: dict[str, frozenset[str]] = {}
+
+
+def _jednobajtowe(zrodlo: str) -> frozenset[str]:
+    """Znaki zapisywalne JEDNYM bajtem w `zrodlo` (raz na kodowanie)."""
+    if zrodlo not in _JEDNOBAJTOWE:
+        znaki = set()
+        for b in range(256):
+            try:
+                znaki.add(bytes([b]).decode(zrodlo))
+            except UnicodeDecodeError:
+                pass
+        _JEDNOBAJTOWE[zrodlo] = frozenset(z for z in znaki if len(z.encode(zrodlo)) == 1)
+    return _JEDNOBAJTOWE[zrodlo]
+
+
 def kodowalne(tekst: str, zrodlo: str) -> float:
-    """Udział liter tekstu zapisywalnych JEDNYM bajtem w kodowaniu `zrodlo`."""
+    """Udział liter tekstu zapisywalnych JEDNYM bajtem w kodowaniu `zrodlo`.
+
+    Zbiór znaków zamiast `encode` per znak: funkcja stoi na wejściu
+    `napraw_mojibake` dla KAŻDEGO akapitu (etap 6, wyjście przed oceną).
+    """
     litery = [z for z in tekst if z.isalpha()]
     if not litery:
         return 0.0
-    ok = 0
-    for z in litery:
-        try:
-            ok += len(z.encode(zrodlo)) == 1
-        except UnicodeEncodeError:
-            pass
-    return ok / len(litery)
+    zbior = _jednobajtowe(zrodlo)
+    return sum(z in zbior for z in litery) / len(litery)
 
 
 def _litery_zachowane(tekst: str, kandydat: str) -> bool:
@@ -364,6 +411,30 @@ def _litery_zachowane(tekst: str, kandydat: str) -> bool:
     alfabetach sześciu paczek ATA, zmierzone w etapie 5).
     """
     return sum(z.isalpha() for z in kandydat) >= sum(z.isalpha() for z in tekst)
+
+
+#: Znaki, które prawdziwy tekst pisze sam z siebie, choć przekodowanie robi
+#: z nich litery: hiszpańskie „¿”, „¡” (cp1250: „ż”, „ˇ”).
+_SYMBOLE_ZWYKLE = "¿¡"
+
+
+def _przekodowanie_dopuszczalne(tekst: str, kandydat: str) -> bool:
+    """Przekodowanie w obrębie JEDNEGO pisma (łacina → łacina) musi zamieniać
+    w litery symbole, których zwykły tekst nie pisze („³” → „ł”, „¹” → „ą”,
+    „£” → „Ł”). Samo „ñ” → „ń” to podmiana litery na literę: poprawny
+    hiszpański („El año pasado el señor…”) wychodził jako „El ańo … seńor”
+    przy alfabetach sześciu paczek ATA, bo „ń” jest w polskim (etap 6, audyt
+    ATA M1). Zmiana pisma (łacina → cyrylica, „Повесть”) przechodzi zawsze.
+    """
+    symbol_w_litere = False
+    for a, b in zip(tekst, kandydat):
+        if a == b:
+            continue
+        if a.isalpha() and b.isalpha() and _pismo(a) != _pismo(b):
+            return True
+        if not a.isalpha() and b.isalpha() and a not in _SYMBOLE_ZWYKLE:
+            symbol_w_litere = True
+    return symbol_w_litere
 
 
 def wiarygodnosc(tekst: str, alfabety) -> tuple[int, int]:
@@ -393,20 +464,24 @@ def napraw_mojibake(tekst: str, alfabety, *, min_slow: int = MIN_SLOW_MOJIBAKE
 
     Returns:
         (tekst, info) — info: `slow`, `wejscie` i `wynik` (udziały słów
-        wiarygodnych), `kodowanie` („latin-1>cp1251”) albo `None`.
+        wiarygodnych; `slow`/`wejscie` = `None`, gdy tekstu nie da się zapisać
+        w żadnym kodowaniu źródła — cyrylica, polski: wyjście przed oceną),
+        `kodowanie` („latin-1>cp1251”) albo `None`.
     """
+    zrodla = [z for z in ZRODLA_MOJIBAKE if kodowalne(tekst, z) >= MIN_KODOWALNYCH_MOJIBAKE]
+    if not zrodla:
+        return tekst, {"slow": None, "wejscie": None, "wynik": None, "kodowanie": None}
     alfabety = [frozenset(a) for a in alfabety]
     n, ok = wiarygodnosc(tekst, alfabety)
     info = {"slow": n, "wejscie": ok / n if n else 1.0, "wynik": None, "kodowanie": None}
     if n < min_slow or info["wejscie"] > PROG_WEJSCIA_MOJIBAKE:
         return tekst, info
     najlepszy = (0.0, None, tekst)
-    for zrodlo in ZRODLA_MOJIBAKE:
-        if kodowalne(tekst, zrodlo) < MIN_KODOWALNYCH_MOJIBAKE:
-            continue
+    for zrodlo in zrodla:
         for cel in CELE_MOJIBAKE:
             kandydat = przekoduj(tekst, zrodlo, cel)
-            if not _litery_zachowane(tekst, kandydat):
+            if not _litery_zachowane(tekst, kandydat) or \
+                    not _przekodowanie_dopuszczalne(tekst, kandydat):
                 continue
             n2, ok2 = wiarygodnosc(kandydat, alfabety)
             if n2 and ok2 / n2 > najlepszy[0]:
@@ -451,7 +526,8 @@ def napraw_mojibake_akapitow(akapity: list[str], alfabety) -> tuple[list[str], d
             if kodowalne(akapit, zrodlo) < MIN_KODOWALNYCH_MOJIBAKE:
                 continue
             kandydat = przekoduj(akapit, zrodlo, cel)
-            if not _litery_zachowane(akapit, kandydat):
+            if not _litery_zachowane(akapit, kandydat) or \
+                    not _przekodowanie_dopuszczalne(akapit, kandydat):
                 continue
             n, ok = wiarygodnosc(akapit, alfabety)
             n2, ok2 = wiarygodnosc(kandydat, alfabety)
