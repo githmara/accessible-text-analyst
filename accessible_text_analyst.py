@@ -580,12 +580,19 @@ def load_pdf(path):
             print(f"    ... и ещё {len(removed_bp)-5}")
     # Применяем финальную очистку
     pages = [p for p in (clean_pdf_text(r) for r in cleaned_raw) if p]
-    # U+F020 i tekst rozstrzelony — ta sama specyfikacja co w load_docx;
-    # przeniesienia w PDF skleja już clean_pdf_text (dywiz na końcu wiersza).
-    from naprawa_zrodel import oczysc_akapity
-    pages, _cz = oczysc_akapity(pages, przeniesienia=False)
-    pages = [re.sub(r"\s+", " ", p).strip() for p in pages]
-    _print_text_cleanup("PDF", _cz)
+    # U+F020 → spacja. Tekstu rozstrzelonego w PDF NIE sklejamy po tekście:
+    # rozstrzelenie i odstęp między słowami dają tę samą pojedynczą spację
+    # („в о́ й н ы.” → „во́йн ы.”). Granice słów daje geometria
+    # (`naprawa_zrodel.serie_rozstrzelone`); decyzja o sklejeniu przyjdzie ze
+    # wspólnego modułu z Reżyserem. Przeniesienia skleja clean_pdf_text.
+    from naprawa_zrodel import zamien_spacje_pua
+    _pua = 0
+    for _i, _p in enumerate(pages):
+        _p, _n = zamien_spacje_pua(_p)
+        if _n:
+            pages[_i], _pua = re.sub(r"\s+", " ", _p).strip(), _pua + _n
+    if _pua:
+        print(f"  PDF: символов-пробелов шрифта Symbol (U+F020) заменено обычным пробелом: {_pua}.")
     print(f"  PDF: {total} страниц, загружено {len(pages)}, пропущено {skipped}.")
     return pages
 

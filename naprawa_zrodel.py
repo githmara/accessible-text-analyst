@@ -530,3 +530,108 @@ def oczysc_akapity(akapity: list[str], style: list[str] | None = None,
     if przeniesienia:
         tmp, prz = sklej_przeniesienia(tmp, slowa)
     return tmp, CzyszczenieTekstu(pua, roz_s, roz_p, prz, przez)
+
+
+# ---------------------------------------------------------------------------
+# PDF: granice słów w tekście rozstrzelonym z GEOMETRII znaków
+# ---------------------------------------------------------------------------
+# W warstwie tekstu PDF rozstrzelenie i odstęp między słowami dają TĘ SAMĄ
+# pojedynczą spację („в о́ й н ы.”), więc reguła tekstowa łączyła słowa albo je
+# rwała. Granicę widać dopiero w położeniu liter (słownik, s. 55): odstęp między
+# literami 4,1 pt, między słowami 11,5 pt, a po literze z akcentem 8,3 pt
+# (rozstrzelenie dokłada odstęp także za akcentem, ≈ jeden odstęp liter).
+# Próg 1,5, nie 1,8 jak w Reżyserze: w Земской (pdfplumber, spacje w warstwie
+# tekstu) odstęp słów to tylko 1,77–1,9× odstępu liter (6,47 vs 3,66 pt) i przy
+# 1,8 „существительных неод…” się zlewały; odstępy liter wahają się do 1,2×.
+# Po literze z akcentem granica dopiero powyżej (PROG + 1) × mediana: 8,3 pt
+# to nie granica, 17,96 pt („Волна́ какая”, s. 42) — tak; zakaz bezwzględny
+# zlewał takie słowa.
+# Decyzji o sklejeniu tu NIE ma: należy do wspólnego modułu (etap 4, część 2).
+PROG_GRANICY_ROZSTRZELENIA = 1.5   # granica: odstęp > PROG × mediana odstępów serii
+
+
+class SeriaRozstrzelona(NamedTuple):
+    """Seria jednoliterowych słów pdfplumbera w jednej linii strony."""
+    litery: tuple            # „з”, „о́”, „н”, „а” — litera z ewentualnymi znakami łączącymi
+    granice: tuple           # len(litery) - 1; True = granica słowa ZA literą i
+    odstepy: tuple           # odstępy w pt między kolejnymi literami
+    top: float
+    x0: float
+    x1: float
+    przed: str = ""          # interpunkcja przed pierwszą literą („«л е …”)
+    po: str = ""             # interpunkcja za ostatnią („… к и,”)
+
+    def slowa(self) -> list[str]:
+        """Słowa wg geometrii: [„Жёлтая”, „зо́на”]."""
+        wynik, biezace = [], self.litery[0]
+        for litera, granica in zip(self.litery[1:], self.granice):
+            if granica:
+                wynik.append(biezace)
+                biezace = litera
+            else:
+                biezace += litera
+        wynik.append(biezace)
+        return wynik
+
+    def tekst(self) -> str:
+        """Tak, jak seria stoi w `extract_text`: litery przez pojedynczą spację."""
+        return self.przed + " ".join(self.litery) + self.po
+
+
+def _granice_serii(litery: list, odstepy: list) -> tuple:
+    import statistics
+    mediana = statistics.median(odstepy)
+    return tuple(
+        g > (PROG_GRANICY_ROZSTRZELENIA + (1 if unicodedata.combining(litery[i][-1]) else 0)) * mediana
+        for i, g in enumerate(odstepy))
+
+
+def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona]:
+    """Serie ≥ `MIN_ROZSTRZELENIE` jednoliterowych słów w jednej linii strony.
+
+    `strona` to `pdfplumber.page.Page` — po `napraw_strone`, jeśli ta była
+    potrzebna (akcent jest wtedy doklejony do litery i ma jej położenie).
+    Słowa wg `extract_words` z tą samą tolerancją, z jaką `extract_text` stawia
+    spację; samodzielny znak łączący (PDF bez naprawy) dokleja się do litery
+    przed nim. Linia = to samo `top` (± 1 pt), kolejne słowa w porządku `x0`.
+    """
+    slowa = strona.extract_words(x_tolerance=x_tolerance)
+    serie: list[SeriaRozstrzelona] = []
+    run: list[dict] = []
+    brzegi = {"przed": "", "po": ""}
+
+    def zamknij():
+        if len(run) >= MIN_ROZSTRZELENIE:
+            litery = [w["text"] for w in run]
+            odstepy = [round(b["x0"] - a["x1"], 2) for a, b in zip(run, run[1:])]
+            serie.append(SeriaRozstrzelona(tuple(litery), _granice_serii(litery, odstepy),
+                                           tuple(odstepy), run[0]["top"], run[0]["x0"], run[-1]["x1"],
+                                           brzegi["przed"], brzegi["po"]))
+        run.clear()
+        brzegi["przed"] = brzegi["po"] = ""
+
+    for w in slowa:
+        tekst = w["text"]
+        ta_sama_linia = bool(run) and abs(w["top"] - run[-1]["top"]) <= 1 and w["x0"] >= run[-1]["x0"]
+        if run and ta_sama_linia and tekst and all(unicodedata.combining(z) for z in tekst):
+            run[-1] = {**run[-1], "text": run[-1]["text"] + tekst}   # położenie litery, nie akcentu
+            continue
+        if _jednoliterowy(tekst):
+            if run and not ta_sama_linia:
+                zamknij()
+            run.append(w)
+            continue
+        # Litera z interpunkcją zdaniową: „и,” kończy serię, „«л” ją zaczyna.
+        rdzen_po = tekst.rstrip(_BRZEG_PRAWY)
+        if run and ta_sama_linia and rdzen_po != tekst and _jednoliterowy(rdzen_po):
+            run.append({**w, "text": rdzen_po})
+            brzegi["po"] = tekst[len(rdzen_po):]
+            zamknij()
+            continue
+        zamknij()
+        rdzen_przed = tekst.lstrip(_BRZEG_LEWY)
+        if rdzen_przed != tekst and _jednoliterowy(rdzen_przed):
+            run.append({**w, "text": rdzen_przed})
+            brzegi["przed"] = tekst[:len(tekst) - len(rdzen_przed)]
+    zamknij()
+    return serie

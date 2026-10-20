@@ -48,7 +48,7 @@ def _font_ttf() -> bytes:
     return buf.getvalue()
 
 
-def _pdf(gidy: str, to_unicode: bool = True, pelna_mapa: bool = False) -> bytes:
+def _pdf(gidy: str, to_unicode: bool = True, pelna_mapa: bool = False, tj: bytes = b"") -> bytes:
     """Jednostronicowy PDF; `gidy` — ciąg hex kodów Identity-H w Tj."""
     font = _font_ttf()
     if pelna_mapa:
@@ -59,7 +59,7 @@ def _pdf(gidy: str, to_unicode: bool = True, pelna_mapa: bool = False) -> bytes:
     cmap = (b"/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"
             b"/CMapName /Test def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n"
             + cmap_body + b"endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
-    tresc = b"BT /F1 12 Tf 72 700 Td <" + gidy.encode() + b"> Tj ET"
+    tresc = b"BT /F1 12 Tf 72 700 Td " + (tj or b"<" + gidy.encode() + b"> Tj") + b" ET"
     obiekty = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -235,6 +235,30 @@ class TestRozstrzeleniaIPua(unittest.TestCase):
         pua = chr(0xF020)
         wynik, cz = n.oczysc_akapity([pua + " " + pua + "\t— вариант"])
         self.assertEqual((wynik[0], cz.spacje_pua), ("   \t— вариант", 2))
+
+
+class TestRozstrzeleniaGeometria(unittest.TestCase):
+    """Granice słów w rozstrzeleniu PDF z odstępów (nie z tekstu)."""
+
+    def test_granice_z_odstepow_i_akcent(self):
+        import pdfplumber
+        # 12 pt, glif 600/1000 → 7,2 pt; -300 → odstęp 3,6 pt, -900 → 10,8 pt.
+        # „А Б В А” | „Б́ В А”: akcent (glif 3, szerokość 0) po Б, odstęp za nim
+        # 7,2 pt = 2× mediana — to NIE granica (rozstrzelenie za akcentem).
+        tj = (b"[<0001> -300 <0002> -300 <0004> -300 <0001> -900 "
+              b"<0002> -300 <0003> -300 <0004> -300 <0001>] TJ")
+        with tempfile.TemporaryDirectory() as tmp:
+            sciezka = Path(tmp) / "r.pdf"
+            sciezka.write_bytes(_pdf("", tj=tj))
+            with pdfplumber.open(sciezka) as pdf:
+                s = pdf.pages[0]
+                n.napraw_strone(s)
+                serie = n.serie_rozstrzelone(s)
+                tekst = s.extract_text()
+        self.assertEqual(len(serie), 1)
+        self.assertEqual(serie[0].slowa(), [A + BE + VE + A, BE + AKCENT + VE + A])
+        self.assertEqual(serie[0].tekst(), tekst)     # seria stoi w tekście 1:1
+        self.assertEqual(len(serie[0].litery), 7)
 
 
 class TestBramkaZrodla(unittest.TestCase):
