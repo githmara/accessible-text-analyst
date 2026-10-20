@@ -250,26 +250,30 @@ def _pdf_strony(strony) -> bytes:
     """
     obiekty = [None, None]                       # 1 katalog, 2 drzewo stron
     kids = []
-    for litery, gidy in strony:
+    for wpis in strony:
+        litery, gidy = wpis[0], wpis[1]
+        opcje = wpis[2] if len(wpis) > 2 else {}
+        nazwa_fontu = opcje.get("nazwa", b"BCDEEE+Times")
         nr = len(obiekty) + 1
         if litery is None:
             tresc = b""
             obiekty += [b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents %d 0 R >>" % (nr + 1),
                         b"<< /Length 0 >>\nstream\n\nendstream"]
         else:
-            font = _font_ttf_litery(litery)
+            font = opcje.get("font") or _font_ttf_litery(litery)
             cmap = (b"/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"
                     b"/CMapName /Test def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n"
-                    b"1 beginbfchar\n<0001> <%04X>\nendbfchar\n" % ord(litery[0])
+                    b"1 beginbfchar\n<0001> <%04X>\nendbfchar\n" % ord(opcje.get("pierwsza", litery[0]))
                     + b"endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
-            tresc = b"BT /F1 12 Tf 72 700 Td <" + gidy.encode() + b"> Tj ET"
+            tresc = (b"BT /F1 12 Tf 72 700 Td " + (opcje.get("tj") or b"<" + gidy.encode() + b"> Tj")
+                     + b" ET")
             obiekty += [
                 b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
                 b"/Resources << /Font << /F1 %d 0 R >> >> /Contents %d 0 R >>" % (nr + 2, nr + 1),
                 b"<< /Length %d >>\nstream\n" % len(tresc) + tresc + b"\nendstream",
-                b"<< /Type /Font /Subtype /Type0 /BaseFont /BCDEEE+Times /Encoding /Identity-H "
+                b"<< /Type /Font /Subtype /Type0 /BaseFont /" + nazwa_fontu + b" /Encoding /Identity-H "
                 b"/DescendantFonts [%d 0 R] /ToUnicode %d 0 R >>" % (nr + 3, nr + 6),
-                b"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /BCDEEE+Times "
+                b"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /" + nazwa_fontu + b" "
                 b"/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
                 b"/FontDescriptor %d 0 R /DW 600 /CIDToGIDMap /Identity >>" % (nr + 4),
                 b"<< /Type /FontDescriptor /FontName /BCDEEE+Times /Flags 4 /FontBBox [0 -200 1000 800] "
@@ -336,6 +340,85 @@ class TestAudytPdf(unittest.TestCase):
         t = zrodlo_raportu.sprawdz_tresc(str(sciezka), ["Совсем другой текст о манипуляциях"])
         self.assertEqual((t.stan, t.powod), ("niesprawdzalna", "unreadable"))
 
+
+
+def _font_ttf_glify(nazwy, cmap) -> bytes:
+    """TrueType z glifami `nazwy` (po .notdef) i podaną mapą {kod: nazwa}."""
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+    kolejnosc = [".notdef"] + list(nazwy)
+    fb = FontBuilder(1000, isTTF=True)
+    fb.setupGlyphOrder(kolejnosc)
+    fb.setupCharacterMap(cmap)
+    glify = {}
+    for nazwa in kolejnosc:
+        pen = TTGlyphPen(None)
+        pen.moveTo((50, 0)); pen.lineTo((50, 500)); pen.lineTo((450, 500)); pen.lineTo((450, 0))
+        pen.closePath()
+        glify[nazwa] = pen.glyph()
+    fb.setupGlyf(glify)
+    fb.setupHorizontalMetrics({k: (600, 50) for k in kolejnosc})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "Test", "styleName": "Regular"})
+    fb.setupOS2()
+    fb.setupPost()
+    buf = io.BytesIO()
+    fb.save(buf)
+    return buf.getvalue()
+
+
+class TestLigaturyIPustaNazwa(unittest.TestCase):
+    """Uzupełnienie audytu: glif-ligatura spoza cmap (agl daje 3 znaki) i pusty BaseFont."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        # GID 1 „o” (ToUnicode), 2 „f_f_i” (tylko nazwa post → „ffi”), 3 „c”, 4 „e”.
+        self.font = _font_ttf_glify(["o", "f_f_i", "c", "e"], {ord("o"): "o", ord("c"): "c", ord("e"): "e"})
+
+    def pdf(self, gidy="", nazwa=b"BCDEEE+Times", tj=b""):
+        p = Path(self.tmp.name) / "l.pdf"
+        p.write_bytes(_pdf_strony([("o", gidy, {"font": self.font, "pierwsza": "o", "nazwa": nazwa, "tj": tj})]))
+        return p
+
+    def test_ligatura_naprawiona_bez_wyjatku(self):
+        import pdfplumber
+        with pdfplumber.open(self.pdf("0001000200030004" * 3)) as pdf:
+            s = pdf.pages[0]
+            o = n.napraw_strone(s)
+            self.assertEqual(s.extract_text(), "office" * 3)
+            # Licznik bramki: jeden glif = jedna pozycja, niezależnie od długości tekstu glifu.
+            self.assertEqual((o.litery, o.znaczniki, o.nierozwiazane), (12, 9, 0))
+            self.assertTrue(o.naprawiona)
+
+    def test_ligatura_w_rozstrzeleniu(self):
+        # „o ffi c e” rozstrzelone: „ffi” nie jest literą pojedynczą, więc nie wchodzi
+        # do serii i nie psuje geometrii ani decyzji modułu.
+        import pdfplumber
+        import czyszczenie_tekstu as ct
+        tj = (b"[<0003> -300 <0001> -300 <0004> -300 <0003> -300 <0002> -300 "
+              b"<0003> -300 <0001> -300 <0004> -300 <0003>] TJ")
+        with pdfplumber.open(self.pdf(tj=tj)) as pdf:
+            s = pdf.pages[0]
+            n.napraw_strone(s)
+            serie = n.serie_rozstrzelone(s)
+            tekst = s.extract_text()
+        self.assertIn("ffi", tekst)
+        self.assertTrue(all(all(ct.litera_pojedyncza(l) for l in x.litery) for x in serie))
+        oznaczony, _ = n.oznacz_granice(tekst, serie)
+        wynik, _ = ct.scal_rozstrzelone([oznaczony, "coec"], granica=n.ZNACZNIK_GRANICY)
+        self.assertEqual(n._ct.bez_laczacych(wynik[0]).replace(" ", ""), tekst.replace(" ", ""))
+
+    def test_pusty_basefont_zgloszony_nie_zgadywany(self):
+        import pdfplumber
+        with pdfplumber.open(self.pdf("0001000200030004" * 3, nazwa=b"")) as pdf:
+            s = pdf.pages[0]
+            o = n.napraw_strone(s)
+            tekst = s.extract_text()
+        # Bez nazwy nie da się powiązać znaku z fontem strony — nic nie zgadujemy.
+        self.assertEqual(o.nierozwiazane, o.znaczniki)
+        self.assertTrue(o.do_zgloszenia)
+        self.assertNotIn("ffi", tekst)
 
 
 if __name__ == "__main__":
