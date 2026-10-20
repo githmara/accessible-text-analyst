@@ -59,6 +59,7 @@ jobs:
           python .github/scripts/test_parytet.py
           python .github/scripts/test_bramka_printow.py
           python .github/scripts/test_audyt_podstaw.py
+          python .github/scripts/test_zrodlo_raportu.py
 
       # Rozjazd tłumaczeń (klucze, placeholdery, struktura i polecenia w README ×6)
       # BLOKUJE wydanie — odpowiednik `--waliduj` z Reżysera.

@@ -10,6 +10,7 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 
 - `accessible_text_analyst.ipynb` — a Jupyter notebook with the complete analysis pipeline (42 cells: 21 code + 21 markdown; the in-notebook narrative is in Russian). It writes two accessibility artefacts (`accessible_text.html`, `accessible_text.docx`) where every paragraph and every foreign-language sentence carries its own `lang` attribute so screen readers and TTS engines switch voice automatically — even offline.
 - `generate_report.py` — a post-processing script that turns the executed notebook into a single accessible HTML file (`analysis_report.html`). It wraps foreign-corpus fragments in `<span lang="target_lang">` and, regardless of corpus language, hardcodes `<span lang="en">` around technical English content (POS tags, NER labels, spaCy/Hugging Face model identifiers, ASCII filenames). Inline code and code blocks in the narrative are blanket-tagged `lang="en"`. In reader mode (`remove_noise: true`) it truncates the notebook's per-document diagnostic loops to the first few documents instead of dumping hundreds of them.
+- `run_all.py` — a launcher for the whole free local chain: it registers the `analyst_env` Jupyter kernel if it is missing, runs the notebook headlessly (without the interactive question cell) and saves its outputs into the `.ipynb`, then runs `generate_report.py`, `shamanic_pipeline.py` and, for a Finnish corpus, the Book of the Unsaid `scan`. It never starts a paid step (LLM rituals, ElevenLabs voices, the Book's `draft`/`fill`).
 - `generate_diagnostic.py` — an independent generator of a full **diagnostic** report (`diagnostic_report.html`) built directly from the notebook's CSV/JSON exports (not from `generate_report.py`'s output). A navigable, screen-reader-first structure: a `<nav>` table of contents plus sections — each with its own heading and lists — for an overview, topics with their paragraphs, theses, named entities grouped by type, and top keywords. Structural labels follow `ui_lang`; corpus fragments get `<span lang="…">`, NER labels `<span lang="en">`.
 - `generate_md.py` — converts the generated `analysis_report.html` into `gemini_notebook_report.md` for ingestion into Gemini Notebook (formerly NotebookLM). The accessibility spans are unwrapped since Gemini Notebook does not consume them.
 - `shamanic_pipeline.py` *(optional)* — a non-LLM post-processor that turns the notebook's CSV/JSON exports into ritual text artefacts (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, and — when the optional sentiment analysis is enabled — `emotional_undertow.txt`), all fully localized across the six supported languages.
@@ -230,6 +231,17 @@ Contents:
 
 The numbered scripts below are intended to be run **in order**: each one consumes artefacts produced by the previous step.
 
+### Shortcut: the whole local chain (`run_all.py`)
+
+```bash
+# notebook -> generate_report.py -> shamanic_pipeline.py -> Book scan (Finnish only)
+python run_all.py
+# reuse the outputs already saved in the notebook
+python run_all.py --skip-notebook
+```
+
+Steps 1, 2 and 4 below, plus the Book of the Unsaid `scan` for a Finnish corpus, in one command. Run it with the Python of the repo's `.venv`: if the `analyst_env` kernel is missing, it is registered for that interpreter. The chain stops at the first failing step; exit code 3 means that the source gate of the report refused (see step 2).
+
 ### 1. Notebook (mandatory)
 
 ```bash
@@ -249,6 +261,8 @@ python generate_report.py
 ```
 
 `generate_report.py` reads cell outputs directly from the `.ipynb` file, so the HTML report must be generated from a **freshly executed** notebook. `requirements.txt` lists `nbstripout` — if it has been activated in the local git config, notebook outputs are stripped on commit. Generate the report _before_ committing, or disable nbstripout for your workflow.
+
+**Source gate.** Before writing anything, `generate_report.py` checks that the notebook outputs belong to the `source_file` in the config, and refuses otherwise (exit code 3, nothing written). Three checks: the source path and the export folder printed by the notebook must match the config, and the saved run must have reached the end of the export cell; `paragraphs.csv` and `sentences.csv` must not be newer than the `.ipynb` (otherwise the outputs of the last run were never saved — typical of running the notebook in VS Code without saving it); and the page openings printed by the notebook must occur in the source file (compared as a stream of letters, so joined hyphenation, removed page numbers and running headers do not matter). When the content cannot be compared — scans read by OCR, images, URLs, a garbled PDF text layer — the first two checks decide and the console says so. The report also records whether omorfi took part in the run (`<meta name="ata-omorfi">`); the Book of the Unsaid reads it.
 
 For a structured, full **diagnostic** view built straight from the CSV/JSON exports:
 
@@ -343,7 +357,7 @@ A game built on `raw_roots_chant.txt`. For each block of 3–6 consecutive roots
 
 The script is the deterministic half (filters, blocks, source of truth, validation, judging, the Book). The creative half — writing `draft.json` — is done either by an agent following `skills/ksiega-niedomowien/SKILL.md` or by an API model through `draft`.
 
-**Input filters.** Only `export_results/` subfolders with a Finnish name, `<html lang="fi">`, a Finnish chant and no grammar leak qualify; anything else is refused with a reason. The `roots.header` line is stripped when present. The *grammar leak* check catches corpora processed before omorfi was enabled (v1.5.0): over the full `keywords_tfidf.csv` it counts inflected forms that survived lemmatization plus spaCy's garbage lemmas, and rejects the folder above 1.0 per 100 terms. Requires omorfi (Installation step 5).
+**Input filters.** Only `export_results/` subfolders with a Finnish name, `<html lang="fi">`, a Finnish chant and no grammar leak qualify; anything else is refused with a reason. The `roots.header` line is stripped when present. The *grammar leak* check catches corpora processed before omorfi was enabled (v1.5.0): over the full `keywords_tfidf.csv` it counts inflected forms that survived lemmatization plus spaCy's garbage lemmas, and rejects the folder above 1.0 per 100 terms. Requires omorfi (Installation step 5). When the folder has a current `analysis_report.html`, a refusal for a grammar leak says what the report knows: omorfi took part in the run (then the engine itself — the Finnish lemma correction in the notebook — may need fixing; report the examples), omorfi was missing (install it and re-run the notebook), or the run had no omorfi step at all. Without a current report it says that this is unknown.
 
 **Why Finnish only.** The game lives on what lemmatization leaves unsaid, so it only makes sense where reducing a word to its lemma removes real meaning. Finnish is agglutinative: what Polish or Russian express partly with separate prepositions, and English mostly with word order and function words, Finnish packs into the word itself — fifteen cases (`talossa` "in the house", `talosta` "out of the house", `taloon` "into the house", `talolle` "to the house", `talotta` "without a house"), possessive suffixes (`taloni` "my house", `talonsa` "his/her/their house"), clitics (`-ko` question, `-kin` "also", `-han` emphasis) and verb forms carrying person, tense, mood and the passive at once (`tehtäisiinkö` "would it be done?"). The chant reduces all of that to `TALO` and `TEHDÄ`: who, where, from where, to where, whose and whether all vanish — exactly the gaps a listener has to fill. In Polish and Russian the lemma drops the inflectional ending, but much of the relation sits in a separate word (the preposition), so the lemma never carried it alone; English loses little beyond number and tense. Icelandic (four cases, largely governed by prepositions) and Italian (prepositions and articles, little nominal inflection) sit closer to the Polish/Russian and the English patterns respectively. Technically the tool also needs a dictionary analyser to prove that a chant is grammar-free and to match roots back to inflected text; in this pipeline only Finnish has one (omorfi), and the thresholds were calibrated on real Finnish corpora.
 

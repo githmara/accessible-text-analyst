@@ -10,6 +10,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 
 - `accessible_text_analyst.ipynb` — Jupyter-minnisbók með heilli greiningarleiðslu (42 hólf: 21 kóða + 21 markdown; frásögnin innan minnisbókarinnar er á rússnesku). Hún skrifar tvö aðgengisgripi (`accessible_text.html`, `accessible_text.docx`), þar sem hver málsgrein og hver erlend setning ber sitt eigið `lang`-eiginleika — skjálesarar og TTS-vélar skipta um rödd sjálfkrafa, jafnvel án nets.
 - `generate_report.py` — eftirvinnsluforrit sem breytir framkvæmdri minnisbók í eina aðgengilega HTML-skrá (`analysis_report.html`). Það vefur erlend brot inn í `<span lang="target_lang">` og — óháð tungumáli safnsins — þvingar `<span lang="en">` utan um tæknilegt enskt innihald (POS-merki, NER-merki, auðkenni spaCy/Hugging Face líkana, ASCII-skráarnöfn). Inline-kóði og kóðablokkir í frásögn fá öll `lang="en"` í einu lagi. Í lesendaham (`remove_noise: true`) styttir það skjalkvíslar greiningarlykkjur minnisbókarinnar niður í fyrstu fáu skjölin í stað þess að prenta hundruð.
+- `run_all.py` — ræsir fyrir alla ókeypis staðbundnu keðjuna: skráir Jupyter-kjarnann `analyst_env` ef hann vantar, keyrir minnisbókina án viðmóts (án gagnvirka spurningahólfsins) og vistar úttak hennar í `.ipynb`, keyrir svo `generate_report.py`, `shamanic_pipeline.py` og, fyrir finnskt textasafn, `scan` fyrir Bók hins ósagða. Hann ræsir aldrei greitt skref (LLM-helgisiði, ElevenLabs-raddir, `draft`/`fill` bókarinnar).
 - `generate_diagnostic.py` — sjálfstæður smiður á heildstæðri **greiningarskýrslu** (`diagnostic_report.html`) sem byggð er beint á CSV/JSON-útflutningi minnisbókarinnar (ekki á úttaki `generate_report.py`). Aðgengileg uppbygging fyrir skjálesara: efnisyfirlit `<nav>` ásamt köflum — hver með eigin fyrirsögn og listum — fyrir yfirlit, þemu með málsgreinum, tesur, nafngreinda nafnliði eftir tegund og helstu lykilorð. Byggingartextar fylgja `ui_lang`; brot úr safninu fá `<span lang="…">`, NER-merki `<span lang="en">`.
 - `generate_md.py` — breytir `analysis_report.html` í `gemini_notebook_report.md` fyrir Gemini Notebook (áður NotebookLM). Aðgengis-spans eru afpökkuð því Gemini Notebook notar þau ekki.
 - `shamanic_pipeline.py` *(valfrjálst)* — eftirvinnsluforrit án LLM sem breytir CSV/JSON-útflutningi minnisbókarinnar í helgisiðatextagripi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` og — þegar valfrjáls tilfinningagreining er virk — `emotional_undertow.txt`), öll að fullu staðfærð fyrir sex studdu tungumálin.
@@ -230,6 +231,17 @@ Innihald:
 
 Skriftunum hér að neðan er ætlað að keyra **í röð**: hver tekur við gripum úr fyrra skrefi.
 
+### Flýtileið: öll staðbundna keðjan (`run_all.py`)
+
+```bash
+# minnisbók -> generate_report.py -> shamanic_pipeline.py -> scan bókarinnar (aðeins finnska)
+python run_all.py
+# nota úttakið sem þegar er vistað í minnisbókinni
+python run_all.py --skip-notebook
+```
+
+Skref 1, 2 og 4 hér að neðan, auk `scan` fyrir Bók hins ósagða þegar textasafnið er finnskt, í einni skipun. Keyrðu hann með Python úr `.venv` geymslunnar: ef kjarnann `analyst_env` vantar er hann skráður fyrir þann túlk. Keðjan stöðvast við fyrsta skrefið sem mistekst; úttakskóði 3 þýðir að heimildarathugun skýrslunnar hafnaði (sjá skref 2).
+
 ### 1. Minnisbók (skyldug)
 
 ```bash
@@ -249,6 +261,8 @@ python generate_report.py
 ```
 
 `generate_report.py` les úttak hólfa beint úr `.ipynb`-skránni, þannig að HTML-skýrslan verður að vera mynduð úr **nýkeyrðri** minnisbók. `requirements.txt` listar `nbstripout` — ef hann hefur verið virkjaður í staðbundinni git-stillingu eru úttök minnisbókarinnar fjarlægð við commit. Myndaðu skýrsluna _áður_ en þú commitar, eða slökktu á nbstripout fyrir vinnuflæði þitt.
+
+**Heimildarathugun.** Áður en `generate_report.py` skrifar nokkuð athugar það hvort úttak minnisbókarinnar tilheyri `source_file` í stillingunum, og hafnar annars (úttakskóði 3, ekkert skrifað). Þrjár athuganir: slóð heimildarinnar og útflutningsmappan sem minnisbókin prentaði verða að passa við stillingarnar og vistaða keyrslan verður að hafa náð enda útflutningshólfsins; `paragraphs.csv` og `sentences.csv` mega ekki vera nýrri en `.ipynb` (annars var úttak síðustu keyrslu aldrei vistað — dæmigert þegar minnisbókin er keyrð í VS Code án þess að vista); og síðuupphöfin sem minnisbókin prentaði verða að koma fyrir í upprunaskránni (borið saman sem runa bókstafa eingöngu, svo sameinuð orðskipti, fjarlægð blaðsíðutöl og síðuhausar skipta ekki máli). Þegar ekki er hægt að bera innihaldið saman — skannar lesnir með OCR, myndir, vefslóðir, brenglað textalag í PDF — ráða fyrstu tvær athuganirnar og stjórnborðið segir frá því. Skýrslan skráir líka hvort omorfi tók þátt í keyrslunni (`<meta name="ata-omorfi">`); Bók hins ósagða les það.
 
 Fyrir uppbyggða, heildstæða **greiningarsýn** sem byggð er beint á CSV/JSON-útflutningnum:
 
@@ -343,7 +357,7 @@ Leikur sem byggir á `raw_roots_chant.txt`. Fyrir hverja blokk 3–6 samfelldra 
 
 Skriftan er ákveðni helmingurinn (síur, blokkir, sannleiksuppspretta, sannprófun, mat, Bókin). Skapandi helminginn — að skrifa `draft.json` — vinnur annaðhvort gervigreindarþjónn eftir `skills/ksiega-niedomowien/SKILL.md` eða líkan gegnum API með `draft`.
 
-**Inntakssíur.** Aðeins undirmöppur `export_results/` með finnsku heiti, `<html lang="fi">`, finnskum söng og engum málfræðileka koma til greina; öllu öðru er hafnað með ástæðu. Línan `roots.header` er fjarlægð ef hún er til staðar. Prófið á *málfræðileka* finnur málheildir sem voru unnar áður en omorfi var virkjað (v1.5.0): yfir alla `keywords_tfidf.csv` telur það beygðar myndir sem lifðu lemmun af ásamt ruslmyndum spaCy og hafnar möppunni yfir 1,0 á hver 100 hugtök. Krefst omorfi (5. skref uppsetningar).
+**Inntakssíur.** Aðeins undirmöppur `export_results/` með finnsku heiti, `<html lang="fi">`, finnskum söng og engum málfræðileka koma til greina; öllu öðru er hafnað með ástæðu. Línan `roots.header` er fjarlægð ef hún er til staðar. Prófið á *málfræðileka* finnur málheildir sem voru unnar áður en omorfi var virkjað (v1.5.0): yfir alla `keywords_tfidf.csv` telur það beygðar myndir sem lifðu lemmun af ásamt ruslmyndum spaCy og hafnar möppunni yfir 1,0 á hver 100 hugtök. Krefst omorfi (5. skref uppsetningar). Þegar mappan hefur uppfærða `analysis_report.html` segir höfnun vegna málfræðileka hvað skýrslan veit: omorfi tók þátt í keyrslunni (þá gæti vélin sjálf — leiðrétting finnskra lemma í minnisbókinni — þurft lagfæringu; tilkynntu dæmin), omorfi vantaði (settu það upp og keyrðu minnisbókina aftur) eða keyrslan hafði ekkert omorfi-skref. Án uppfærðrar skýrslu segir hún að það sé óvitað.
 
 **Hvers vegna aðeins finnska.** Leikurinn lifir á því sem lemmun lætur ósagt, svo hann er aðeins skynsamlegur þar sem það að færa orð í grunnmynd sviptir það raunverulegri merkingu. Finnska er viðskeytamál: það sem pólska eða rússneska tjá að hluta með sérstökum forsetningum, og enska aðallega með orðaröð og kerfisorðum, pakkar finnskan inn í orðið sjálft — fimmtán föll (`talossa` „í húsinu“, `talosta` „úr húsinu“, `taloon` „inn í húsið“, `talolle` „að húsinu“, `talotta` „án húss“), eignarviðskeyti (`taloni` „húsið mitt“, `talonsa` „húsið hans/hennar/þeirra“), smáorðsviðhengi (`-ko` spurning, `-kin` „líka“, `-han` áhersla) og sagnmyndir sem bera í senn persónu, tíð, hátt og þolmynd (`tehtäisiinkö` „yrði það gert?“). Söngurinn smættar allt þetta í `TALO` og `TEHDÄ`: hver, hvar, hvaðan, hvert, hvers og hvort hverfa — einmitt þær eyður sem hlustandinn þarf að fylla. Í pólsku og rússnesku missir grunnmyndin beygingarendinguna, en stór hluti venslanna býr í sérstöku orði (forsetningunni), svo grunnmyndin bar þau aldrei ein; enska tapar litlu umfram tölu og tíð. Íslenska (fjögur föll, sem forsetningar stýra að miklu leyti) og ítalska (forsetningar og greinar, lítil nafnorðabeyging) standa nær pólsk-rússneska og enska mynstrinu, hvort um sig. Tæknilega þarf tólið einnig orðabókargreini til að sanna að söngurinn sé laus við málfræði og til að tengja rætur aftur við beygðan texta; í þessari leiðslu er slíkur aðeins til fyrir finnsku (omorfi), og þröskuldarnir voru stilltir á raunverulegum finnskum málheildum.
 
