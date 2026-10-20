@@ -22,7 +22,7 @@ If the agent's shell is a different OS than the venv (e.g. a Linux sandbox over 
 
 Commands: `scan [--folder X] [--blocks] [--json]`, `prepare [--folder X] [--limit N] [--verbose]`, `draft <id> [--force] [--provider P] [--model M]`, `seal <id>`, `fill <id> [--provider P] [--model M]`, `judge <id>`, `status`, `tidy [--apply]`.
 `<id>` is the packet id printed by `prepare` (or its start), the start of the folder name (the next packet of that folder at the right stage is taken), or the packet folder path.
-Exit codes: 0 OK, 1 error, 3 refusal (folder fails the filters), 4 draft rejected. Rely on exit codes, not on message text — console output follows `ui_lang` from `config.json`.
+Exit codes: 0 OK, 1 error, 3 refusal (`prepare` and the packet commands: the folder fails the filters), 4 draft rejected; `scan --folder X` returns 2 when the named folder does not qualify (plain `scan` always returns 0). Rely on exit codes, not on message text — console output follows `ui_lang` from `config.json`.
 
 ## Hard input rules (refusal)
 

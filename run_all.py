@@ -40,10 +40,20 @@ ANSI_RE = re.compile(chr(27) + r"\[[0-9;]*[A-Za-z]")
 
 def ensure_kernel(name):
     from jupyter_client.kernelspec import KernelSpecManager
-    if name in KernelSpecManager().find_kernel_specs():
-        print(t(UI_LANG, "run_all.kernel_ok", name=name))
-        return True
-    print(t(UI_LANG, "run_all.kernel_registering", name=name, python=sys.executable))
+    ksm = KernelSpecManager()
+    if name in ksm.find_kernel_specs():
+        # Sama nazwa nie wystarcza: po odtworzeniu .venv kernelspec wskazuje
+        # interpreter, którego już nie ma, a jądro nie wstaje (audyt 2026-10-20).
+        try:
+            python = ksm.get_kernel_spec(name).argv[0]
+        except Exception:  # noqa: BLE001 — uszkodzony kernel.json = rejestrujemy od nowa
+            python = ""
+        if python and (not os.path.isabs(python) or os.path.isfile(python)):
+            print(t(UI_LANG, "run_all.kernel_ok", name=name))
+            return True
+        print(t(UI_LANG, "run_all.kernel_stale", name=name, old=python or "?", python=sys.executable))
+    else:
+        print(t(UI_LANG, "run_all.kernel_registering", name=name, python=sys.executable))
     r = subprocess.run([sys.executable, "-m", "ipykernel", "install", "--user",
                         "--name", name, "--display-name", name],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -72,12 +82,6 @@ def run_notebook():
         return False
     stop = next((i for i, c in enumerate(nb.cells) if _tag(c, i) in QA_TAGS), len(nb.cells))
     code = [i for i in range(stop) if nb.cells[i].cell_type == "code"]
-    # Stare wyjścia precz PRZED startem: po awarii komórki dalsze komórki nie
-    # mogą zostać z wyjściami poprzedniego przebiegu (mieszanka dwóch przebiegów
-    # w .ipynb przeszłaby przez bramkę źródła raportu).
-    for i in code:
-        nb.cells[i].outputs = []
-        nb.cells[i].execution_count = None
     # timeout=None: cell_sentiment na CPU potrafi liczyć wiele minut.
     client = NotebookClient(nb, timeout=None, kernel_name=name,
                             resources={"metadata": {"path": str(ROOT)}})
@@ -85,20 +89,33 @@ def run_notebook():
     # jądra) nie ma nic dla operatora i psuje odczyt czytnikiem ekranu. Błędy
     # komórek przychodzą komunikatami jądra, nie jego stderr — nic nie ginie.
     warnings.filterwarnings("ignore", message="Proactor event loop", category=RuntimeWarning)
-    ok, i = True, 0
+    ok, i, ruszone = True, 0, 0
     try:
         with client.setup_kernel(stderr=subprocess.DEVNULL):
+            # Stare wyjścia precz dopiero, gdy jądro WSTAŁO, ale przed pierwszą
+            # komórką: po awarii komórki dalsze komórki nie mogą zostać
+            # z wyjściami poprzedniego przebiegu (mieszanka dwóch przebiegów
+            # w .ipynb przeszłaby przez bramkę źródła raportu). Jądro, które nie
+            # wstaje, nie kasuje już zapisanych wyjść (audyt 2026-10-20).
+            for j in code:
+                nb.cells[j].outputs = []
+                nb.cells[j].execution_count = None
             for n, i in enumerate(code, 1):
                 print(t(UI_LANG, "run_all.notebook_cell", i=n, total=len(code), tag=_tag(nb.cells[i], i)),
                       flush=True)
+                ruszone += 1
                 client.execute_cell(nb.cells[i], i)
-    except CellExecutionError as e:
+    except Exception as e:  # noqa: BLE001 — CellExecutionError, DeadKernelError, jądro nie wstało
         ok = False
-        last = ANSI_RE.sub("", str(e)).strip().splitlines()[-1:] or [""]
-        print(t(UI_LANG, "run_all.notebook_failed", tag=_tag(nb.cells[i], i), path=NOTEBOOK.name,
-                error=last[0]))
+        last = ANSI_RE.sub("", str(e) or type(e).__name__).strip().splitlines()[-1:] or [type(e).__name__]
+        if ruszone:
+            print(t(UI_LANG, "run_all.notebook_failed", tag=_tag(nb.cells[i], i), path=NOTEBOOK.name,
+                    error=last[0]))
+        else:
+            print(t(UI_LANG, "run_all.kernel_start_failed", name=name, path=NOTEBOOK.name, error=last[0]))
     finally:
-        nbformat.write(nb, NOTEBOOK)
+        if ruszone:
+            nbformat.write(nb, NOTEBOOK)
     if ok:
         print(t(UI_LANG, "run_all.notebook_saved", path=NOTEBOOK.name, n=len(code)))
     return ok
@@ -110,6 +127,13 @@ def run_script(args):
 
 
 def main(argv=None):
+    # Konsola Windows bywa cp1250, a przekierowane wyjście nie dziedziczy
+    # PYTHONIOENCODING z ustawień agenta: rosyjski komunikat albo cyrylica
+    # w ścieżce źródła rzucały UnicodeEncodeError (exit 1 zamiast kodu bramki;
+    # audyt 2026-10-20). Jak w ksiega_niedomowien.py.
+    for _strumien in (sys.stdout, sys.stderr):
+        if hasattr(_strumien, "reconfigure"):
+            _strumien.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=t(UI_LANG, "run_all.description"))
     ap.add_argument("--skip-notebook", action="store_true", help=t(UI_LANG, "run_all.help_skip_notebook"))
     ap.add_argument("--no-shamanic", action="store_true", help=t(UI_LANG, "run_all.help_no_shamanic"))

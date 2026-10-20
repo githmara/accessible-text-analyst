@@ -23,6 +23,9 @@ generate_report:
   gate_reason_no_text: 'the file has no text layer, the notebook read it by OCR'
   gate_reason_garbled: 'the text layer of the file is garbled'
   gate_reason_no_previews: 'the notebook printed no usable page openings'
+  gate_reason_ocr: 'some pages have no text layer, the notebook read them by OCR'
+  gate_reason_custom_patterns: 'custom_patterns from the config changed the text before the page openings'
+  gate_reason_unreadable: 'the source file cannot be read (damaged or replaced)'
   info_omorfi_active: '[INFO] omorfi corrected the Finnish lemmas in this run (marked in the report for the Book of the Unsaid).'
   info_omorfi_inactive: '[INFO] Finnish corpus WITHOUT omorfi in this run (package or automata missing, or loading failed) — marked in the report.'
 
@@ -170,6 +173,8 @@ run_all:
   kernel_ok: '[OK] Jupyter kernel {name} is registered.'
   kernel_registering: '[INFO] Jupyter kernel {name} is missing — registering it for {python}.'
   kernel_failed: '[ERROR] Could not register the Jupyter kernel {name}: {error}'
+  kernel_stale: '[INFO] Jupyter kernel {name} points to a missing interpreter ({old}) — registering it again for {python}.'
+  kernel_start_failed: '[ERROR] The Jupyter kernel {name} did not start; the outputs saved in {path} were left untouched. Last line: {error}'
   notebook_cell: '  cell {i} of {total}: {tag}'
   notebook_saved: '[OK] Notebook outputs saved to {path} ({n} cells; the interactive question cell was skipped).'
   notebook_failed: '[ERROR] Cell {tag} failed; the outputs up to it were saved to {path}. The chain stops here. Last line: {error}'

@@ -165,7 +165,7 @@ def omorfi_status(nb) -> str:
 # Źródło prawdy: początek pliku z configu jako ciąg liter
 # ============================================================
 
-def _kawalki_pdf(sciezka, stan=None):
+def _kawalki_pdf(sciezka, stan=None, wzorce=()):
     """Strony tą samą drogą co `load_pdf`: naprawa z osadzonego fontu
     (`naprawa_zrodel.napraw_strone`) przed `extract_text`, a strona, której
     font nie rozwiązał w całości, jest pusta — loader też jej nie wpuszcza do
@@ -182,11 +182,16 @@ def _kawalki_pdf(sciezka, stan=None):
                     stan["wstrzymane"] = stan.get("wstrzymane", 0) + 1
                 yield ""
                 continue
+            tekst = strona.extract_text() or ""
+            if not tekst.strip() and stan is not None:
+                # Strona bez warstwy tekstu: notatnik czyta ją OCR-em, a tekstu
+                # z OCR w pliku nie ma — podgląd z niej nie może tu pasować.
+                stan["obrazy"] = stan.get("obrazy", 0) + 1
             # U+F020 i mojibake jak w load_pdf (mojibake zmienia litery).
-            yield oczysc_strone_pdf(strona.extract_text() or "", alfabety)[0]
+            yield oczysc_strone_pdf(tekst, alfabety)[0]
 
 
-def _kawalki_txt(sciezka):
+def _kawalki_txt(sciezka, stan=None, wzorce=()):
     """Cały plik przez mojibake wspólnego modułu (jednostka = plik, jak
     `load_txt`), potem kawałki po `PAGE_SIZE`."""
     from czyszczenie_tekstu import napraw_mojibake_akapitow
@@ -194,11 +199,13 @@ def _kawalki_txt(sciezka):
     with open(sciezka, encoding="utf-8", errors="replace") as f:
         tekst = f.read()
     tekst = "\n".join(napraw_mojibake_akapitow(tekst.split("\n"), alfabety_paczek())[0])
+    for wzorzec in wzorce:            # CUSTOM_PATTERNS jak w load_txt
+        tekst = re.sub(wzorzec, "", tekst)
     for i in range(0, len(tekst), PAGE_SIZE):
         yield tekst[i:i + PAGE_SIZE]
 
 
-def _kawalki_docx(sciezka, stan=None):
+def _kawalki_docx(sciezka, stan=None, wzorce=()):
     """Akapity po tym samym czyszczeniu co w `load_docx`
     (`czyszczenie_tekstu.oczysc_akapity_docx`: U+F020, mojibake, rozstrzelenia,
     przeniesienia). Mojibake zmienia litery, reszta nie — bramka czyta
@@ -207,10 +214,18 @@ def _kawalki_docx(sciezka, stan=None):
     from czyszczenie_tekstu import oczysc_akapity_docx
     from shamanic_locale import alfabety_paczek
     akapity = [p.text for p in Document(sciezka).paragraphs]
-    yield from oczysc_akapity_docx(akapity, alfabety_paczek())[0]
+    akapity = oczysc_akapity_docx(akapity, alfabety_paczek())[0]
+    if not wzorce:
+        yield from akapity
+        return
+    # CUSTOM_PATTERNS jak w load_docx: na tekście połączonym z akapitów.
+    tekst = re.sub(r"\s+", " ", "  ".join(a for a in akapity if a.strip())).strip()
+    for wzorzec in wzorce:
+        tekst = re.sub(wzorzec, "", tekst)
+    yield tekst
 
 
-def _kawalki_html(sciezka):
+def _kawalki_html(sciezka, stan=None, wzorce=()):
     from bs4 import BeautifulSoup
     with open(sciezka, encoding="utf-8", errors="replace") as f:
         soup = BeautifulSoup(f.read(), "html.parser")
@@ -219,7 +234,7 @@ def _kawalki_html(sciezka):
     yield soup.get_text(" ")
 
 
-def _kawalki_md(sciezka):
+def _kawalki_md(sciezka, stan=None, wzorce=()):
     import markdown
     from bs4 import BeautifulSoup
     with open(sciezka, encoding="utf-8", errors="replace") as f:
@@ -238,13 +253,18 @@ _CZYTNIKI = {".pdf": _kawalki_pdf, ".txt": _kawalki_txt, ".text": _kawalki_txt,
 @dataclass
 class Tresc:
     stan: str                      # zgodna | rozjazd | niesprawdzalna
-    powod: str = ""                # dla niesprawdzalnej: image | url | missing_file | format | library | no_text | garbled | no_previews
+    powod: str = ""                # dla niesprawdzalnej: image | url | missing_file | format | library | no_text | garbled | no_previews | ocr | custom_patterns | unreadable
     znalezione: int = 0
     sprawdzalne: int = 0
 
 
-def sprawdz_tresc(zrodlo: str, podglady: list) -> Tresc:
-    """Warstwa 3: podglądy stron z wydruku notatnika vs plik źródłowy."""
+def sprawdz_tresc(zrodlo: str, podglady: list, wzorce=()) -> Tresc:
+    """Warstwa 3: podglądy stron z wydruku notatnika vs plik źródłowy.
+
+    `wzorce` = `custom_patterns` z configu: loadery txt/docx usuwają ich
+    dopasowania przed podglądem, więc bramka robi to samo.
+    """
+    wzorce = tuple(wzorce or ())
     if zrodlo.startswith(("http://", "https://")):
         return Tresc("niesprawdzalna", "url")
     ext = Path(zrodlo).suffix.lower()
@@ -263,7 +283,7 @@ def sprawdz_tresc(zrodlo: str, podglady: list) -> Tresc:
     budzet_liter = (len(cele) + 2) * PAGE_SIZE
     stan: dict = {}
     try:
-        for kawalek in (czytnik(zrodlo, stan) if ext in (".pdf", ".docx") else czytnik(zrodlo)):
+        for kawalek in czytnik(zrodlo, stan=stan, wzorce=wzorce):
             surowe += kawalek if len(surowe) < 4 * budzet_liter else ""
             nowe = litery(kawalek)
             if nowe:
@@ -279,6 +299,8 @@ def sprawdz_tresc(zrodlo: str, podglady: list) -> Tresc:
                 break
     except ImportError:
         return Tresc("niesprawdzalna", "library")
+    except Exception:  # noqa: BLE001 — plik podmieniony/uszkodzony/zły regex: nie wiemy, nie odmawiamy
+        return Tresc("niesprawdzalna", "unreadable")
     znalezione = len(cele) - len(niezn)
     if znalezione:
         return Tresc("zgodna", znalezione=znalezione, sprawdzalne=len(cele))
@@ -291,6 +313,13 @@ def sprawdz_tresc(zrodlo: str, podglady: list) -> Tresc:
         # loader przepuścił te strony przez OCR — tekst pliku nie jest wtedy
         # źródłem prawdy. Strony naprawione czytamy już naprawione (wyżej).
         return Tresc("niesprawdzalna", "garbled", sprawdzalne=len(cele))
+    if stan.get("obrazy"):
+        # Podglądy mogą pochodzić ze stron czytanych OCR-em (bez warstwy tekstu).
+        return Tresc("niesprawdzalna", "ocr", sprawdzalne=len(cele))
+    if wzorce and ext in (".txt", ".text", ".docx"):
+        # Wzorce zastosowane, a mimo to rozjazd: regex mógł działać inaczej na
+        # granicach akapitów niż w loaderze — bez dowodu nie odmawiamy.
+        return Tresc("niesprawdzalna", "custom_patterns", sprawdzalne=len(cele))
     return Tresc("rozjazd", znalezione=0, sprawdzalne=len(cele))
 
 
@@ -320,7 +349,7 @@ class Werdykt:
     tresc: Tresc | None = None
 
 
-def sprawdz(nb, source_cfg: str, project_dir: Path, notebook_path: Path) -> Werdykt:
+def sprawdz(nb, source_cfg: str, project_dir: Path, notebook_path: Path, wzorce=()) -> Werdykt:
     """Pełny werdykt bramki. `source_cfg` = `source_file` z configu (może być "")."""
     w = wyjscia_korpusu(nb)
     source_cfg = (source_cfg or "").strip()
@@ -359,7 +388,7 @@ def sprawdz(nb, source_cfg: str, project_dir: Path, notebook_path: Path) -> Werd
     # --- 3. treść ---
     if w.rodzaj == "wbudowany":
         return Werdykt(True, "gate_ok_builtin")
-    tresc = sprawdz_tresc(w.zrodlo, w.podglady)
+    tresc = sprawdz_tresc(w.zrodlo, w.podglady, wzorce)
     if tresc.stan == "rozjazd":
         return Werdykt(False, "gate_content_mismatch",
                        {"source": source_cfg, "checked": tresc.sprawdzalne}, tresc)

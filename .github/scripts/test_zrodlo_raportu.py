@@ -219,5 +219,37 @@ class TestTonPrzecieku(unittest.TestCase):
         self.assertEqual(self.klucz(), "leak_omorfi_unknown")
 
 
+class TestCustomPatterns(unittest.TestCase):
+    """Audyt 2026-10-20 (M4): loader usuwa dopasowania `custom_patterns`
+    przed podglądem, więc bramka czytająca surowy plik odmawiała fałszywie."""
+
+    WZORZEC = r"PUHUJA \d+:"
+
+    def setUp(self):
+        import re
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        zdania = ["Hyvää huomenta kaikille kuulijoille", "Tänään puhumme turvallisuudesta",
+                  "Kysymys koskee koko Itämeren aluetta", "Vastaus ei ole yksinkertainen"]
+        linie = [f"[00:{i:02d}] PUHUJA {i % 3 + 1}: {zdania[i % 4]} numero {i}." for i in range(60)]
+        self.src = Path(self.tmp.name) / "litteraatti.txt"
+        self.src.write_text("\n".join(linie), encoding="utf-8")
+        # Podgląd tak, jak drukuje go notatnik: load_txt usuwa wzorzec i zwija spacje.
+        tekst = re.sub(r"[ \t]+", " ", re.sub(self.WZORZEC, "", self.src.read_text(encoding="utf-8"))).strip()
+        self.podglady = [tekst[:80].replace("\n", " ")]
+
+    def test_bez_wzorcow_to_rozjazd(self):
+        self.assertEqual(z.sprawdz_tresc(str(self.src), self.podglady).stan, "rozjazd")
+
+    def test_wzorce_z_configu_daja_zgodnosc(self):
+        t = z.sprawdz_tresc(str(self.src), self.podglady, [self.WZORZEC])
+        self.assertEqual((t.stan, t.znalezione), ("zgodna", 1))
+
+    def test_wzorce_bez_dowodu_nie_odmawiaja(self):
+        t = z.sprawdz_tresc(str(self.src), ["Kokonaan toinen teksti, jota tiedostossa ei ole lainkaan"],
+                            [self.WZORZEC])
+        self.assertEqual((t.stan, t.powod), ("niesprawdzalna", "custom_patterns"))
+
+
 if __name__ == "__main__":
     unittest.main()

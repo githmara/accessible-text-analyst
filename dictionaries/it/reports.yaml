@@ -23,6 +23,9 @@ generate_report:
   gate_reason_no_text: 'il file non ha un livello di testo, il notebook lo ha letto con l''OCR'
   gate_reason_garbled: 'il livello di testo del file è corrotto'
   gate_reason_no_previews: 'il notebook non ha stampato inizi di pagina utilizzabili'
+  gate_reason_ocr: 'alcune pagine non hanno un livello di testo, il notebook le ha lette con l''OCR'
+  gate_reason_custom_patterns: 'i custom_patterns della configurazione hanno modificato il testo prima degli inizi di pagina'
+  gate_reason_unreadable: 'il file sorgente non è leggibile (danneggiato o sostituito)'
   info_omorfi_active: '[INFO] In questa esecuzione omorfi ha corretto i lemmi finlandesi (annotato nel report per il Libro del Non Detto).'
   info_omorfi_inactive: '[INFO] Corpus finlandese SENZA omorfi in questa esecuzione (pacchetto o automi mancanti, oppure caricamento fallito) — annotato nel report.'
 
@@ -170,6 +173,8 @@ run_all:
   kernel_ok: '[OK] Il kernel Jupyter {name} è registrato.'
   kernel_registering: '[INFO] Il kernel Jupyter {name} manca — lo registro per {python}.'
   kernel_failed: '[ERRORE] Impossibile registrare il kernel Jupyter {name}: {error}'
+  kernel_stale: '[INFO] Il kernel Jupyter {name} punta a un interprete inesistente ({old}) — lo registro di nuovo per {python}.'
+  kernel_start_failed: '[ERRORE] Il kernel Jupyter {name} non si è avviato; gli output salvati in {path} non sono stati toccati. Ultima riga: {error}'
   notebook_cell: '  cella {i} di {total}: {tag}'
   notebook_saved: '[OK] Output del notebook salvati in {path} ({n} celle; la cella interattiva delle domande è stata saltata).'
   notebook_failed: '[ERRORE] La cella {tag} è fallita; gli output fino a essa sono stati salvati in {path}. La catena si ferma qui. Ultima riga: {error}'

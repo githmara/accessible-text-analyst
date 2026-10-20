@@ -215,5 +215,128 @@ class TestBramkaZrodla(unittest.TestCase):
         self.assertEqual((t.stan, t.powod), ("niesprawdzalna", "garbled"))
 
 
+def _font_ttf_litery(litery: str) -> bytes:
+    """TrueType z glifami g1…gN → kolejne litery `litery` (tylko w cmap)."""
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+    nazwy = [".notdef"] + [f"g{i}" for i in range(1, len(litery) + 1)]
+    fb = FontBuilder(1000, isTTF=True)
+    fb.setupGlyphOrder(nazwy)
+    fb.setupCharacterMap({ord(z): f"g{i}" for i, z in enumerate(litery, 1)})
+    glify = {}
+    for nazwa in nazwy:
+        pen = TTGlyphPen(None)
+        pen.moveTo((50, 0)); pen.lineTo((50, 500)); pen.lineTo((450, 500)); pen.lineTo((450, 0))
+        pen.closePath()
+        glify[nazwa] = pen.glyph()
+    fb.setupGlyf(glify)
+    fb.setupHorizontalMetrics({k: (600, 50) for k in nazwy})
+    fb.setupHorizontalHeader(ascent=800, descent=-200)
+    fb.setupNameTable({"familyName": "Test", "styleName": "Regular"})
+    fb.setupOS2()
+    fb.setupPost()
+    buf = io.BytesIO()
+    fb.save(buf)
+    return buf.getvalue()
+
+
+def _pdf_strony(strony) -> bytes:
+    """Wielostronicowy PDF; `strony` = [(litery fontu albo None, ciąg hex GID-ów)].
+
+    Każda strona ma WŁASNY obiekt fontu Type0 o tej samej nazwie
+    `/BCDEEE+Times` (jak kolejne podzbiory Worda w scalonym PDF-ie), z uciętą
+    mapą ToUnicode (tylko GID 1) jak słownik — reszta glifów to „(cid:N)”
+    (bez ToUnicode pdfminer sam czytałby `cmap` fontu). None = strona pusta.
+    """
+    obiekty = [None, None]                       # 1 katalog, 2 drzewo stron
+    kids = []
+    for litery, gidy in strony:
+        nr = len(obiekty) + 1
+        if litery is None:
+            tresc = b""
+            obiekty += [b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents %d 0 R >>" % (nr + 1),
+                        b"<< /Length 0 >>\nstream\n\nendstream"]
+        else:
+            font = _font_ttf_litery(litery)
+            cmap = (b"/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n"
+                    b"/CMapName /Test def\n1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n"
+                    b"1 beginbfchar\n<0001> <%04X>\nendbfchar\n" % ord(litery[0])
+                    + b"endcmap\nCMapName currentdict /CMap defineresource pop\nend\nend\n")
+            tresc = b"BT /F1 12 Tf 72 700 Td <" + gidy.encode() + b"> Tj ET"
+            obiekty += [
+                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+                b"/Resources << /Font << /F1 %d 0 R >> >> /Contents %d 0 R >>" % (nr + 2, nr + 1),
+                b"<< /Length %d >>\nstream\n" % len(tresc) + tresc + b"\nendstream",
+                b"<< /Type /Font /Subtype /Type0 /BaseFont /BCDEEE+Times /Encoding /Identity-H "
+                b"/DescendantFonts [%d 0 R] /ToUnicode %d 0 R >>" % (nr + 3, nr + 6),
+                b"<< /Type /Font /Subtype /CIDFontType2 /BaseFont /BCDEEE+Times "
+                b"/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> "
+                b"/FontDescriptor %d 0 R /DW 600 /CIDToGIDMap /Identity >>" % (nr + 4),
+                b"<< /Type /FontDescriptor /FontName /BCDEEE+Times /Flags 4 /FontBBox [0 -200 1000 800] "
+                b"/ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 /FontFile2 %d 0 R >>" % (nr + 5),
+                b"<< /Length %d /Length1 %d >>\nstream\n" % (len(font), len(font)) + font + b"\nendstream",
+                b"<< /Length %d >>\nstream\n" % len(cmap) + cmap + b"\nendstream",
+            ]
+        kids.append(b"%d 0 R" % nr)
+    obiekty[0] = b"<< /Type /Catalog /Pages 2 0 R >>"
+    obiekty[1] = b"<< /Type /Pages /Kids [" + b" ".join(kids) + b"] /Count %d >>" % len(kids)
+    wyj = bytearray(b"%PDF-1.4\n")
+    pozycje = []
+    for nr, obiekt in enumerate(obiekty, 1):
+        pozycje.append(len(wyj))
+        wyj += b"%d 0 obj\n" % nr + obiekt + b"\nendobj\n"
+    xref = len(wyj)
+    wyj += b"xref\n0 %d\n0000000000 65535 f \n" % (len(obiekty) + 1)
+    for p in pozycje:
+        wyj += b"%010d 00000 n \n" % p
+    wyj += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(obiekty) + 1, xref)
+    return bytes(wyj)
+
+
+class TestAudytPdf(unittest.TestCase):
+    """Przypadki z audytu przed wydaniem (2026-10-20)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def zapisz(self, dane, nazwa="a.pdf"):
+        p = Path(self.tmp.name) / nazwa
+        p.write_bytes(dane)
+        return p
+
+    def test_ta_sama_nazwa_rozne_fonty(self):
+        # M2: dwa podzbiory „BCDEEE+Times” (КОТЫ / ДОМА) — każda strona swoim fontem.
+        import pdfplumber
+        sciezka = self.zapisz(_pdf_strony([("КОТЫ", "00010002000300040001000200030004"),
+                                           ("ДОМА", "00010002000300040001000200030004")]))
+        pamiec, wynik = {}, []
+        with pdfplumber.open(sciezka) as pdf:
+            for s in pdf.pages:
+                o = n.napraw_strone(s, pamiec)
+                wynik.append((s.extract_text(), o.naprawiona))
+        self.assertEqual(wynik, [("КОТЫКОТЫ", True), ("ДОМАДОМА", True)])
+
+    def test_bramka_strony_ocr_nie_odmawiaja(self):
+        # M3: 5 stron bez warstwy tekstu + 10 z tekstem; podglądy pochodzą z OCR.
+        import zrodlo_raportu
+        tekst = ("КОТЫ", "0001000200030004" * 6)
+        sciezka = self.zapisz(_pdf_strony([(None, "")] * 5 + [tekst] * 10))
+        ocr = ["Совсем другой текст, który rozpoznał OCR na stronie skanu"]
+        t = zrodlo_raportu.sprawdz_tresc(str(sciezka), ocr)
+        self.assertEqual((t.stan, t.powod), ("niesprawdzalna", "ocr"))
+        # Kontrola: bez stron-obrazów ten sam podgląd to dowód rozjazdu.
+        bez_obrazow = self.zapisz(_pdf_strony([tekst] * 10), "b.pdf")
+        self.assertEqual(zrodlo_raportu.sprawdz_tresc(str(bez_obrazow), ocr).stan, "rozjazd")
+
+    def test_bramka_plik_nieczytelny(self):
+        # L1: podmieniony / uszkodzony plik — brak wiedzy, nie wyjątek i nie odmowa.
+        import zrodlo_raportu
+        sciezka = self.zapisz(b"to nie jest PDF " * 50)
+        t = zrodlo_raportu.sprawdz_tresc(str(sciezka), ["Совсем другой текст о манипуляциях"])
+        self.assertEqual((t.stan, t.powod), ("niesprawdzalna", "unreadable"))
+
+
+
 if __name__ == "__main__":
     unittest.main()

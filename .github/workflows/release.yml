@@ -50,8 +50,11 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Install PyYAML and lingua
-        run: python -m pip install --quiet "pyyaml<6.1" "lingua-language-detector<2.3"
+      # markdown: generate_report.py kończy się sys.exit(1) już przy imporcie bez
+      # niego (test_wzorce_raportu go importuje); pdfplumber + fonttools: testy
+      # naprawy PDF (test_naprawa_zrodel). Granice jak w requirements.txt.
+      - name: Install test dependencies
+        run: python -m pip install --quiet "pyyaml<6.1" "lingua-language-detector<2.3" "markdown<3.12" "pdfplumber<0.12" "fonttools<4.68"
 
       - name: Self-test
         run: |
@@ -61,6 +64,7 @@ jobs:
           python .github/scripts/test_audyt_podstaw.py
           python .github/scripts/test_zrodlo_raportu.py
           python .github/scripts/test_wzorce_raportu.py
+          python .github/scripts/test_naprawa_zrodel.py
           # Wspólny moduł z Reżyserem (bajt w bajt) — runner i wektory też wspólne, sam stdlib.
           python czyszczenie_tekstu_wektory.py
 

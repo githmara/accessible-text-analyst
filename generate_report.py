@@ -11,6 +11,14 @@ from shamanic_locale import (PODSTAWY, get_ui_lang, kody_regex, lingua_jezyki, n
 import zrodlo_raportu
 from czyszczenie_tekstu import CELE_MOJIBAKE, ZRODLA_MOJIBAKE
 
+# Konsola Windows bywa cp1250, a przekierowane wyjście nie dziedziczy
+# PYTHONIOENCODING z ustawień agenta: rosyjski komunikat albo cyrylica
+# w ścieżce źródła rzucały UnicodeEncodeError (exit 1 zamiast kodu bramki;
+# audyt 2026-10-20). Jak w ksiega_niedomowien.py.
+for _strumien in (sys.stdout, sys.stderr):
+    if hasattr(_strumien, "reconfigure"):
+        _strumien.reconfigure(encoding="utf-8", errors="replace")
+
 # Język UI (printy w konsoli) — odczytywany z config.json/ini, fallback 'en'.
 UI_LANG = get_ui_lang()
 
@@ -65,6 +73,17 @@ def _load_source(config_path=None):
             return (json.load(f).get("source_file") or "").strip()
     except (FileNotFoundError, json.JSONDecodeError):
         return ""
+
+
+def _load_custom_patterns(config_path=None):
+    """`custom_patterns` z configu — bramka źródła stosuje je jak loadery."""
+    if config_path is None:
+        config_path = CONFIG_PATH
+    try:
+        with open(config_path, "r", encoding="utf-8-sig") as f:
+            return [str(x) for x in (json.load(f).get("custom_patterns") or [])]
+    except (FileNotFoundError, json.JSONDecodeError, AttributeError):
+        return []
 
 
 def _resolve_project_dir(config_path=None):
@@ -722,7 +741,8 @@ def _gate(nb):
     """Bramka źródła (zrodlo_raportu.py): raport tylko z wyjść notatnika, które
     pochodzą ze źródła z configu i zostały zapisane po ostatnim przebiegu.
     Zwraca True albo drukuje powód odmowy i zwraca False."""
-    w = zrodlo_raportu.sprawdz(nb, _load_source(), PROJECT_DIR, Path(NOTEBOOK_PATH))
+    w = zrodlo_raportu.sprawdz(nb, _load_source(), PROJECT_DIR, Path(NOTEBOOK_PATH),
+                               _load_custom_patterns())
     args = dict(w.argumenty)
     if "reason" in args:
         args["reason"] = t(UI_LANG, f"generate_report.gate_reason_{args['reason']}")

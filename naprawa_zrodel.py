@@ -162,16 +162,22 @@ def mapa_cid_fontu(font_dict) -> dict[int, str]:
 
 
 def _fonty_zasobow(zasoby, wynik: dict, odwiedzone: set) -> None:
-    """Zbiera {BaseFont: słownik fontu} z zasobów strony i jej Form XObjectów."""
+    """Zbiera {BaseFont: {klucz obiektu: słownik fontu}} z zasobów strony i jej
+    Form XObjectów. Klucz = numer obiektu PDF (albo tożsamość słownika
+    bezpośredniego): w scalonych PDF-ach dwa RÓŻNE podzbiory mają tę samą
+    nazwę (Word numeruje je kolejno, „BCDEEE+Times”), więc nazwa nie może
+    być kluczem pamięci fontów dokumentu."""
     zasoby = _r(zasoby) or {}
     if id(zasoby) in odwiedzone:
         return
     odwiedzone.add(id(zasoby))
-    for font in (_r(zasoby.get("Font")) or {}).values():
-        font = _r(font) or {}
+    for ref in (_r(zasoby.get("Font")) or {}).values():
+        font = _r(ref) or {}
         nazwa = _nazwa(font.get("BaseFont"))
         if nazwa:
-            wynik.setdefault(nazwa, font)
+            objid = getattr(ref, "objid", None)
+            klucz = ("obj", objid) if objid is not None else ("id", id(font))
+            wynik.setdefault(nazwa, {}).setdefault(klucz, font)
     for xobj in (_r(zasoby.get("XObject")) or {}).values():
         xobj = _r(xobj)
         attrs = getattr(xobj, "attrs", None) or {}
@@ -188,8 +194,9 @@ def napraw_strone(strona, pamiec: dict | None = None) -> OcenaStrony:
 
     `strona` to `pdfplumber.page.Page`; wywołaj PRZED pierwszym
     `extract_text*` (pdfplumber buforuje mapę tekstu). `pamiec` to pamięć
-    podręczna dokumentu {BaseFont: mapa CID → znak} — nazwa podzbioru
-    („WNVQEB+TimesNewRomanPSMT”) jest w pliku unikalna.
+    podręczna dokumentu {klucz obiektu fontu: mapa CID → znak}; kluczem jest
+    numer obiektu PDF, nie nazwa — nazwa podzbioru („BCDEEE+Times”) w scalonym
+    PDF-ie bywa wspólna dla różnych fontów (audyt 2026-10-20).
 
     Znak łączący (U+0301 akcentu) dokleja się do POPRZEDNIEGO znaku tej samej
     linii, zamiast zostać osobnym znakiem o zerowej szerokości: pdfplumber
@@ -217,10 +224,17 @@ def napraw_strone(strona, pamiec: dict | None = None) -> OcenaStrony:
     laczace = []
     for poz, cid in do_naprawy:
         z = znaki[poz]
-        nazwa = z.get("fontname") or ""
-        if nazwa not in pamiec:
-            pamiec[nazwa] = mapa_cid_fontu(fonty[nazwa]) if nazwa in fonty else {}
-        nowy = pamiec[nazwa].get(cid)
+        kandydaci = fonty.get(z.get("fontname") or "", {})
+        if len(kandydaci) != 1:
+            # Brak fontu albo dwa różne fonty o tej samej nazwie na jednej
+            # stronie: pdfplumber podaje przy znaku tylko nazwę, więc nie wiemy,
+            # którego użyć — znacznik zostaje nierozwiązany (bramka go zgłosi).
+            nierozwiazane += 1
+            continue
+        klucz, font = next(iter(kandydaci.items()))
+        if klucz not in pamiec:
+            pamiec[klucz] = mapa_cid_fontu(font)
+        nowy = pamiec[klucz].get(cid)
         if not nowy:
             nierozwiazane += 1
             continue
@@ -443,11 +457,14 @@ def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona
 
 # Znak granicy słowa z geometrii, wstawiany w tekst strony dla
 # `czyszczenie_tekstu.scal_rozstrzelone(..., granica=ZNACZNIK_GRANICY)` (ten
-# zamienia go w wyniku na spację). Prywatny obszar Unicode: nie występuje
-# w tekście, nie jest białym znakiem (przeżywa `clean_pdf_text`), nie jest
-# literą (bramka źródła go nie widzi) i nie koduje się w Latin-1 (mojibake go
-# nie rusza).
-ZNACZNIK_GRANICY = chr(0xE000)
+# zamienia go w wyniku na spację). Niezamiennik Unicode U+FDD0 — nie U+E000 jak
+# do 2026-10-20: naprawiony tekst MOŻE zawierać znaki z prywatnego obszaru
+# (`agl.toUnicode("uniE000")`, przypisania PUA w fontach symboli), a znak
+# z tekstu wziąłby się za granicę (audyt). Niezamiennika font nie przypisuje,
+# a gdyby jednak stał w tekście, `oznacz_granice` go usuwa przed znakowaniem.
+# Nie jest białym znakiem (przeżywa `clean_pdf_text`), nie jest literą (bramka
+# źródła go nie widzi) i nie koduje się w Latin-1 (mojibake go nie rusza).
+ZNACZNIK_GRANICY = chr(0xFDD0)
 
 
 def _slowo_wieloliterowe(tekst: str | None) -> bool:
@@ -486,6 +503,7 @@ def oznacz_granice(tekst: str, serie: list[SeriaRozstrzelona]) -> tuple[str, int
     zdjęta jako kolontytuł), jest pomijana. Zwraca (tekst, oznaczonych serii).
     """
     nl = chr(10)
+    tekst = tekst.replace(ZNACZNIK_GRANICY, "")      # prawdziwe wystąpienie nie może udawać granicy
     wynik, kursor, n = [], 0, 0
     for seria in serie:
         k = tekst.find(seria.tekst(), kursor)

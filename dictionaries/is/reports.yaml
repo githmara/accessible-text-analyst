@@ -23,6 +23,9 @@ generate_report:
   gate_reason_no_text: 'skráin hefur ekkert textalag, minnisbókin las hana með OCR'
   gate_reason_garbled: 'textalag skrárinnar er brenglað'
   gate_reason_no_previews: 'minnisbókin prentaði engin nothæf síðuupphöf'
+  gate_reason_ocr: 'sumar síður hafa ekkert textalag, minnisbókin las þær með OCR'
+  gate_reason_custom_patterns: 'custom_patterns úr stillingunum breyttu textanum á undan síðuupphöfunum'
+  gate_reason_unreadable: 'ekki er hægt að lesa upprunaskrána (skemmd eða skipt út)'
   info_omorfi_active: '[INFO] omorfi leiðrétti finnsku lemmurnar í þessari keyrslu (merkt í skýrslunni fyrir Bók hins ósagða).'
   info_omorfi_inactive: '[INFO] Finnskt textasafn ÁN omorfi í þessari keyrslu (pakka eða sjálfvirkja vantar, eða hleðsla mistókst) — merkt í skýrslunni.'
 
@@ -170,6 +173,8 @@ run_all:
   kernel_ok: '[OK] Jupyter-kjarninn {name} er skráður.'
   kernel_registering: '[INFO] Jupyter-kjarnann {name} vantar — skrái hann fyrir {python}.'
   kernel_failed: '[VILLA] Ekki tókst að skrá Jupyter-kjarnann {name}: {error}'
+  kernel_stale: '[INFO] Jupyter-kjarninn {name} vísar á túlk sem er ekki til ({old}) — skrái hann aftur fyrir {python}.'
+  kernel_start_failed: '[VILLA] Jupyter-kjarninn {name} ræstist ekki; úttakið sem vistað er í {path} var látið ósnert. Síðasta lína: {error}'
   notebook_cell: '  hólf {i} af {total}: {tag}'
   notebook_saved: '[OK] Úttak minnisbókarinnar vistað í {path} ({n} hólf; gagnvirka spurningahólfinu var sleppt).'
   notebook_failed: '[VILLA] Hólfið {tag} mistókst; úttak fram að því var vistað í {path}. Keðjan stöðvast hér. Síðasta lína: {error}'

@@ -23,6 +23,9 @@ generate_report:
   gate_reason_no_text: 'tiedostossa ei ole tekstikerrosta, muistikirja luki sen OCR:llä'
   gate_reason_garbled: 'tiedoston tekstikerros on vääristynyt'
   gate_reason_no_previews: 'muistikirja ei tulostanut käyttökelpoisia sivujen alkuja'
+  gate_reason_ocr: 'osalla sivuista ei ole tekstikerrosta, muistikirja luki ne OCR:llä'
+  gate_reason_custom_patterns: 'asetusten custom_patterns muutti tekstiä ennen sivujen alkuja'
+  gate_reason_unreadable: 'lähdetiedostoa ei voi lukea (vioittunut tai vaihdettu)'
   info_omorfi_active: '[INFO] omorfi korjasi suomen lemmat tässä ajossa (merkitty raporttiin Sanomattomien kirjaa varten).'
   info_omorfi_inactive: '[INFO] Suomenkielinen korpus ILMAN omorfia tässä ajossa (paketti tai automaatit puuttuvat tai lataus epäonnistui) — merkitty raporttiin.'
 
@@ -170,6 +173,8 @@ run_all:
   kernel_ok: '[OK] Jupyter-ydin {name} on rekisteröity.'
   kernel_registering: '[INFO] Jupyter-ydin {name} puuttuu — rekisteröidään se tulkille {python}.'
   kernel_failed: '[VIRHE] Jupyter-ytimen {name} rekisteröinti epäonnistui: {error}'
+  kernel_stale: '[INFO] Jupyter-ydin {name} osoittaa puuttuvaan tulkkiin ({old}) — rekisteröin sen uudelleen tulkille {python}.'
+  kernel_start_failed: '[VIRHE] Jupyter-ydin {name} ei käynnistynyt; tiedostoon {path} tallennettuihin tulosteisiin ei koskettu. Viimeinen rivi: {error}'
   notebook_cell: '  solu {i}/{total}: {tag}'
   notebook_saved: '[OK] Muistikirjan tulosteet tallennettu tiedostoon {path} ({n} solua; interaktiivinen kysymyssolu ohitettiin).'
   notebook_failed: '[VIRHE] Solu {tag} epäonnistui; tulosteet siihen asti tallennettiin tiedostoon {path}. Ketju pysähtyy tähän. Viimeinen rivi: {error}'

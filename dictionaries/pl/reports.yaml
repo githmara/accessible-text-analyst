@@ -23,6 +23,9 @@ generate_report:
   gate_reason_no_text: 'plik nie ma warstwy tekstu, notatnik czytał go przez OCR'
   gate_reason_garbled: 'warstwa tekstu pliku jest zniekształcona'
   gate_reason_no_previews: 'notatnik nie wydrukował użytecznych początków stron'
+  gate_reason_ocr: 'część stron nie ma warstwy tekstu, notatnik czytał je przez OCR'
+  gate_reason_custom_patterns: 'wzorce custom_patterns z configu zmieniły tekst przed początkami stron'
+  gate_reason_unreadable: 'pliku źródłowego nie da się odczytać (uszkodzony albo podmieniony)'
   info_omorfi_active: '[INFO] omorfi poprawiał fińskie lematy w tym przebiegu (zaznaczone w raporcie dla Księgi Niedomówień).'
   info_omorfi_inactive: '[INFO] Korpus fiński BEZ omorfi w tym przebiegu (brak pakietu lub automatów albo błąd ładowania) — zaznaczone w raporcie.'
 
@@ -170,6 +173,8 @@ run_all:
   kernel_ok: '[OK] Jądro Jupytera {name} jest zarejestrowane.'
   kernel_registering: '[INFO] Brak jądra Jupytera {name} — rejestruję je dla {python}.'
   kernel_failed: '[BŁĄD] Nie udało się zarejestrować jądra Jupytera {name}: {error}'
+  kernel_stale: '[INFO] Jądro Jupytera {name} wskazuje nieistniejący interpreter ({old}) — rejestruję je ponownie dla {python}.'
+  kernel_start_failed: '[BŁĄD] Jądro Jupytera {name} nie wystartowało; wyjścia zapisane w {path} zostały nietknięte. Ostatnia linia: {error}'
   notebook_cell: '  komórka {i} z {total}: {tag}'
   notebook_saved: '[OK] Wyjścia notatnika zapisane w {path} ({n} komórek; interaktywna komórka pytań pominięta).'
   notebook_failed: '[BŁĄD] Komórka {tag} się wywróciła; wyjścia do niej zapisano w {path}. Łańcuch zatrzymuje się tutaj. Ostatnia linia: {error}'
