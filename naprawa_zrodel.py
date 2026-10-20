@@ -300,6 +300,9 @@ class SeriaRozstrzelona(NamedTuple):
     x1: float
     przed: str = ""          # interpunkcja przed pierwszą literą („«л е …”)
     po: str = ""             # interpunkcja za ostatnią („… к и,”)
+    poczatek_linii: bool = False   # przed serią nie ma słowa w tej linii
+    nastepny: str | None = None    # słowo za serią w tej linii; None = koniec linii
+    odstep_po: float | None = None # odstęp w pt do `nastepny`
 
     def slowa(self) -> list[str]:
         """Słowa wg geometrii: [„Жёлтая”, „зо́на”]."""
@@ -338,41 +341,58 @@ def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona
     slowa = strona.extract_words(x_tolerance=x_tolerance)
     serie: list[SeriaRozstrzelona] = []
     run: list[dict] = []
-    brzegi = {"przed": "", "po": ""}
+    brzegi = {"przed": "", "po": "", "start": False}
+    poprzednie = [None]          # słowo przed bieżącym (do „początku linii”)
 
-    def zamknij():
+    def linia(a, b) -> bool:
+        return a is not None and abs(b["top"] - a["top"]) <= 1 and b["x0"] >= a["x0"]
+
+    def zamknij(nastepny=None):
         if len(run) >= _ct.MIN_ROZSTRZELENIE:
             litery = [w["text"] for w in run]
             odstepy = [round(b["x0"] - a["x1"], 2) for a, b in zip(run, run[1:])]
-            serie.append(SeriaRozstrzelona(tuple(litery), _granice_serii(litery, odstepy),
-                                           tuple(odstepy), run[0]["top"], run[0]["x0"], run[-1]["x1"],
-                                           brzegi["przed"], brzegi["po"]))
+            obok = nastepny is not None and linia(run[-1], nastepny)
+            serie.append(SeriaRozstrzelona(
+                tuple(litery), _granice_serii(litery, odstepy), tuple(odstepy),
+                run[0]["top"], run[0]["x0"], run[-1]["x1"], brzegi["przed"], brzegi["po"],
+                brzegi["start"], nastepny["text"] if obok else None,
+                round(nastepny["x0"] - run[-1]["x1"], 2) if obok else None))
         run.clear()
         brzegi["przed"] = brzegi["po"] = ""
 
+    def otworz(w):
+        if not run:
+            brzegi["start"] = not linia(poprzednie[0], w)
+
     for w in slowa:
         tekst = w["text"]
-        ta_sama_linia = bool(run) and abs(w["top"] - run[-1]["top"]) <= 1 and w["x0"] >= run[-1]["x0"]
+        if run and brzegi["po"]:          # „и,” zamknęło serię; `w` to jej sąsiad
+            zamknij(w)
+        ta_sama_linia = bool(run) and linia(run[-1], w)
         if run and ta_sama_linia and tekst and all(unicodedata.combining(z) for z in tekst):
             run[-1] = {**run[-1], "text": run[-1]["text"] + tekst}   # położenie litery, nie akcentu
             continue
         if _ct.litera_pojedyncza(tekst):
             if run and not ta_sama_linia:
-                zamknij()
+                zamknij(w)
+            otworz(w)
             run.append(w)
+            poprzednie[0] = w
             continue
         # Litera z interpunkcją zdaniową: „и,” kończy serię, „«л” ją zaczyna.
         rdzen_po = tekst.rstrip(_ct.ZAMYKAJACE)
         if run and ta_sama_linia and rdzen_po != tekst and _ct.litera_pojedyncza(rdzen_po):
             run.append({**w, "text": rdzen_po})
             brzegi["po"] = tekst[len(rdzen_po):]
-            zamknij()
+            poprzednie[0] = w
             continue
-        zamknij()
+        zamknij(w)
         rdzen_przed = tekst.lstrip(_ct.OTWIERAJACE)
         if rdzen_przed != tekst and _ct.litera_pojedyncza(rdzen_przed):
+            otworz(w)
             run.append({**w, "text": rdzen_przed})
             brzegi["przed"] = tekst[:len(tekst) - len(rdzen_przed)]
+        poprzednie[0] = w
     zamknij()
     return serie
 
@@ -386,21 +406,42 @@ def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona
 ZNACZNIK_GRANICY = chr(0xE000)
 
 
+def _slowo_wieloliterowe(tekst: str | None) -> bool:
+    """Sąsiad jest słowem, a nie dokładnie jedną literą ani samą interpunkcją."""
+    return tekst is not None and sum(z.isalpha() for z in tekst) >= 2
+
+
+def _prawa_granica(seria: SeriaRozstrzelona) -> bool:
+    """Prawy brzeg serii: koniec linii, sąsiad-słowo (≥ 2 litery) albo odstęp
+    do sąsiada powyżej progu — reguły 1:1 z Reżyserem."""
+    if seria.nastepny is None:
+        return True
+    if _slowo_wieloliterowe(seria.nastepny):
+        return True
+    import statistics
+    return (seria.odstep_po is not None
+            and seria.odstep_po > PROG_GRANICY_ROZSTRZELENIA * statistics.median(seria.odstepy))
+
+
 def oznacz_granice(tekst: str, serie: list[SeriaRozstrzelona]) -> tuple[str, int]:
     """Wstawia `ZNACZNIK_GRANICY` w granice słów serii rozstrzelonych strony.
 
-    Granice WEWNĄTRZ serii z geometrii (`granice`) oraz OBA BRZEGI serii:
-    tam, gdzie kończy się seria, kończy się też słowo — bez znacznika
-    pojedyncza spacja do sąsiedniego słowa (albo koniec linii, który
-    `clean_pdf_text` zamienia na spację) wyglądałaby dla modułu jak urwany
-    kawałek („przyklejone”). Brzeg z interpunkcją (`przed`/`po`, „… к и,”)
-    zostaje bez znacznika: rozdzielenie „и” i „,” wstawiłoby spację przed
-    przecinkiem.
+    Granice WEWNĄTRZ serii z geometrii (`granice`) oraz brzegi serii wg reguł
+    wspólnych z Reżyserem:
+      * lewy brzeg — zawsze granica, chyba że seria zaczyna linię, a poprzednia
+        linia kończy się przeniesieniem („лишь уве- | л и ч и в а е т” to jedno
+        słowo);
+      * prawy brzeg — granica na końcu linii, przy sąsiedzie-słowie (nie
+        dokładnie jedna litera) albo przy odstępie do sąsiada powyżej progu.
+    Bez znaczników pojedyncza spacja do sąsiada wyglądałaby dla modułu jak
+    urwany kawałek („przyklejone”). Interpunkcja `przed`/`po` stoi przy literze
+    jak w tekście; znacznik idzie za nią/przed nią.
 
     Serie szukamy w kolejności, od kursora, dokładnie w postaci `.tekst()`
     (tak stoją w `extract_text`). Seria, której nie ma w tekście (linia
     zdjęta jako kolontytuł), jest pomijana. Zwraca (tekst, oznaczonych serii).
     """
+    nl = chr(10)
     wynik, kursor, n = [], 0, 0
     for seria in serie:
         k = tekst.find(seria.tekst(), kursor)
@@ -410,11 +451,14 @@ def oznacz_granice(tekst: str, serie: list[SeriaRozstrzelona]) -> tuple[str, int
         czesci = [seria.litery[0]]
         for litera, granica in zip(seria.litery[1:], seria.granice):
             czesci.append((" " + ZNACZNIK_GRANICY + " " if granica else " ") + litera)
-        lewy = (ZNACZNIK_GRANICY + " " if not seria.przed and k > 0 and tekst[k - 1] in " \n"
-                else "")
-        prawy = (" " + ZNACZNIK_GRANICY if not seria.po and koniec < len(tekst)
-                 and tekst[koniec] in " \n" else "")
-        wynik.append(tekst[kursor:k] + lewy + seria.przed + "".join(czesci) + seria.po + prawy)
+        lewa = k > 0 and tekst[k - 1] in " " + nl
+        if lewa and seria.poczatek_linii and tekst[k - 1] == nl:
+            linia_przed = tekst[:k - 1].rsplit(nl, 1)[-1].rstrip()
+            lewa = not linia_przed.endswith("-")
+        prawa = koniec < len(tekst) and tekst[koniec] in " " + nl and _prawa_granica(seria)
+        wynik.append(tekst[kursor:k] + (ZNACZNIK_GRANICY + " " if lewa else "")
+                     + seria.przed + "".join(czesci) + seria.po
+                     + (" " + ZNACZNIK_GRANICY if prawa else ""))
         kursor = koniec
         n += 1
     wynik.append(tekst[kursor:])
