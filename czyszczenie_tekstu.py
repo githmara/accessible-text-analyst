@@ -275,16 +275,26 @@ def _scal_ciagi(czesci: list[str], slowa: dict[str, int], liczniki: dict[str, in
                 j, liter = j + 4, liter + 1
             else:
                 break
+        # Ostatni token ciągu może nieść interpunkcję zamykającą: „в а к ц и́ н.”
+        # → „вакци́н.” (etap 5; słownik PDF +19 sklejeń, Земская +12).
+        ogon = ""
+        if j + 2 < len(czesci) and pojedyncza(j + 1):
+            rdzen = czesci[j + 2].rstrip(ZAMYKAJACE)
+            if rdzen != czesci[j + 2] and litera_pojedyncza(rdzen):
+                j, liter, ogon = j + 2, liter + 1, czesci[j + 2][len(rdzen):]
         if liter >= MIN_ROZSTRZELENIE:
             przyklejony = (i >= 2 and pojedyncza(i - 1) and czesci[i - 2]) or \
                 (j + 2 < len(czesci) and pojedyncza(j + 1) and czesci[j + 2])
-            sklejone = "".join(czesci[i:j + 1:2])
+            litery = czesci[i:j + 1:2]
+            if ogon:
+                litery[-1] = litery[-1][:-len(ogon)]
+            sklejone = "".join(litery)
             if przyklejony:
                 liczniki["przyklejone"] += 1
                 nowe.extend(czesci[i:j + 1])
             elif slowa.get(klucz_slowa(sklejone), 0):
                 liczniki["sklejone"] += 1
-                nowe.append(sklejone)
+                nowe.append(sklejone + ogon)
             else:
                 liczniki["bez_zmian"] += 1
                 nowe.extend(czesci[i:j + 1])
@@ -345,16 +355,33 @@ def kodowalne(tekst: str, zrodlo: str) -> float:
     return ok / len(litery)
 
 
+def _litery_zachowane(tekst: str, kandydat: str) -> bool:
+    """Przekodowanie nie zamienia liter w symbole (mojibake: litera → litera).
+
+    Bez tego cp866 robiło z niemieckiego „Hauptmenüleiste” „Hauptmen№leiste”:
+    słowo z niewiarygodnym „ü” rozpadało się na dwa wiarygodne słowa ASCII
+    i udział słów wiarygodnych ROSNĄŁ (339 linii paczek de/fr/es przy
+    alfabetach sześciu paczek ATA, zmierzone w etapie 5).
+    """
+    return sum(z.isalpha() for z in kandydat) >= sum(z.isalpha() for z in tekst)
+
+
 def wiarygodnosc(tekst: str, alfabety) -> tuple[int, int]:
-    """(słów, słów wiarygodnych): słowo jest wiarygodne, gdy WSZYSTKIE jego
-    litery mieszczą się w alfabecie JEDNEJ paczki.
+    """(słów, słów wiarygodnych): słowo jest wiarygodne, gdy jego litery są
+    z JEDNEGO pisma i WSZYSTKIE mieszczą się w alfabecie JEDNEJ paczki.
 
     Sama suma alfabetów nie wystarcza: „Áèáëèîòåêà” ma litery z is, fr, it,
-    fi — każdą znaną, ale żadna paczka nie ma ich wszystkich.
+    fi — każdą znaną, ale żadna paczka nie ma ich wszystkich. Jedno pismo:
+    paczka rosyjska zna też łacinę (z tekstów `ui.yaml`), więc bez tego
+    francuskie „partîmes” po przekodowaniu na „partоmes” (łacina + cyrylica)
+    liczyło się jako wiarygodne — zmierzone w ATA bez paczki fr. Pismo to
+    pierwszy wyraz nazwy Unicode litery; znaki łączące i apostrofy są
+    neutralne (słowo ich nie zawiera: łączące zdjęte, apostrof nie jest literą).
     """
     alfabety = list(alfabety)
     slowa = _RE_SLOWO_MOJIBAKE.findall(bez_laczacych(tekst))
-    return len(slowa), sum(1 for s in slowa if any(set(s) <= a for a in alfabety))
+    return len(slowa), sum(1 for s in slowa if len({_pismo(z) for z in s}) == 1
+                           and any(set(s) <= a for a in alfabety))
 
 
 def napraw_mojibake(tekst: str, alfabety, *, min_slow: int = MIN_SLOW_MOJIBAKE
@@ -379,6 +406,8 @@ def napraw_mojibake(tekst: str, alfabety, *, min_slow: int = MIN_SLOW_MOJIBAKE
             continue
         for cel in CELE_MOJIBAKE:
             kandydat = przekoduj(tekst, zrodlo, cel)
+            if not _litery_zachowane(tekst, kandydat):
+                continue
             n2, ok2 = wiarygodnosc(kandydat, alfabety)
             if n2 and ok2 / n2 > najlepszy[0]:
                 najlepszy = (ok2 / n2, f"{zrodlo}>{cel}", kandydat)
@@ -390,42 +419,45 @@ def napraw_mojibake(tekst: str, alfabety, *, min_slow: int = MIN_SLOW_MOJIBAKE
 
 
 def napraw_mojibake_akapitow(akapity: list[str], alfabety) -> tuple[list[str], dict]:
-    """Mojibake w jednostce (strona PDF albo cały `.docx`), decyzja per akapit.
+    """Mojibake w jednostce (strona PDF albo cały `.docx`): JEDNO kodowanie.
 
-    Akapit z co najmniej `MIN_SLOW_MOJIBAKE` słowami ocenia `napraw_mojibake`
-    samodzielnie — strona z akapitem mojibake i akapitem francuskim zostaje
-    w połowie francuska (ocena całej strony nie przechodziła progu w żadną
-    stronę). Krótkie akapity (nagłówek, „33”, podpis) dostają kodowanie,
-    które wygrało najczęściej w długich akapitach JEDNOSTKI, ale tylko gdy
-    to podnosi ich udział słów wiarygodnych.
+    Przebieg 1: akapit z co najmniej `MIN_SLOW_MOJIBAKE` słowami ocenia
+    `napraw_mojibake` samodzielnie (strona z akapitem mojibake i akapitem
+    francuskim — ocena całej strony nie przechodziła progu w żadną stronę).
+    Przebieg 2: mojibake jednostki powstał JEDNYM kodowaniem, więc stosujemy
+    wyłącznie to, które wygrało najczęściej — do każdego akapitu (krótkiego,
+    odrzuconego, a także „zdobytego” przez inne kodowanie), o ile podnosi
+    jego udział słów wiarygodnych. Zmierzone na „Повесть о Горе-Злочастии”
+    (pisze „ѣ” łacińskim „h”, „вhка”): po regule jednego pisma 42 ze 108
+    akapitów nie dochodziło samodzielnie do progu 0,9, a jeden przypadkiem
+    dochodził przez mac-cyrillic, które z „я” robi „€” („обратилис€”).
 
     Returns:
         (akapity, info) — `przekodowane` (liczba akapitów) i `kodowania`
         ({„latin-1>cp1251”: liczba akapitów}).
     """
     alfabety = [frozenset(a) for a in alfabety]
+    glosy: dict[str, int] = {}
+    for akapit in akapity:
+        _, info = napraw_mojibake(akapit, alfabety)
+        if info["kodowanie"] is not None:
+            glosy[info["kodowanie"]] = glosy.get(info["kodowanie"], 0) + 1
     wynik = list(akapity)
     kodowania: dict[str, int] = {}
-    krotkie: list[int] = []
-    for i, akapit in enumerate(akapity):
-        nowy, info = napraw_mojibake(akapit, alfabety)
-        if info["slow"] < MIN_SLOW_MOJIBAKE:
-            krotkie.append(i)
-        elif info["kodowanie"] is not None:
-            wynik[i] = nowy
-            kodowania[info["kodowanie"]] = kodowania.get(info["kodowanie"], 0) + 1
-    if kodowania:
-        glowne = max(kodowania, key=lambda k: kodowania[k])
+    if glosy:
+        glowne = max(glosy, key=lambda k: glosy[k])
         zrodlo, cel = glowne.split(">")
-        for i in krotkie:
-            if kodowalne(akapity[i], zrodlo) < MIN_KODOWALNYCH_MOJIBAKE:
+        for i, akapit in enumerate(akapity):
+            if kodowalne(akapit, zrodlo) < MIN_KODOWALNYCH_MOJIBAKE:
                 continue
-            kandydat = przekoduj(akapity[i], zrodlo, cel)
-            n, ok = wiarygodnosc(akapity[i], alfabety)
+            kandydat = przekoduj(akapit, zrodlo, cel)
+            if not _litery_zachowane(akapit, kandydat):
+                continue
+            n, ok = wiarygodnosc(akapit, alfabety)
             n2, ok2 = wiarygodnosc(kandydat, alfabety)
             if n2 and n and ok2 / n2 > ok / n:
                 wynik[i] = kandydat
-                kodowania[glowne] += 1
+                kodowania[glowne] = kodowania.get(glowne, 0) + 1
     return wynik, {"przekodowane": sum(kodowania.values()), "kodowania": kodowania}
 
 

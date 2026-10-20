@@ -353,6 +353,39 @@
    }
   },
   {
+   "nazwa": "ostatni token z interpunkcją zamykającą (в а к ц и н.)",
+   "akapity": [
+    "Война вакцин.",
+    "В о й н а   в а к ц и н."
+   ],
+   "granica": null,
+   "oczekiwane": [
+    "Война вакцин.",
+    "Война   вакцин."
+   ],
+   "liczniki": {
+    "sklejone": 2,
+    "przyklejone": 0
+   }
+  },
+  {
+   "nazwa": "ostatni token z przecinkiem, dalej słowo pojedynczą spacją: przyklejony",
+   "akapity": [
+    "Языка нет.",
+    "с т р о й  я з ы к а, и"
+   ],
+   "granica": null,
+   "oczekiwane": [
+    "Языка нет.",
+    "с т р о й  я з ы к а, и"
+   ],
+   "liczniki": {
+    "sklejone": 0,
+    "bez_zmian": 1,
+    "przyklejone": 1
+   }
+  },
+  {
    "nazwa": "pdf: granice z geometrii jako znacznik",
    "akapity": [
     "Социальное дистанцирование.",
@@ -434,6 +467,48 @@
    "kodowanie": null
   },
   {
+   "nazwa": "ATA bez fr: francuski przy paczce ru znającej łacinę bez zmian (partîmes)",
+   "tekst": "Nous partîmes cinq cents; mais par un prompt renfort nous nous vîmes trois mille en arrivant au port.",
+   "alfabety": [
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzîèéàçôûêâ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÅÄÖåäö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÐÉÍÓÚÝÞÆÖáðéíóúýþæö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÈÉÌÍÎÒÓÙÚàèéìíîòóùú",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż"
+   ],
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "ATA bez de: cp866 nie robi z liter symboli (Hauptmen№leiste)",
+   "tekst": "Die Datei ist passwortgeschützt. Hauptmenüleiste, Wörterbücher, zurück, Schließen, verfügbar, Übersetzung.",
+   "alfabety": [
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzîèéàçôûêâ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÅÄÖåäö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÐÉÍÓÚÝÞÆÖáðéíóúýþæö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÈÉÌÍÎÒÓÙÚàèéìíîòóùú",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż"
+   ],
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "ATA: Повесть przekodowana także przy sześciu paczkach",
+   "tekst": "Áèáëèîòåêà ëèòåðàòóðû Äðåâíåé Ðóñè. XVII âåê. Ïîâåñòü î Ãîðå-Çëî÷àñòèè",
+   "alfabety": [
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzîèéàçôûêâ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÅÄÖåäö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÐÉÍÓÚÝÞÆÖáðéíóúýþæö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÈÉÌÍÎÒÓÙÚàèéìíîòóùú",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż"
+   ],
+   "oczekiwany": "Библиотека литературы Древней Руси. XVII век. Повесть о Горе-Злочастии",
+   "kodowanie": "latin-1>cp1251"
+  },
+  {
    "nazwa": "za krótki tekst nie jest oceniany",
    "tekst": "Áèáëèîòåêà ëèòåðàòóðû",
    "oczekiwany": null,
@@ -456,6 +531,38 @@
    "przekodowane": 2
   },
   {
+   "nazwa": "ѣ pisane łacińskim h: akapit odrzucony sam dziedziczy kodowanie jednostki",
+   "alfabety": [
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzîèéàçôûêâ",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÅÄÖåäö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÐÉÍÓÚÝÞÆÖáðéíóúýþæö",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÈÉÌÍÎÒÓÙÚàèéìíîòóùú",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż"
+   ],
+   "akapity": [
+    "Ïîâåñòü î Ãîðå-Çëî÷àñòèè. Áèáëèîòåêà ëèòåðàòóðû Äðåâíåé Ðóñè.",
+    "À âú íà÷àëh âhêà ñåãî òëhííàãî ñîòâîðèë Áîãú íåáî è çåìëþ"
+   ],
+   "oczekiwane": [
+    "Повесть о Горе-Злочастии. Библиотека литературы Древней Руси.",
+    "А въ началh вhка сего тлhннаго сотворил Богъ небо и землю"
+   ],
+   "przekodowane": 2
+  },
+  {
+   "nazwa": "akapit Повести z h zamiast ѣ: jedno kodowanie jednostki (nie mac-cyrillic)",
+   "akapity": [
+    "Ïîâåñòü î Ãîðå-Çëî÷àñòèè. Áèáëèîòåêà ëèòåðàòóðû Äðåâíåé Ðóñè.",
+    "À ñå ðîäè ïîøëè ñëàáû, 1äîáðó áîæëèâè1, à íà áåçóìèå îáðàòèëèñÿ è ó÷åëè æèòü â ñóåòh èâ íåïðàâäh,* â ïåðå÷èíå2* â"
+   ],
+   "oczekiwane": [
+    "Повесть о Горе-Злочастии. Библиотека литературы Древней Руси.",
+    "А се роди пошли слабы, 1добру божливи1, а на безумие обратилися и учели жить в суетh ив неправдh,* в перечине2* в"
+   ],
+   "przekodowane": 2
+  },
+  {
    "nazwa": "same krótkie akapity bez długiego: nic nie przekodowane",
    "akapity": [
     "Ïîâåñòü 33",
@@ -466,6 +573,30 @@
     "Áèáëèîòåêà"
    ],
    "przekodowane": 0
+  }
+ ],
+ "wiarygodnosc": [
+  {
+   "nazwa": "słowo z dwóch pism niewiarygodne (partоmes: łacina + cyrylickie о)",
+   "tekst": "partоmes",
+   "alfabety": [
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzîèéàçôûêâ"
+   ],
+   "wynik": [
+    1,
+    0
+   ]
+  },
+  {
+   "nazwa": "słowa jednego pisma wiarygodne",
+   "tekst": "Москва и Moscow",
+   "alfabety": [
+    "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzîèéàçôûêâ"
+   ],
+   "wynik": [
+    2,
+    2
+   ]
   }
  ]
 }

@@ -52,11 +52,21 @@ class Wektory(unittest.TestCase):
                 self.assertEqual(wynik, w["oczekiwane"])
                 self._liczniki(liczniki, w["liczniki"])
 
+    @staticmethod
+    def _alfabety(w):
+        """Alfabety wektora (np. sytuacja ATA: sześć paczek) albo wspólne."""
+        return [frozenset(a) for a in w.get("alfabety", DANE["alfabety"])]
+
+    def test_wiarygodnosc(self):
+        for w in DANE["wiarygodnosc"]:
+            with self.subTest(w["nazwa"]):
+                self.assertEqual(list(ct.wiarygodnosc(w["tekst"], self._alfabety(w))),
+                                 w["wynik"])
+
     def test_mojibake(self):
-        alfabety = [frozenset(a) for a in DANE["alfabety"]]
         for w in DANE["mojibake"]:
             with self.subTest(w["nazwa"]):
-                wynik, info = ct.napraw_mojibake(w["tekst"], alfabety)
+                wynik, info = ct.napraw_mojibake(w["tekst"], self._alfabety(w))
                 self.assertEqual(wynik, w["oczekiwany"] if w["oczekiwany"] is not None
                                  else w["tekst"])
                 self.assertEqual(info["kodowanie"], w["kodowanie"])
@@ -64,7 +74,7 @@ class Wektory(unittest.TestCase):
     def test_mojibake_akapitow(self):
         for w in DANE["mojibake_akapity"]:
             with self.subTest(w["nazwa"]):
-                wynik, info = ct.napraw_mojibake_akapitow(w["akapity"], DANE["alfabety"])
+                wynik, info = ct.napraw_mojibake_akapitow(w["akapity"], self._alfabety(w))
                 self.assertEqual(wynik, w["oczekiwane"])
                 self.assertEqual(info["przekodowane"], w["przekodowane"])
 
