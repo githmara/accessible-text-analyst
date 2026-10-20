@@ -27,6 +27,9 @@ Trzy warstwy, każda deterministyczna; odmowa wyłącznie na DOWÓD rozjazdu:
 
 Bramka czyta tylko początek źródła (PDF: strony aż do podglądów + zapas,
 pozostałe: kilka stron po 2000 znaków), więc nie kosztuje przebiegu loadera.
+PDF i DOCX czyta jednak tą samą drogą co loader (`naprawa_zrodel`): strony PDF
+naprawione z osadzonego fontu, DOCX po `oczysc_akapity` — inaczej podgląd
+naprawionej strony („Словарь…”) porównywałby się z surowym „(cid:NNN)”.
 Napisy rosyjskie niżej to DANE: dosłowny stdout notatnika, który jest celowo
 rosyjski (CLAUDE.md, „Notebook localization scope”).
 """
@@ -161,10 +164,21 @@ def omorfi_status(nb) -> str:
 # Źródło prawdy: początek pliku z configu jako ciąg liter
 # ============================================================
 
-def _kawalki_pdf(sciezka):
+def _kawalki_pdf(sciezka, stan=None):
+    """Strony tą samą drogą co `load_pdf`: naprawa z osadzonego fontu
+    (`naprawa_zrodel.napraw_strone`) przed `extract_text`, a strona, której
+    font nie rozwiązał w całości, jest pusta — loader też jej nie wpuszcza do
+    korpusu (idzie do OCR). Liczbę takich stron zapisujemy w `stan`."""
     import pdfplumber
+    from naprawa_zrodel import napraw_strone
+    pamiec = {}
     with pdfplumber.open(sciezka) as pdf:
         for strona in pdf.pages:
+            if napraw_strone(strona, pamiec).do_zgloszenia:
+                if stan is not None:
+                    stan["wstrzymane"] = stan.get("wstrzymane", 0) + 1
+                yield ""
+                continue
             yield strona.extract_text() or ""
 
 
@@ -177,10 +191,15 @@ def _kawalki_txt(sciezka):
             yield k
 
 
-def _kawalki_docx(sciezka):
+def _kawalki_docx(sciezka, stan=None):
+    """Akapity po tym samym czyszczeniu co w `load_docx`
+    (`naprawa_zrodel.oczysc_akapity`: U+F020, rozstrzelenia, przeniesienia).
+    Na ciąg liter nie wpływa (łącznik, spacja i U+F020 to nie litery), ale
+    bramka czyta wtedy dokładnie ten tekst, który trafił do korpusu."""
     from docx import Document
-    for p in Document(sciezka).paragraphs:
-        yield p.text
+    from naprawa_zrodel import oczysc_akapity
+    akapity = Document(sciezka).paragraphs
+    yield from oczysc_akapity([p.text for p in akapity], [p.style.name for p in akapity])[0]
 
 
 def _kawalki_html(sciezka):
@@ -234,8 +253,9 @@ def sprawdz_tresc(zrodlo: str, podglady: list) -> Tresc:
     niezn = set(range(len(cele)))
     ciag, surowe, niepuste = "", "", 0
     budzet_liter = (len(cele) + 2) * PAGE_SIZE
+    stan: dict = {}
     try:
-        for kawalek in czytnik(zrodlo):
+        for kawalek in (czytnik(zrodlo, stan) if ext in (".pdf", ".docx") else czytnik(zrodlo)):
             surowe += kawalek if len(surowe) < 4 * budzet_liter else ""
             nowe = litery(kawalek)
             if nowe:
@@ -255,11 +275,13 @@ def sprawdz_tresc(zrodlo: str, podglady: list) -> Tresc:
     if znalezione:
         return Tresc("zgodna", znalezione=znalezione, sprawdzalne=len(cele))
     if not ciag:
-        return Tresc("niesprawdzalna", "no_text", sprawdzalne=len(cele))
+        return Tresc("niesprawdzalna", "garbled" if stan.get("wstrzymane") else "no_text",
+                     sprawdzalne=len(cele))
     obce = sum(z not in _ALFABET for z in ciag) / len(ciag)
-    if obce > PROG_ZNIEKSZTALCENIA or surowe.count("(cid:") >= 3:
-        # Warstwa tekstu PDF bez mapy ToUnicode: loader mógł ją naprawić albo
-        # przepuścić przez OCR — surowy tekst nie jest wtedy źródłem prawdy.
+    if obce > PROG_ZNIEKSZTALCENIA or surowe.count("(cid:") >= 3 or stan.get("wstrzymane"):
+        # Warstwa tekstu PDF bez mapy ToUnicode, której font nie naprawił:
+        # loader przepuścił te strony przez OCR — tekst pliku nie jest wtedy
+        # źródłem prawdy. Strony naprawione czytamy już naprawione (wyżej).
         return Tresc("niesprawdzalna", "garbled", sprawdzalne=len(cele))
     return Tresc("rozjazd", znalezione=0, sprawdzalne=len(cele))
 

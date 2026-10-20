@@ -1,4 +1,6 @@
-"""Testy naprawa_zrodel.py: bramka i naprawa warstwy tekstu PDF, przeniesienia DOCX.
+"""Testy naprawa_zrodel.py: bramka i naprawa warstwy tekstu PDF, czyszczenie tekstu
+(U+F020, rozstrzelenia, przeniesienia — wspólna specyfikacja z Reżyserem) oraz
+czytanie źródła przez bramkę raportu (zrodlo_raportu.py).
 
 PDF jest syntetyczny i odtwarza przypadek słownika z 2026-10-20: font
 Type0/Identity-H z osadzonym TrueType i UCIĘTĄ mapą ToUnicode (tylko „А”).
@@ -142,54 +144,127 @@ class TestPdf(unittest.TestCase):
         self.assertEqual(n.zakresy_stron([]), "")
 
 
-class TestDocx(unittest.TestCase):
-    # Tło „słownika”: formy poświadczone gdzie indziej i spójnik z czołówki.
-    TLO = (["посвященного издания", "коронавирус и пандемия"] * 3
-           + ["ковид-контакт", "ковид", "и"] * 2)
+class TestPrzeniesienia(unittest.TestCase):
+    """Wspólna specyfikacja z Reżyserem — wektory obowiązkowe, identyczne w obu projektach."""
 
-    def sklej(self, *akapity):
-        wynik, licz = n.sklej_przeniesienia(list(akapity) + self.TLO)
-        return wynik[:len(akapity)], licz
+    def jeden(self, tekst, *tlo):
+        wynik, licz = n.sklej_przeniesienia([tekst, *tlo])
+        return wynik[0], licz
 
-    def test_przeniesienie_poswiadczone(self):
-        self.assertEqual(self.sklej("издания, по- священного теме")[0], ["издания, посвященного теме"])
+    def test_wektory_obowiazkowe(self):
+        przypadki = [
+            (("издания, по- священного теме", "посвященное издание"), "издания, посвященного теме", 3),
+            (("государст- венный",), "государственный", 3),
+            (("бело- голубых", "голубых тонов"), "бело- голубых", 4),
+            (("двух- и трёхкомнатный", "и так и этак"), "двух- и трёхкомнатный", 4),
+            (("с ковид- диссидентов", "о ковид-диссидентов"), "с ковид-диссидентов", 2),
+            (("по-английски",), "по-английски", None),
+            (("gazeta-obozrenie- birulevo.ru",), "gazeta-obozrenie- birulevo.ru", "wykluczone"),
+            (("ПО- СВЯЩЕННОГО",), "ПО- СВЯЩЕННОГО", "wykluczone"),
+        ]
+        for (tekst, *tlo), oczekiwany, regula in przypadki:
+            with self.subTest(tekst=tekst):
+                wynik, licz = self.jeden(tekst, *tlo)
+                self.assertEqual(wynik, oczekiwany)
+                if regula is None:
+                    self.assertEqual(sum(licz.values()), 0)
+                else:
+                    self.assertEqual(licz[regula], 1)
 
-    def test_przeniesienie_nieposwiadczone(self):
-        self.assertEqual(self.sklej("заканчи- вался срок")[0], ["заканчивался срок"])
+    def test_regula_1_przed_2(self):
+        self.assertEqual(self.jeden("корона- вирус", "коронавирус", "корона-вирус")[0], "коронавирус")
 
-    def test_zawieszony_lacznik_zostaje(self):
-        for tekst in ("двух- и трёхкомнатный", "пред- и постпандемийный"):
-            wynik, licz = self.sklej(tekst)
-            self.assertEqual(wynik, [tekst])
-            self.assertEqual(licz["zostaw"], 1)
+    def test_kandydat_sam_sie_nie_liczy(self):
+        # Jedyne wystąpienie „венный” to prawy fragment kandydata — reguła 3, nie 4.
+        self.assertEqual(self.jeden("государст- венный")[1][3], 1)
 
-    def test_myslniki_i_lacznik_bez_spacji_nietkniete(self):
-        tekst = "слово — слово, 1990–2000, по-английски, слово - слово"
-        self.assertEqual(self.sklej(tekst)[0], [tekst])
+    def test_interpunkcja_zdania_to_nie_adres(self):
+        self.assertEqual(self.jeden("«мелодра- мы».")[0], "«мелодрамы».")
+        self.assertEqual(self.jeden("vvs- syzran.ru 09.06.2020")[0], "vvs- syzran.ru 09.06.2020")
 
-    def test_czlon_zlozenia_zachowuje_lacznik(self):
-        self.assertEqual(self.sklej("с ковид- трупами")[0], ["с ковид-трупами"])
+    def test_rozne_pisma_i_myslniki(self):
+        tekst = "IT- индустрии; слово — слово, 1990–2000, слово - слово"
+        self.assertEqual(self.jeden(tekst)[0], tekst)
 
-    def test_wielka_litera_i_inne_pismo(self):
-        self.assertEqual(self.sklej("Мать- Природа")[0], ["Мать-Природа"])
-        for tekst in ("IT- индустрии", "root- корневой", "РЕКУРСИЯ- То же", "Приставка е- в слове"):
-            self.assertEqual(self.sklej(tekst)[0], [tekst])
+    def test_wiele_spacji(self):
+        self.assertEqual(self.jeden("выдержи-   вают")[0], "выдерживают")
 
-    def test_przez_granice_akapitu_tylko_z_dowodem(self):
-        akapity = ["издания, по-", "священного теме", "", "заканчи-", "вался срок",
-                   "раздел -И-", "Не хвались"] + self.TLO
+    def test_przez_granice_akapitu(self):
+        akapity = ["издания, по-", "священного теме", "", "раздел -И-", "Не хвались",
+                   "государст-", "", "венный", "бело-", "голубых", "голубых тонов"]
         style = ["Body Text"] * len(akapity)
-        wynik, sklejone, zostawione = n.sklej_przez_akapity(akapity, style)
+        wynik, licz = n.sklej_przez_akapity(akapity, style)
         self.assertEqual(wynik[0], "издания, посвященного теме")
-        self.assertEqual(wynik[2:6], ["заканчи-", "вался срок", "раздел -И-", "Не хвались"])
-        self.assertEqual((sklejone, zostawione), (1, 2))
+        self.assertIn("раздел -И-", wynik)          # wielka litera: wykluczone
+        self.assertIn("государст-", wynik)          # pusty akapit między: bez bezpiecznika
+        self.assertIn("бело-", wynik)               # reguła 4
+        self.assertEqual((licz[3], licz[4], licz["wykluczone"], licz["bez_bezpiecznika"]), (1, 1, 1, 1))
 
-    def test_przez_granice_inny_styl_zostaje(self):
-        akapity = ["издания, по-", "священного теме"] + self.TLO
-        style = ["Body Text", "Heading 3"] + ["Body Text"] * len(self.TLO)
-        wynik, sklejone, _ = n.sklej_przez_akapity(akapity, style)
-        self.assertEqual(sklejone, 0)
-        self.assertEqual(wynik[:2], akapity[:2])
+    def test_przez_granice_inny_styl(self):
+        wynik, licz = n.sklej_przez_akapity(["издания, по-", "священного теме"], ["Body Text", "Heading 3"])
+        self.assertEqual(licz["bez_bezpiecznika"], 1)
+        self.assertEqual(wynik, ["издания, по-", "священного теме"])
+
+
+class TestRozstrzeleniaIPua(unittest.TestCase):
+    def test_seria_poswiadczona_sklejona(self):
+        wynik, s, p = n.sklej_rozstrzelenia(["дается у с т о й ч и в о е сочетание", "устойчивое"])
+        self.assertEqual((wynik[0], s, p), ("дается устойчивое сочетание", 1, 0))
+
+    def test_seria_nieposwiadczona_zostaje(self):
+        tekst = "Ж ё л т а я з о н а"
+        self.assertEqual(n.sklej_rozstrzelenia([tekst, "жёлтая зона"])[0][0], tekst)
+
+    def test_dwie_spacje_rozdzielaja_slowa(self):
+        wynik, s, _ = n.sklej_rozstrzelenia(["Ж ё л т а я  з о н а", "жёлтая зона"])
+        self.assertEqual((wynik[0], s), ("Жёлтая  зона", 2))
+
+    def test_akcent_w_serii(self):
+        wynik, s, _ = n.sklej_rozstrzelenia(["з о" + AKCENT + " н а", "зона"])
+        self.assertEqual(wynik[0], "зо" + AKCENT + "на")
+
+    def test_jednoliterowe_slowa_nie_sklejane(self):
+        # „а и в с” — cztery prawdziwe słowa jednoliterowe; „аивс” nie jest słowem.
+        tekst = "а и в с о к у я"
+        self.assertEqual(n.sklej_rozstrzelenia([tekst, "и в с а"])[0][0], tekst)
+
+    def test_trzy_litery_to_nie_seria(self):
+        self.assertEqual(n.sklej_rozstrzelenia(["в с е", "все"])[0][0], "в с е")
+
+    def test_spacja_pua(self):
+        pua = chr(0xF020)
+        wynik, cz = n.oczysc_akapity([pua + " " + pua + "\t— вариант"])
+        self.assertEqual((wynik[0], cz.spacje_pua), ("   \t— вариант", 2))
+
+
+class TestBramkaZrodla(unittest.TestCase):
+    """zrodlo_raportu czyta PDF tą samą drogą co load_pdf (naprawa z fontu)."""
+
+    def setUp(self):
+        import zrodlo_raportu
+        self.z = zrodlo_raportu
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def pdf(self, gidy):
+        p = Path(self.tmp.name) / "s.pdf"
+        p.write_bytes(_pdf(gidy))
+        return str(p)
+
+    def test_podglad_naprawionej_strony_pasuje(self):
+        # 20 liter „АБВ…” — tyle, ile podgląd notatnika po naprawie.
+        sciezka = self.pdf("000100020004" * 7)
+        podglad = (A + BE + VE) * 7
+        t = self.z.sprawdz_tresc(sciezka, [podglad])
+        self.assertEqual((t.stan, t.znalezione), ("zgodna", 1))
+
+    def test_obcy_podglad_to_rozjazd(self):
+        t = self.z.sprawdz_tresc(self.pdf("000100020004" * 7), ["Совсем другой текст о манипуляциях"])
+        self.assertEqual(t.stan, "rozjazd")
+
+    def test_strona_nienaprawiona_niesprawdzalna(self):
+        t = self.z.sprawdz_tresc(self.pdf("0001000500050005" * 5), [(A + BE + VE) * 7])
+        self.assertEqual((t.stan, t.powod), ("niesprawdzalna", "garbled"))
 
 
 if __name__ == "__main__":

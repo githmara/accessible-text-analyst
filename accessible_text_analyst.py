@@ -580,6 +580,12 @@ def load_pdf(path):
             print(f"    ... и ещё {len(removed_bp)-5}")
     # Применяем финальную очистку
     pages = [p for p in (clean_pdf_text(r) for r in cleaned_raw) if p]
+    # U+F020 i tekst rozstrzelony — ta sama specyfikacja co w load_docx;
+    # przeniesienia w PDF skleja już clean_pdf_text (dywiz na końcu wiersza).
+    from naprawa_zrodel import oczysc_akapity
+    pages, _cz = oczysc_akapity(pages, przeniesienia=False)
+    pages = [re.sub(r"\s+", " ", p).strip() for p in pages]
+    _print_text_cleanup("PDF", _cz)
     print(f"  PDF: {total} страниц, загружено {len(pages)}, пропущено {skipped}.")
     return pages
 
@@ -607,6 +613,23 @@ def load_txt(path, page_size=2000):
     return pages
 
 
+def _print_text_cleanup(kind, cz):
+    """Строки отчёта о чистке текста (`naprawa_zrodel.oczysc_akapity`)."""
+    p, x = cz.przeniesienia, cz.przez_akapity
+    if cz.spacje_pua:
+        print(f"  {kind}: символов-пробелов шрифта Symbol (U+F020) заменено обычным пробелом: "
+              f"{cz.spacje_pua}.")
+    if cz.rozstrzelenia_sklejone or cz.rozstrzelenia_pozostawione:
+        print(f"  {kind}: текст вразрядку — склеено серий: {cz.rozstrzelenia_sklejone}, "
+              f"оставлено (склеенное слово не встречается в документе): "
+              f"{cz.rozstrzelenia_pozostawione}.")
+    if sum(p.values()) or sum(x.values()):
+        print(f"  {kind}: переносы внутри абзацев — склеено: {p[1] + p[3]}, "
+              f"с сохранением дефиса: {p[2]}, оставлено: {p[4]}, не переносы: {p['wykluczone']}; "
+              f"через границу абзаца — склеено: {x[1] + x[3]}, с дефисом: {x[2]}, "
+              f"оставлено: {x[4] + x['wykluczone'] + x['bez_bezpiecznika']}.")
+
+
 def load_docx(path, page_size=2000):
     """Загружает файл .docx и извлекает текст из всех абзацев документа."""
     try:
@@ -615,20 +638,14 @@ def load_docx(path, page_size=2000):
         print("[ВНИМАНИЕ] python-docx не установлен. Выполните: pip install python-docx")
         return []
     doc = Document(path)
-    # Przeniesienia z PDF zapisanego jako DOCX („по- священного”) — moduł
-    # `naprawa_zrodel`: przez granicę akapitu tylko formy poświadczone
-    # w dokumencie, wewnątrz akapitu reguły `sklej_przeniesienia`
-    # (zawieszony łącznik „двух- и трёх…”, myślniki i „по-английски” zostają).
-    from naprawa_zrodel import sklej_przeniesienia, sklej_przez_akapity
-    _paras, _cross, _cross_left = sklej_przez_akapity(
+    # DOCX zapisany z PDF — moduł `naprawa_zrodel`, wspólna specyfikacja
+    # z Reżyserem: U+F020 → spacja, rozstrzelenia („у с т о й ч и в о е”),
+    # przeniesienia „по- священного” (reguły 1–4; zawieszony łącznik
+    # „двух- и трёх…”, myślniki i „по-английски” zostają).
+    from naprawa_zrodel import oczysc_akapity
+    _paras, _cz = oczysc_akapity(
         [p.text for p in doc.paragraphs], [p.style.name for p in doc.paragraphs])
-    _paras, _hyph = sklej_przeniesienia(_paras)
-    if _hyph["sklej"] or _hyph["lacznik"] or _cross:
-        print(f"  DOCX: склеено переносов внутри абзацев: {_hyph['sklej']}, "
-              f"с сохранением дефиса: {_hyph['lacznik']}; через границу абзаца: {_cross}.")
-    if _hyph["zostaw"] or _cross_left:
-        print(f"  DOCX: оставлено без изменений (висячий дефис или нет доказательства): "
-              f"внутри абзацев {_hyph['zostaw']}, на границе абзацев {_cross_left}.")
+    _print_text_cleanup("DOCX", _cz)
     raw = "  ".join(p for p in _paras if p.strip())
     raw = re.sub(r"\s+", " ", raw).strip()
     # Применяем CUSTOM_PATTERNS (если определены)
