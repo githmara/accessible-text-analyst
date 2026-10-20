@@ -1,6 +1,6 @@
-"""Testy naprawa_zrodel.py: bramka i naprawa warstwy tekstu PDF, czyszczenie tekstu
-(U+F020, rozstrzelenia, przeniesienia — wspólna specyfikacja z Reżyserem) oraz
-czytanie źródła przez bramkę raportu (zrodlo_raportu.py).
+"""Testy naprawa_zrodel.py: bramka i naprawa warstwy tekstu PDF, granice rozstrzeleń
+z geometrii podane wspólnemu modułowi czyszczenie_tekstu (jego własne wektory:
+czyszczenie_tekstu_wektory.py) oraz czytanie źródła przez bramkę raportu.
 
 PDF jest syntetyczny i odtwarza przypadek słownika z 2026-10-20: font
 Type0/Identity-H z osadzonym TrueType i UCIĘTĄ mapą ToUnicode (tylko „А”).
@@ -144,109 +144,16 @@ class TestPdf(unittest.TestCase):
         self.assertEqual(n.zakresy_stron([]), "")
 
 
-class TestPrzeniesienia(unittest.TestCase):
-    """Wspólna specyfikacja z Reżyserem — wektory obowiązkowe, identyczne w obu projektach."""
-
-    def jeden(self, tekst, *tlo):
-        wynik, licz = n.sklej_przeniesienia([tekst, *tlo])
-        return wynik[0], licz
-
-    def test_wektory_obowiazkowe(self):
-        przypadki = [
-            (("издания, по- священного теме", "посвященное издание"), "издания, посвященного теме", 3),
-            (("государст- венный",), "государственный", 3),
-            (("бело- голубых", "голубых тонов"), "бело- голубых", 4),
-            (("двух- и трёхкомнатный", "и так и этак"), "двух- и трёхкомнатный", 4),
-            (("с ковид- диссидентов", "о ковид-диссидентов"), "с ковид-диссидентов", 2),
-            (("по-английски",), "по-английски", None),
-            (("gazeta-obozrenie- birulevo.ru",), "gazeta-obozrenie- birulevo.ru", "wykluczone"),
-            (("ПО- СВЯЩЕННОГО",), "ПО- СВЯЩЕННОГО", "wykluczone"),
-        ]
-        for (tekst, *tlo), oczekiwany, regula in przypadki:
-            with self.subTest(tekst=tekst):
-                wynik, licz = self.jeden(tekst, *tlo)
-                self.assertEqual(wynik, oczekiwany)
-                if regula is None:
-                    self.assertEqual(sum(licz.values()), 0)
-                else:
-                    self.assertEqual(licz[regula], 1)
-
-    def test_regula_1_przed_2(self):
-        self.assertEqual(self.jeden("корона- вирус", "коронавирус", "корона-вирус")[0], "коронавирус")
-
-    def test_kandydat_sam_sie_nie_liczy(self):
-        # Jedyne wystąpienie „венный” to prawy fragment kandydata — reguła 3, nie 4.
-        self.assertEqual(self.jeden("государст- венный")[1][3], 1)
-
-    def test_interpunkcja_zdania_to_nie_adres(self):
-        self.assertEqual(self.jeden("«мелодра- мы».")[0], "«мелодрамы».")
-        self.assertEqual(self.jeden("vvs- syzran.ru 09.06.2020")[0], "vvs- syzran.ru 09.06.2020")
-
-    def test_rozne_pisma_i_myslniki(self):
-        tekst = "IT- индустрии; слово — слово, 1990–2000, слово - слово"
-        self.assertEqual(self.jeden(tekst)[0], tekst)
-
-    def test_wiele_spacji(self):
-        self.assertEqual(self.jeden("выдержи-   вают")[0], "выдерживают")
-
-    def test_przez_granice_akapitu(self):
-        akapity = ["издания, по-", "священного теме", "", "раздел -И-", "Не хвались",
-                   "государст-", "", "венный", "бело-", "голубых", "голубых тонов"]
-        style = ["Body Text"] * len(akapity)
-        wynik, licz = n.sklej_przez_akapity(akapity, style)
-        self.assertEqual(wynik[0], "издания, посвященного теме")
-        self.assertIn("раздел -И-", wynik)          # wielka litera: wykluczone
-        self.assertIn("государст-", wynik)          # pusty akapit między: bez bezpiecznika
-        self.assertIn("бело-", wynik)               # reguła 4
-        self.assertEqual((licz[3], licz[4], licz["wykluczone"], licz["bez_bezpiecznika"]), (1, 1, 1, 1))
-
-    def test_przez_granice_inny_styl(self):
-        wynik, licz = n.sklej_przez_akapity(["издания, по-", "священного теме"], ["Body Text", "Heading 3"])
-        self.assertEqual(licz["bez_bezpiecznika"], 1)
-        self.assertEqual(wynik, ["издания, по-", "священного теме"])
-
-
-class TestRozstrzeleniaIPua(unittest.TestCase):
-    def test_seria_poswiadczona_sklejona(self):
-        wynik, s, p = n.sklej_rozstrzelenia(["дается у с т о й ч и в о е сочетание", "устойчивое"])
-        self.assertEqual((wynik[0], s, p), ("дается устойчивое сочетание", 1, 0))
-
-    def test_seria_nieposwiadczona_zostaje(self):
-        tekst = "Ж ё л т а я з о н а"
-        self.assertEqual(n.sklej_rozstrzelenia([tekst, "жёлтая зона"])[0][0], tekst)
-
-    def test_dwie_spacje_rozdzielaja_slowa(self):
-        wynik, s, _ = n.sklej_rozstrzelenia(["Ж ё л т а я  з о н а", "жёлтая зона"])
-        self.assertEqual((wynik[0], s), ("Жёлтая  зона", 2))
-
-    def test_akcent_w_serii(self):
-        wynik, s, _ = n.sklej_rozstrzelenia(["з о" + AKCENT + " н а", "зона"])
-        self.assertEqual(wynik[0], "зо" + AKCENT + "на")
-
-    def test_jednoliterowe_slowa_nie_sklejane(self):
-        # „а и в с” — cztery prawdziwe słowa jednoliterowe; „аивс” nie jest słowem.
-        tekst = "а и в с о к у я"
-        self.assertEqual(n.sklej_rozstrzelenia([tekst, "и в с а"])[0][0], tekst)
-
-    def test_trzy_litery_to_nie_seria(self):
-        self.assertEqual(n.sklej_rozstrzelenia(["в с е", "все"])[0][0], "в с е")
-
-    def test_spacja_pua(self):
-        pua = chr(0xF020)
-        wynik, cz = n.oczysc_akapity([pua + " " + pua + "\t— вариант"])
-        self.assertEqual((wynik[0], cz.spacje_pua), ("   \t— вариант", 2))
-
-
 class TestRozstrzeleniaGeometria(unittest.TestCase):
     """Granice słów w rozstrzeleniu PDF z odstępów (nie z tekstu)."""
 
     def test_granice_z_odstepow_i_akcent(self):
         import pdfplumber
         # 12 pt, glif 600/1000 → 7,2 pt; -300 → odstęp 3,6 pt, -900 → 10,8 pt.
-        # „А Б В А” | „Б́ В А”: akcent (glif 3, szerokość 0) po Б, odstęp za nim
+        # „А Б В А” | „Б́ В А Б”: akcent (glif 3, szerokość 0) po Б, odstęp za nim
         # 7,2 pt = 2× mediana — to NIE granica (rozstrzelenie za akcentem).
         tj = (b"[<0001> -300 <0002> -300 <0004> -300 <0001> -900 "
-              b"<0002> -300 <0003> -300 <0004> -300 <0001>] TJ")
+              b"<0002> -300 <0003> -300 <0004> -300 <0001> -300 <0002>] TJ")
         with tempfile.TemporaryDirectory() as tmp:
             sciezka = Path(tmp) / "r.pdf"
             sciezka.write_bytes(_pdf("", tj=tj))
@@ -256,9 +163,26 @@ class TestRozstrzeleniaGeometria(unittest.TestCase):
                 serie = n.serie_rozstrzelone(s)
                 tekst = s.extract_text()
         self.assertEqual(len(serie), 1)
-        self.assertEqual(serie[0].slowa(), [A + BE + VE + A, BE + AKCENT + VE + A])
+        self.assertEqual(serie[0].slowa(), [A + BE + VE + A, BE + AKCENT + VE + A + BE])
         self.assertEqual(serie[0].tekst(), tekst)     # seria stoi w tekście 1:1
-        self.assertEqual(len(serie[0].litery), 7)
+        self.assertEqual(len(serie[0].litery), 8)
+        # Geometria → znacznik granicy → decyzja wspólnego modułu.
+        import czyszczenie_tekstu as ct
+        oznaczony, n_ozn = n.oznacz_granice(tekst, serie)
+        self.assertEqual(n_ozn, 1)
+        slowa_dok = A + BE + VE + A + " " + BE + VE + A + BE
+        wynik, licz = ct.scal_rozstrzelone([oznaczony, slowa_dok], granica=n.ZNACZNIK_GRANICY)
+        self.assertEqual(wynik[0], A + BE + VE + A + " " + BE + AKCENT + VE + A + BE)
+        self.assertEqual(licz["sklejone"], 2)
+        # Bez geometrii (sam tekst) seria jest jednym ciągiem i nie jest słowem.
+        self.assertEqual(ct.scal_rozstrzelone([tekst, slowa_dok])[0][0], tekst)
+
+    def test_strona_pdf_spacja_symbol_i_mojibake(self):
+        from shamanic_locale import alfabety_paczek
+        moj = "Áèáëèîòåêà èíñòèòóòà ÿçûêîçíàíèÿ ïðèíÿëà íîâûå êíèãè"
+        tekst, info = n.oczysc_strone_pdf(moj + "\n33" + chr(0xF020) + "x", alfabety_paczek())
+        self.assertTrue(tekst.startswith("Библиотека института"))
+        self.assertEqual((info["spacja_symbol"], info["mojibake_linie"]), (1, 1))
 
 
 class TestBramkaZrodla(unittest.TestCase):

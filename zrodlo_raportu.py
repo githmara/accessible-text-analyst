@@ -27,9 +27,10 @@ Trzy warstwy, każda deterministyczna; odmowa wyłącznie na DOWÓD rozjazdu:
 
 Bramka czyta tylko początek źródła (PDF: strony aż do podglądów + zapas,
 pozostałe: kilka stron po 2000 znaków), więc nie kosztuje przebiegu loadera.
-PDF i DOCX czyta jednak tą samą drogą co loader (`naprawa_zrodel`): strony PDF
-naprawione z osadzonego fontu, DOCX po `oczysc_akapity` — inaczej podgląd
-naprawionej strony („Словарь…”) porównywałby się z surowym „(cid:NNN)”.
+PDF, DOCX i TXT czyta jednak tą samą drogą co loader: strony PDF naprawione
+z osadzonego fontu (`naprawa_zrodel`), U+F020 i mojibake ze wspólnego modułu
+`czyszczenie_tekstu` — inaczej podgląd naprawionej strony („Словарь…”)
+porównywałby się z surowym „(cid:NNN)”, a przekodowany „Библиотека” z „Áèáëèîòåêà”.
 Napisy rosyjskie niżej to DANE: dosłowny stdout notatnika, który jest celowo
 rosyjski (CLAUDE.md, „Notebook localization scope”).
 """
@@ -170,7 +171,9 @@ def _kawalki_pdf(sciezka, stan=None):
     font nie rozwiązał w całości, jest pusta — loader też jej nie wpuszcza do
     korpusu (idzie do OCR). Liczbę takich stron zapisujemy w `stan`."""
     import pdfplumber
-    from naprawa_zrodel import napraw_strone
+    from naprawa_zrodel import napraw_strone, oczysc_strone_pdf
+    from shamanic_locale import alfabety_paczek
+    alfabety = alfabety_paczek()
     pamiec = {}
     with pdfplumber.open(sciezka) as pdf:
         for strona in pdf.pages:
@@ -179,27 +182,32 @@ def _kawalki_pdf(sciezka, stan=None):
                     stan["wstrzymane"] = stan.get("wstrzymane", 0) + 1
                 yield ""
                 continue
-            yield strona.extract_text() or ""
+            # U+F020 i mojibake jak w load_pdf (mojibake zmienia litery).
+            yield oczysc_strone_pdf(strona.extract_text() or "", alfabety)[0]
 
 
 def _kawalki_txt(sciezka):
+    """Cały plik przez mojibake wspólnego modułu (jednostka = plik, jak
+    `load_txt`), potem kawałki po `PAGE_SIZE`."""
+    from czyszczenie_tekstu import napraw_mojibake_akapitow
+    from shamanic_locale import alfabety_paczek
     with open(sciezka, encoding="utf-8", errors="replace") as f:
-        while True:
-            k = f.read(PAGE_SIZE)
-            if not k:
-                return
-            yield k
+        tekst = f.read()
+    tekst = "\n".join(napraw_mojibake_akapitow(tekst.split("\n"), alfabety_paczek())[0])
+    for i in range(0, len(tekst), PAGE_SIZE):
+        yield tekst[i:i + PAGE_SIZE]
 
 
 def _kawalki_docx(sciezka, stan=None):
     """Akapity po tym samym czyszczeniu co w `load_docx`
-    (`naprawa_zrodel.oczysc_akapity`: U+F020, rozstrzelenia, przeniesienia).
-    Na ciąg liter nie wpływa (łącznik, spacja i U+F020 to nie litery), ale
-    bramka czyta wtedy dokładnie ten tekst, który trafił do korpusu."""
+    (`czyszczenie_tekstu.oczysc_akapity_docx`: U+F020, mojibake, rozstrzelenia,
+    przeniesienia). Mojibake zmienia litery, reszta nie — bramka czyta
+    dokładnie ten tekst, który trafił do korpusu."""
     from docx import Document
-    from naprawa_zrodel import oczysc_akapity
-    akapity = Document(sciezka).paragraphs
-    yield from oczysc_akapity([p.text for p in akapity], [p.style.name for p in akapity])[0]
+    from czyszczenie_tekstu import oczysc_akapity_docx
+    from shamanic_locale import alfabety_paczek
+    akapity = [p.text for p in Document(sciezka).paragraphs]
+    yield from oczysc_akapity_docx(akapity, alfabety_paczek())[0]
 
 
 def _kawalki_html(sciezka):

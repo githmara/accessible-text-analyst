@@ -1,0 +1,471 @@
+{
+ "opis": "Wektory testowe czyszczenie_tekstu.py — bliźniak bajt w bajt (Reżyser Audio GPT ⟷ ATA). Oczekiwania wpisane ręcznie. Pole oczekiwany=null znaczy: tekst bez zmian.",
+ "alfabety": [
+  "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀÂÆÇÈÉÊËÎÏÔŒÙÛÜŸàâæçèéêëîïôœùûüÿ",
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÄÖÜäöüß",
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÅÄÖåäö",
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÐÉÍÓÚÝÞÆÖáðéíóúýþæö",
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż"
+ ],
+ "spacja_symbol": [
+  {
+   "nazwa": "U+F020 → spacja",
+   "akapity": [
+    " \t— пункт",
+    "bez zmian"
+   ],
+   "oczekiwane": [
+    "   \t— пункт",
+    "bez zmian"
+   ],
+   "liczba": 2
+  }
+ ],
+ "przeniesienia": [
+  {
+   "nazwa": "spec-1: R nie jest słowem",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "по- священного"
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "посвященного"
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 0,
+    "3": 1,
+    "4": 0,
+    "wykluczone": 0,
+    "3_bez_reguly_1": 0
+   }
+  },
+  {
+   "nazwa": "spec-2: urywek sylaby",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "государст- венный"
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "государственный"
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 0,
+    "3": 1,
+    "4": 0,
+    "wykluczone": 0,
+    "3_bez_reguly_1": 0
+   }
+  },
+  {
+   "nazwa": "spec-3: R jest słowem",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "бело- голубых"
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "бело- голубых"
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 0,
+    "3": 0,
+    "4": 1,
+    "wykluczone": 0,
+    "3_bez_reguly_1": 0
+   }
+  },
+  {
+   "nazwa": "spec-4: dywiz wiszący",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "двух- и трёхкомнатный"
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "двух- и трёхкомнатный"
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 0,
+    "3": 0,
+    "4": 1,
+    "wykluczone": 0,
+    "3_bez_reguly_1": 0
+   }
+  },
+  {
+   "nazwa": "spec-5: złożenie na łączniku",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "ковид- диссидентов"
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "ковид-диссидентов"
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 1,
+    "3": 0,
+    "4": 0,
+    "wykluczone": 0,
+    "3_bez_reguly_1": 0
+   }
+  },
+  {
+   "nazwa": "spec-6: łącznik bez spacji",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "по-английски"
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "по-английски"
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "wykluczone": 0,
+    "3_bez_reguly_1": 0
+   }
+  },
+  {
+   "nazwa": "spec-7: slug adresu",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "obozrenie- birulevo.ru"
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "obozrenie- birulevo.ru"
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "wykluczone": 1,
+    "3_bez_reguly_1": 0
+   }
+  },
+  {
+   "nazwa": "spec-8: wielka litera R",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "ПО- СВЯЩЕННОГО"
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "ПО- СВЯЩЕННОГО"
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "wykluczone": 1,
+    "3_bez_reguly_1": 0
+   }
+  },
+  {
+   "nazwa": "reguła 1 przed regułą 2",
+   "akapity": [
+    "Онлайн и он-лайн.",
+    "Урок он- лайн."
+   ],
+   "oczekiwane": [
+    "Онлайн и он-лайн.",
+    "Урок онлайн."
+   ],
+   "liczniki": {
+    "1": 1,
+    "2": 0,
+    "3": 0,
+    "4": 0
+   }
+  },
+  {
+   "nazwa": "notatki: reguła 1 nie trafia, więc reguła 3 zatrzymana",
+   "akapity": [
+    "Плохой- хуже всех, худший.",
+    "Ostatnia strofa- życzenia do E."
+   ],
+   "oczekiwane": [
+    "Плохой- хуже всех, худший.",
+    "Ostatnia strofa- życzenia do E."
+   ],
+   "liczniki": {
+    "1": 0,
+    "3": 0,
+    "3_bez_reguly_1": 2
+   }
+  },
+  {
+   "nazwa": "interpunkcja na brzegu nie wyklucza",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "Издание («по- священного», 2020)."
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "Издание («посвященного», 2020)."
+   ],
+   "liczniki": {
+    "1": 1,
+    "3": 1
+   }
+  },
+  {
+   "nazwa": "wykluczenia: różne pisma, podkreślnik, cyfra",
+   "akapity": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок он- лайн.",
+    "Вирус COVID- выплаты, ab_c- def, ко2вид- ные."
+   ],
+   "oczekiwane": [
+    "Ковид-диссидентов много. Голубых домов. Двух домов и трёхкомнатный. Онлайн.",
+    "Урок онлайн.",
+    "Вирус COVID- выплаты, ab_c- def, ко2вид- ные."
+   ],
+   "liczniki": {
+    "wykluczone": 3
+   }
+  },
+  {
+   "nazwa": "granica akapitu nietknięta",
+   "akapity": [
+    "Онлайн.",
+    "Урок он- лайн.",
+    "Конец строки по-",
+    "священного начало."
+   ],
+   "oczekiwane": [
+    "Онлайн.",
+    "Урок онлайн.",
+    "Конец строки по-",
+    "священного начало."
+   ],
+   "liczniki": {
+    "1": 1
+   }
+  }
+ ],
+ "rozstrzelone": [
+  {
+   "nazwa": "docx: dwa słowa, granica = kilka spacji",
+   "akapity": [
+    "Социальное дистанцирование — термин.",
+    "С о ц и а л ь н о е   д и с т а н ц и р о в а н и е"
+   ],
+   "granica": null,
+   "oczekiwane": [
+    "Социальное дистанцирование — термин.",
+    "Социальное   дистанцирование"
+   ],
+   "liczniki": {
+    "sklejone": 2,
+    "bez_zmian": 0,
+    "przyklejone": 0
+   }
+  },
+  {
+   "nazwa": "docx: apostrof-akcent w środku ciągu zostaje w słowie",
+   "akapity": [
+    "Ковидная болезнь.",
+    "К о в и ' д н а я   б о л е з н ь"
+   ],
+   "granica": null,
+   "oczekiwane": [
+    "Ковидная болезнь.",
+    "Кови'дная   болезнь"
+   ],
+   "liczniki": {
+    "sklejone": 2
+   }
+  },
+  {
+   "nazwa": "docx: urywek po usuniętym akcencie NIE sklejony (К о в и   д н а я)",
+   "akapity": [
+    "Кови'дная болезнь.",
+    "К о в и   д н а я"
+   ],
+   "granica": null,
+   "oczekiwane": [
+    "Кови'дная болезнь.",
+    "К о в и   д н а я"
+   ],
+   "liczniki": {
+    "sklejone": 0,
+    "bez_zmian": 2
+   }
+  },
+  {
+   "nazwa": "docx: jednoliterowe słowa zostają",
+   "akapity": [
+    "Слова а и в к стоят рядом."
+   ],
+   "granica": null,
+   "oczekiwane": [
+    "Слова а и в к стоят рядом."
+   ],
+   "liczniki": {
+    "sklejone": 0
+   }
+  },
+  {
+   "nazwa": "docx: ciąg urwany przy tokenie z kropką zostaje (м а с к а.)",
+   "akapity": [
+    "Маск сказал. Защитная м а с к а."
+   ],
+   "granica": null,
+   "oczekiwane": [
+    "Маск сказал. Защитная м а с к а."
+   ],
+   "liczniki": {
+    "sklejone": 0,
+    "przyklejone": 1
+   }
+  },
+  {
+   "nazwa": "pdf: granice z geometrii jako znacznik",
+   "akapity": [
+    "Социальное дистанцирование.",
+    "С о ц и а́ л ь н о е|д и с т а н ц и р о в а н и е"
+   ],
+   "granica": "|",
+   "oczekiwane": [
+    "Социальное дистанцирование.",
+    "Социа́льное дистанцирование"
+   ],
+   "liczniki": {
+    "sklejone": 2
+   }
+  },
+  {
+   "nazwa": "pdf: bez granic cały ciąg nie jest słowem",
+   "akapity": [
+    "Социальное дистанцирование.",
+    "С о ц и а л ь н о е д и с т а н ц и р о в а н и е"
+   ],
+   "granica": "|",
+   "oczekiwane": [
+    "Социальное дистанцирование.",
+    "С о ц и а л ь н о е д и с т а н ц и р о в а н и е"
+   ],
+   "liczniki": {
+    "sklejone": 0,
+    "bez_zmian": 1
+   }
+  }
+ ],
+ "mojibake": [
+  {
+   "nazwa": "cp1251 odczytany jako Latin-1 (Повесть о Горе-Злочастии)",
+   "tekst": "Áèáëèîòåêà ëèòåðàòóðû Äðåâíåé Ðóñè. XVII âåê. Ïîâåñòü î Ãîðå-Çëî÷àñòèè",
+   "oczekiwany": "Библиотека литературы Древней Руси. XVII век. Повесть о Горе-Злочастии",
+   "kodowanie": "latin-1>cp1251"
+  },
+  {
+   "nazwa": "francuski bez zmian",
+   "tekst": "Le garçon a mangé une crème brûlée à côté de la fenêtre où il était assis.",
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "niemiecki bez zmian",
+   "tekst": "Die schöne Größe der Übung führt zu größeren Ergebnissen für alle Schüler.",
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "islandzki bez zmian",
+   "tekst": "Þetta er íslenskur texti með ð, þ, æ og ö sem á að vera óbreyttur í dag.",
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "fiński bez zmian",
+   "tekst": "Hyvää päivää, tämä on suomenkielinen lause jossa on ä ja ö kirjaimia.",
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "polski bez zmian",
+   "tekst": "Zażółć gęślą jaźń, to zdanie ma wszystkie polskie litery w środku.",
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "portugalski (brak paczki) bez zmian — niska wiarygodność to nie mojibake",
+   "tekst": "Não há dúvida de que a canção da avó é ótima para as crianças.",
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "rosyjski z akcentem łacińskimi samogłoskami bez zmian (крылó, дéрево)",
+   "tekst": "крылó - крылья, дéрево - дерéвья, перó - пéрья, звенó - звéнья, ýлей - ýльи",
+   "oczekiwany": null,
+   "kodowanie": null
+  },
+  {
+   "nazwa": "za krótki tekst nie jest oceniany",
+   "tekst": "Áèáëèîòåêà ëèòåðàòóðû",
+   "oczekiwany": null,
+   "kodowanie": null
+  }
+ ],
+ "mojibake_akapity": [
+  {
+   "nazwa": "jednostka mieszana: mojibake + francuski + krótki nagłówek",
+   "akapity": [
+    "Ïîâåñòü î Ãîðå-Çëî÷àñòèè. Áèáëèîòåêà ëèòåðàòóðû Äðåâíåé Ðóñè.",
+    "Le garçon a mangé une crème brûlée à côté de la fenêtre.",
+    "Ïîâåñòü 33"
+   ],
+   "oczekiwane": [
+    "Повесть о Горе-Злочастии. Библиотека литературы Древней Руси.",
+    "Le garçon a mangé une crème brûlée à côté de la fenêtre.",
+    "Повесть 33"
+   ],
+   "przekodowane": 2
+  },
+  {
+   "nazwa": "same krótkie akapity bez długiego: nic nie przekodowane",
+   "akapity": [
+    "Ïîâåñòü 33",
+    "Áèáëèîòåêà"
+   ],
+   "oczekiwane": [
+    "Ïîâåñòü 33",
+    "Áèáëèîòåêà"
+   ],
+   "przekodowane": 0
+  }
+ ]
+}

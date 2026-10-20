@@ -102,6 +102,47 @@ def wielkie_litery():
     return _klasa(''.join(p['alfabet'] for p in PODSTAWY.values()))
 
 
+@lru_cache(maxsize=1)
+def alfabety_paczek():
+    """Litery KAŻDEJ paczki osobno (obie wielkości) — parametr `alfabety`
+    wspólnego modułu `czyszczenie_tekstu` (mojibake: słowo jest wiarygodne,
+    gdy wszystkie jego litery mieszczą się w alfabecie jednej paczki).
+
+    Odpowiednik Reżysera (`alfabet` + litery `gui/ui.yaml`): `alfabet` z
+    `podstawy.yaml` plus litery natywnych tekstów paczki — pozostałych plików
+    `dictionaries/<kod>/*.yaml` (wartości tekstowe). Sam `alfabet` ru to czysta cyrylica, a druk
+    przedreformowy bywa zapisany z łacińskim „h” za „ѣ” („вhка”): z samym
+    alfabetem 119 linii „Повести о Горе-Злочастии” nie przechodziło progu
+    mojibake (zmierzone 2026-10-20). `podstawy.yaml` w całości odpada jak
+    u Reżysera (opisy pól)."""
+    def napisy(w):
+        if isinstance(w, str):
+            yield w
+        elif isinstance(w, dict):
+            for v in w.values():
+                yield from napisy(v)
+        elif isinstance(w, list):
+            for v in w:
+                yield from napisy(v)
+
+    wynik = []
+    for kod, p in PODSTAWY.items():
+        tekst = p['alfabet']
+        for plik in sorted((_DICT_ROOT / kod).glob('*.yaml')):
+            if plik.name != 'podstawy.yaml':
+                # Wartości, nie surowy plik: komentarze YAML są po polsku i
+                # dawały każdej paczce „ĆĘŁŃŚ”.
+                tekst += ''.join(napisy(yaml.safe_load(plik.read_text(encoding='utf-8'))))
+        litery = set()
+        for z in set(tekst):
+            if z.isalpha():
+                litery.add(z)
+                litery.update(z.upper())
+                litery.update(z.lower())
+        wynik.append(frozenset(litery))
+    return wynik
+
+
 def diakrytyki(kod):
     d = PODSTAWY[kod]['diakrytyki']
     return d + d.upper()

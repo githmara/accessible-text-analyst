@@ -27,8 +27,9 @@ semantykę co `core_pdf.mapa_glifow`. Sygnał jest inny: tam flaga PDFium
 `HasUnicodeMapError` + litery spoza paczek, tu znacznik pdfplumbera „(cid:N)”,
 który sam jest bezpośrednim sygnałem braku mapowania.
 
-Część tekstowa (`oczysc_akapity`: U+F020, rozstrzelenia, przeniesienia) —
-WSPÓLNA specyfikacja z Reżyserem, patrz komentarz nad `_SLOWO`.
+Czyszczenie tekstu (U+F020, mojibake, rozstrzelenia, przeniesienia) jest we
+WSPÓLNYM module `czyszczenie_tekstu.py` (bliźniak bajt w bajt z Reżyserem);
+tu zostają geometria rozstrzeleń PDF i adaptery stron PDF dla tego modułu.
 
 Moduł niczego nie drukuje — komunikaty należą do notatnika (`load_pdf`,
 `load_docx`).
@@ -38,8 +39,9 @@ from __future__ import annotations
 import io
 import re
 import unicodedata
-from collections import Counter
 from typing import NamedTuple
+
+import czyszczenie_tekstu as _ct
 
 PROG_PODEJRZANYCH = 3
 UDZIAL_PODEJRZANYCH = 0.02
@@ -270,269 +272,6 @@ def zakresy_stron(indeksy) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Tekst ze źródeł konwertowanych z PDF: U+F020, rozstrzelenia, przeniesienia
-# ---------------------------------------------------------------------------
-# WSPÓLNA SPECYFIKACJA z Reżyserem (decyzja użytkownika 2026-10-20 „Hybryda”:
-# jedna semantyka dla obu bliźniaków, klasa `formaty_zrodel`). Kolejność kroków
-# jest częścią specyfikacji: U+F020 → rozstrzelenia → przeniesienia; każdy krok
-# liczy słowa dokumentu na SWOIM wejściu.
-#
-# Słowo dokumentu = `_SLOWO`: litery z pojedynczymi łącznikami w środku
-# („ковид-диссидентов”), całe — nie przylega do litery, cyfry, „_” ani „-”;
-# klucz casefold, bez znaków łączących. Fragment przeniesienia „бело-” słowem
-# nie jest (przylega do „-”), prawy fragment „голубых” po spacji — jest.
-
-_SPACJA_PUA = chr(0xF020)    # spacja z fontu symboli (Wingdings) — wcięcia list w DOCX z PDF
-_SLOWO = re.compile(r"(?<![\w-])[^\W\d_]+(?:-[^\W\d_]+)*(?![\w-])")
-# Kandydat przeniesienia: token kończący się literą, „-”, ≥ 1 spacja, token
-# zaczynający się literą (wielkość, pismo i wykluczenia sprawdza `_przeniesienie`).
-_PRZENIESIENIE = re.compile(r"(?<!\S)(\S*[^\W\d_])- +([^\W\d_]\S*)")
-# Znaki, które wykluczają kandydata, gdy stoją W tokenie (adresy, slugi).
-_ZNAKI_ADRESU = frozenset("./@:_" + chr(0xFF20))
-# Interpunkcja zdaniowa zdejmowana z brzegu tokenu przed tym testem: kropka
-# końca zdania po „мы.” nie czyni z niego adresu.
-_BRZEG_LEWY = "«„“\"'([‹"
-_BRZEG_PRAWY = ".,;:!?…»”\"')]›"
-MIN_ROZSTRZELENIE = 4        # tyle co najmniej jednoliterowych tokenów w serii
-
-
-def _bez_znakow_laczacych(tekst: str) -> str:
-    return "".join(z for z in tekst if not unicodedata.combining(z))
-
-
-def slowa_dokumentu(akapity) -> Counter:
-    """Licznik słów dokumentu (`_SLOWO`, casefold, bez znaków łączących)."""
-    licz: Counter = Counter()
-    for akapit in akapity:
-        for m in _SLOWO.finditer(_bez_znakow_laczacych(akapit)):
-            licz[m.group(0).casefold()] += 1
-    return licz
-
-
-def _pismo(znak: str) -> str:
-    """Pierwsze słowo nazwy Unicode: LATIN, CYRILLIC, …"""
-    return unicodedata.name(znak, "?").split(" ", 1)[0]
-
-
-def zamien_spacje_pua(tekst: str) -> tuple[str, int]:
-    """U+F020 → zwykła spacja (przed normalizacją spacji w loaderze)."""
-    n = tekst.count(_SPACJA_PUA)
-    return (tekst.replace(_SPACJA_PUA, " ") if n else tekst), n
-
-
-# --- rozstrzelenia -----------------------------------------------------------
-
-def _jednoliterowy(token: str) -> bool:
-    """Litera + ewentualne znaki łączące (akcent): „о́”."""
-    rdzen = _bez_znakow_laczacych(token)
-    return len(rdzen) == 1 and rdzen.isalpha() and token[:1] == rdzen
-
-
-def sklej_rozstrzelenia(akapity: list[str], slowa: Counter | None = None
-                        ) -> tuple[list[str], int, int]:
-    """Skleja tekst rozstrzelony „у с т о й ч и в о е” → „устойчивое”.
-
-    Seria = co najmniej `MIN_ROZSTRZELENIE` tokenów jednoliterowych (litera +
-    znaki łączące) rozdzielonych POJEDYNCZYMI spacjami; dwie spacje i więcej
-    rozdzielają słowa. Seria jest sklejana tylko wtedy, gdy sklejona forma
-    (casefold, bez znaków łączących) jest słowem dokumentu — jednoliterowe
-    słowa („в к с о и а у я”, „w z i”) obok siebie nie tworzą słowa, więc nie
-    są sklejane. Zwraca (akapity, sklejone serie, pozostawione serie).
-    """
-    if slowa is None:
-        slowa = slowa_dokumentu(akapity)
-    sklejone = pozostawione = 0
-    wynik = []
-    for akapit in akapity:
-        czesci = re.split(r"( +)", akapit)       # [token, sep, token, sep, …]
-        if len(czesci) < 2 * MIN_ROZSTRZELENIE - 1:
-            wynik.append(akapit)
-            continue
-        out: list[str] = []
-        i = 0
-        while i < len(czesci):
-            j = i
-            if i % 2 == 0 and _jednoliterowy(czesci[i]):
-                while (j + 2 < len(czesci) and czesci[j + 1] == " "
-                       and _jednoliterowy(czesci[j + 2])):
-                    j += 2
-            if (j - i) // 2 + 1 >= MIN_ROZSTRZELENIE:
-                razem = "".join(czesci[i:j + 1:2])
-                if slowa[_bez_znakow_laczacych(razem).casefold()]:
-                    out.append(razem)
-                    sklejone += 1
-                else:
-                    out.extend(czesci[i:j + 1])
-                    pozostawione += 1
-                i = j + 1
-            else:
-                out.append(czesci[i])
-                i += 1
-        wynik.append("".join(out))
-    return wynik, sklejone, pozostawione
-
-
-# --- przeniesienia -----------------------------------------------------------
-
-def _rdzen(token: str, brzeg: str, z_lewej: bool) -> tuple[str, str]:
-    """(otoczka, rdzeń): interpunkcja zdaniowa zdjęta z jednego brzegu tokenu."""
-    if z_lewej:
-        k = len(token) - len(token.lstrip(brzeg))
-        return token[:k], token[k:]
-    k = len(token.rstrip(brzeg))
-    return token[k:], token[:k]
-
-
-def _wykluczony(rdzen: str) -> bool:
-    return any(z in _ZNAKI_ADRESU or z.isdigit() for z in rdzen)
-
-
-def _regula(lewy: str, prawy: str, slowa: Counter) -> int:
-    """Reguła 1–4 wspólnej specyfikacji dla kandydata (lewy, prawy).
-
-    Liczniki są z CAŁEGO dokumentu bez samego kandydata: jego prawy fragment
-    liczy się jako słowo (stoi po spacji), więc odejmujemy to jedno wystąpienie.
-    1. „L+R” jest słowem → sklej bez łącznika;
-    2. „L-R” jest słowem → sklej z łącznikiem;
-    3. R nie jest samodzielnym słowem → sklej bez łącznika;
-    4. inaczej bez zmian („бело- голубых”, „двух- и трёх…”).
-    """
-    if slowa[(lewy + prawy).casefold()]:
-        return 1
-    if slowa[(lewy + "-" + prawy).casefold()]:
-        return 2
-    wlasne = 1 if _SLOWO.fullmatch(prawy) else 0
-    return 3 if slowa[prawy.casefold()] - wlasne <= 0 else 4
-
-
-def _przeniesienie(lewy_tok: str, prawy_tok: str):
-    """(otoczka L, L, R, otoczka R) albo None, gdy kandydat jest wykluczony."""
-    ol, lewy = _rdzen(lewy_tok, _BRZEG_LEWY, True)
-    orr, prawy = _rdzen(prawy_tok, _BRZEG_PRAWY, False)
-    if (not lewy or not prawy or not lewy[-1].isalpha() or not prawy[0].islower()
-            or prawy.endswith("-") or _wykluczony(lewy) or _wykluczony(prawy)
-            or _pismo(lewy[-1]) != _pismo(prawy[0])):
-        return None
-    return ol, lewy, prawy, orr
-
-
-def _zlacz(lewy: str, prawy: str, regula: int) -> str:
-    return lewy + ("-" if regula == 2 else "") + prawy
-
-
-def sklej_przeniesienia(akapity: list[str], slowa: Counter | None = None
-                        ) -> tuple[list[str], Counter]:
-    """Przeniesienia „wyraz- wyraz” WEWNĄTRZ akapitu wg wspólnej specyfikacji.
-
-    Kandydat: token kończący się literą, „-”, jedna lub więcej spacji, token
-    zaczynający się MAŁĄ literą tego samego pisma. Wykluczony, gdy w którymś
-    tokenie (po zdjęciu interpunkcji zdaniowej z brzegu) stoi „.”, „/”, „@”,
-    „＠”, „:”, „_” albo cyfra, albo gdy prawy zaczyna się wielką literą
-    („ПО- СВЯЩЕННОГО”). Decyzja: `_regula`. Myślniki i łącznik bez spacji
-    („по-английски”) nie są kandydatami z definicji.
-
-    Zwraca (akapity, licznik: 1/2/3/4 = reguła, "wykluczone").
-    """
-    if slowa is None:
-        slowa = slowa_dokumentu(akapity)
-    licz: Counter = Counter()
-
-    def zamien(m):
-        k = _przeniesienie(m.group(1), m.group(2))
-        if k is None:
-            licz["wykluczone"] += 1
-            return m.group(0)
-        ol, lewy, prawy, orr = k
-        r = _regula(lewy, prawy, slowa)
-        licz[r] += 1
-        return m.group(0) if r == 4 else ol + _zlacz(lewy, prawy, r) + orr
-
-    return [_PRZENIESIENIE.sub(zamien, a) if "-" in a else a for a in akapity], licz
-
-
-_KONIEC = re.compile(r"(?<!\S)(\S*[^\W\d_])-$")
-_POCZATEK = re.compile(r"^([^\W\d_]\S*)")
-
-
-def sklej_przez_akapity(akapity: list[str], style: list[str],
-                        slowa: Counter | None = None) -> tuple[list[str], Counter]:
-    """Przeniesienie przez granicę akapitu — te same reguły 1–4 co w akapicie.
-
-    Bezpiecznik ATA ponad specyfikację: akapit kończy się „litera-”, NASTĘPNY
-    akapit (bez pustego między nimi) ma ten sam styl i zaczyna się literą;
-    granica akapitu gra rolę spacji. Poza tym (inny styl, pusty akapit) bez
-    zmian, a wielka litera („-И-” → „Не хвались…”) jest wykluczona jak w akapicie.
-    `akapity` — wszystkie akapity dokumentu z pustymi; `style` — nazwy stylów.
-    Zwraca (akapity, licznik: 1/2/3/4, "wykluczone", "bez_bezpiecznika").
-    """
-    if slowa is None:
-        slowa = slowa_dokumentu(akapity)
-    licz: Counter = Counter()
-    wynik: list[str] = []
-    i = 0
-    while i < len(akapity):
-        tekst = akapity[i]
-        m = _KONIEC.search(tekst) if tekst.endswith("-") else None
-        if m:
-            nast = akapity[i + 1] if i + 1 < len(akapity) else ""
-            p = _POCZATEK.match(nast)
-            if not (p and i + 1 < len(style) and style[i + 1] == style[i]):
-                licz["bez_bezpiecznika"] += 1
-            else:
-                k = _przeniesienie(m.group(1), p.group(1))
-                if k is None:
-                    licz["wykluczone"] += 1
-                else:
-                    ol, lewy, prawy, orr = k
-                    r = _regula(lewy, prawy, slowa)
-                    licz[r] += 1
-                    if r != 4:
-                        wynik.append(tekst[:m.start()] + ol + _zlacz(lewy, prawy, r) + orr
-                                     + nast[p.end():])
-                        i += 2
-                        continue
-        wynik.append(tekst)
-        i += 1
-    return wynik, licz
-
-
-class CzyszczenieTekstu(NamedTuple):
-    spacje_pua: int
-    rozstrzelenia_sklejone: int
-    rozstrzelenia_pozostawione: int
-    przeniesienia: Counter           # w akapicie: 1/2/3/4, "wykluczone"
-    przez_akapity: Counter           # jw. + "bez_bezpiecznika"
-
-
-def oczysc_akapity(akapity: list[str], style: list[str] | None = None,
-                   przeniesienia: bool = True) -> tuple[list[str], CzyszczenieTekstu]:
-    """Cały potok w kolejności specyfikacji: U+F020 → rozstrzelenia → przeniesienia.
-
-    Wspólne wejście `load_docx` i `load_pdf` oraz bramki źródła raportu
-    (`zrodlo_raportu`). Bez `style` przez granicę akapitu nie sklejamy.
-    `przeniesienia=False` dla PDF: tam przeniesienie końca wiersza skleja już
-    `clean_pdf_text` (dywiz na końcu wiersza), a „wyraz- wyraz” w jednym
-    wierszu PDF to
-    prawdziwy zawieszony łącznik albo myślnik.
-    """
-    pua = 0
-    tmp = []
-    for a in akapity:
-        a, n = zamien_spacje_pua(a)
-        pua += n
-        tmp.append(a)
-    tmp, roz_s, roz_p = sklej_rozstrzelenia(tmp)
-    slowa = slowa_dokumentu(tmp)
-    przez: Counter = Counter()
-    if style is not None:
-        tmp, przez = sklej_przez_akapity(tmp, style, slowa)
-    prz: Counter = Counter()
-    if przeniesienia:
-        tmp, prz = sklej_przeniesienia(tmp, slowa)
-    return tmp, CzyszczenieTekstu(pua, roz_s, roz_p, prz, przez)
-
-
-# ---------------------------------------------------------------------------
 # PDF: granice słów w tekście rozstrzelonym z GEOMETRII znaków
 # ---------------------------------------------------------------------------
 # W warstwie tekstu PDF rozstrzelenie i odstęp między słowami dają TĘ SAMĄ
@@ -546,7 +285,8 @@ def oczysc_akapity(akapity: list[str], style: list[str] | None = None,
 # Po literze z akcentem granica dopiero powyżej (PROG + 1) × mediana: 8,3 pt
 # to nie granica, 17,96 pt („Волна́ какая”, s. 42) — tak; zakaz bezwzględny
 # zlewał takie słowa.
-# Decyzji o sklejeniu tu NIE ma: należy do wspólnego modułu (etap 4, część 2).
+# Decyzji o sklejeniu tu NIE ma: `czyszczenie_tekstu.scal_rozstrzelone(...,
+# granica=ZNACZNIK_GRANICY)` dostaje tekst z granicami z `oznacz_granice`.
 PROG_GRANICY_ROZSTRZELENIA = 1.5   # granica: odstęp > PROG × mediana odstępów serii
 
 
@@ -587,7 +327,7 @@ def _granice_serii(litery: list, odstepy: list) -> tuple:
 
 
 def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona]:
-    """Serie ≥ `MIN_ROZSTRZELENIE` jednoliterowych słów w jednej linii strony.
+    """Serie ≥ `MIN_ROZSTRZELENIE` (modułu wspólnego) jednoliterowych słów w jednej linii strony.
 
     `strona` to `pdfplumber.page.Page` — po `napraw_strone`, jeśli ta była
     potrzebna (akcent jest wtedy doklejony do litery i ma jej położenie).
@@ -601,7 +341,7 @@ def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona
     brzegi = {"przed": "", "po": ""}
 
     def zamknij():
-        if len(run) >= MIN_ROZSTRZELENIE:
+        if len(run) >= _ct.MIN_ROZSTRZELENIE:
             litery = [w["text"] for w in run]
             odstepy = [round(b["x0"] - a["x1"], 2) for a, b in zip(run, run[1:])]
             serie.append(SeriaRozstrzelona(tuple(litery), _granice_serii(litery, odstepy),
@@ -616,22 +356,79 @@ def serie_rozstrzelone(strona, x_tolerance: float = 3) -> list[SeriaRozstrzelona
         if run and ta_sama_linia and tekst and all(unicodedata.combining(z) for z in tekst):
             run[-1] = {**run[-1], "text": run[-1]["text"] + tekst}   # położenie litery, nie akcentu
             continue
-        if _jednoliterowy(tekst):
+        if _ct.litera_pojedyncza(tekst):
             if run and not ta_sama_linia:
                 zamknij()
             run.append(w)
             continue
         # Litera z interpunkcją zdaniową: „и,” kończy serię, „«л” ją zaczyna.
-        rdzen_po = tekst.rstrip(_BRZEG_PRAWY)
-        if run and ta_sama_linia and rdzen_po != tekst and _jednoliterowy(rdzen_po):
+        rdzen_po = tekst.rstrip(_ct.ZAMYKAJACE)
+        if run and ta_sama_linia and rdzen_po != tekst and _ct.litera_pojedyncza(rdzen_po):
             run.append({**w, "text": rdzen_po})
             brzegi["po"] = tekst[len(rdzen_po):]
             zamknij()
             continue
         zamknij()
-        rdzen_przed = tekst.lstrip(_BRZEG_LEWY)
-        if rdzen_przed != tekst and _jednoliterowy(rdzen_przed):
+        rdzen_przed = tekst.lstrip(_ct.OTWIERAJACE)
+        if rdzen_przed != tekst and _ct.litera_pojedyncza(rdzen_przed):
             run.append({**w, "text": rdzen_przed})
             brzegi["przed"] = tekst[:len(tekst) - len(rdzen_przed)]
     zamknij()
     return serie
+
+
+# Znak granicy słowa z geometrii, wstawiany w tekst strony dla
+# `czyszczenie_tekstu.scal_rozstrzelone(..., granica=ZNACZNIK_GRANICY)` (ten
+# zamienia go w wyniku na spację). Prywatny obszar Unicode: nie występuje
+# w tekście, nie jest białym znakiem (przeżywa `clean_pdf_text`), nie jest
+# literą (bramka źródła go nie widzi) i nie koduje się w Latin-1 (mojibake go
+# nie rusza).
+ZNACZNIK_GRANICY = chr(0xE000)
+
+
+def oznacz_granice(tekst: str, serie: list[SeriaRozstrzelona]) -> tuple[str, int]:
+    """Wstawia `ZNACZNIK_GRANICY` w granice słów serii rozstrzelonych strony.
+
+    Granice WEWNĄTRZ serii z geometrii (`granice`) oraz OBA BRZEGI serii:
+    tam, gdzie kończy się seria, kończy się też słowo — bez znacznika
+    pojedyncza spacja do sąsiedniego słowa (albo koniec linii, który
+    `clean_pdf_text` zamienia na spację) wyglądałaby dla modułu jak urwany
+    kawałek („przyklejone”). Brzeg z interpunkcją (`przed`/`po`, „… к и,”)
+    zostaje bez znacznika: rozdzielenie „и” i „,” wstawiłoby spację przed
+    przecinkiem.
+
+    Serie szukamy w kolejności, od kursora, dokładnie w postaci `.tekst()`
+    (tak stoją w `extract_text`). Seria, której nie ma w tekście (linia
+    zdjęta jako kolontytuł), jest pomijana. Zwraca (tekst, oznaczonych serii).
+    """
+    wynik, kursor, n = [], 0, 0
+    for seria in serie:
+        k = tekst.find(seria.tekst(), kursor)
+        if k < 0:
+            continue
+        koniec = k + len(seria.tekst())
+        czesci = [seria.litery[0]]
+        for litera, granica in zip(seria.litery[1:], seria.granice):
+            czesci.append((" " + ZNACZNIK_GRANICY + " " if granica else " ") + litera)
+        lewy = (ZNACZNIK_GRANICY + " " if not seria.przed and k > 0 and tekst[k - 1] in " \n"
+                else "")
+        prawy = (" " + ZNACZNIK_GRANICY if not seria.po and koniec < len(tekst)
+                 and tekst[koniec] in " \n" else "")
+        wynik.append(tekst[kursor:k] + lewy + seria.przed + "".join(czesci) + seria.po + prawy)
+        kursor = koniec
+        n += 1
+    wynik.append(tekst[kursor:])
+    return "".join(wynik), n
+
+
+def oczysc_strone_pdf(tekst: str, alfabety) -> tuple[str, dict]:
+    """U+F020 i mojibake jednej strony PDF — kolejność jak `oczysc_akapity_docx`.
+
+    Jednostką mojibake jest strona, akapitami jej linie (krótkie linie dostają
+    kodowanie, które wygrało w długich liniach strony). Zwraca (tekst,
+    {"spacja_symbol": n, "mojibake_linie": n, "kodowania": {...}}).
+    """
+    linie, spacje = _ct.zamien_spacje_symbol(tekst.split("\n"))
+    linie, info = _ct.napraw_mojibake_akapitow(linie, alfabety)
+    return "\n".join(linie), {"spacja_symbol": spacje, "mojibake_linie": info["przekodowane"],
+                               "kodowania": info["kodowania"]}

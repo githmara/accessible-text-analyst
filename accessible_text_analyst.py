@@ -508,13 +508,19 @@ def load_pdf(path):
     except ImportError:
         print("[ВНИМАНИЕ] pdfplumber не установлен. Выполните: pip install pdfplumber")
         return []
-    from naprawa_zrodel import napraw_strone, usun_znaczniki, zakresy_stron, ZNACZNIK_CID
+    from naprawa_zrodel import (napraw_strone, usun_znaczniki, zakresy_stron, ZNACZNIK_CID,
+                                serie_rozstrzelone, oznacz_granice, oczysc_strone_pdf,
+                                ZNACZNIK_GRANICY)
+    from czyszczenie_tekstu import scal_rozstrzelone
+    from shamanic_locale import alfabety_paczek
     _fonts = {}
     with pdfplumber.open(path) as pdf:
         total = len(pdf.pages)
         # Naprawa PRZED pierwszym extract_text: pdfplumber buforuje mapę tekstu.
         checks = [napraw_strone(page, _fonts) for page in pdf.pages]
         info = [_page_text_and_number_candidates(page) for page in pdf.pages]
+        # Granice słów w tekście rozstrzelonym — z GEOMETRII znaków, nie z tekstu.
+        spaced = [serie_rozstrzelone(page) for page in pdf.pages]
     texts, removed_numbers = _page_numbers_to_drop(info)
     # Pas marginesu znany tylko dla stron z warstwą tekstu; strona z OCR → None.
     margins = [m if t.strip() else None for (t, _f, m) in info]
@@ -564,8 +570,9 @@ def load_pdf(path):
     if still_empty:
         print(f"  [ВНИМАНИЕ] Страницы без текста, их содержимого НЕ будет в корпусе: "
               f"{', '.join(str(i + 1) for i in still_empty)}.")
-    raw_pages = [t for t in texts if t.strip()]
-    raw_margins = [m for t, m in zip(texts, margins) if t.strip()]
+    raw_idx = [i for i, t in enumerate(texts) if t.strip()]
+    raw_pages = [texts[i] for i in raw_idx]
+    raw_margins = [margins[i] for i in raw_idx]
     skipped = len(still_empty)
     if not raw_pages:
         print("  [ВНИМАНИЕ] OCR не вернул текста ни на одной странице.")
@@ -578,21 +585,36 @@ def load_pdf(path):
             print(f"    - '{bp[:70]}'")
         if len(removed_bp) > 5:
             print(f"    ... и ещё {len(removed_bp)-5}")
+    # Wspólny moduł `czyszczenie_tekstu` (bliźniak bajt w bajt z Reżyserem):
+    # na stronie z liniami — U+F020 i mojibake (jednostka = strona), granice
+    # rozstrzeleń z geometrii jako ZNACZNIK_GRANICY; po clean_pdf_text decyzja
+    # o sklejeniu rozstrzeleń na całym dokumencie. Przeniesień w PDF moduł nie
+    # skleja: dywiz na końcu wiersza łączy clean_pdf_text.
+    _alf = alfabety_paczek()
+    _sym = _moji = _marked = 0
+    _enc = {}
+    for _j, _raw in enumerate(cleaned_raw):
+        _raw, _n = oznacz_granice(_raw, spaced[raw_idx[_j]])
+        _marked += _n
+        _raw, _ci = oczysc_strone_pdf(_raw, _alf)
+        _sym += _ci["spacja_symbol"]
+        _moji += _ci["mojibake_linie"]
+        for _k, _v in _ci["kodowania"].items():
+            _enc[_k] = _enc.get(_k, 0) + _v
+        cleaned_raw[_j] = _raw
     # Применяем финальную очистку
     pages = [p for p in (clean_pdf_text(r) for r in cleaned_raw) if p]
-    # U+F020 → spacja. Tekstu rozstrzelonego w PDF NIE sklejamy po tekście:
-    # rozstrzelenie i odstęp między słowami dają tę samą pojedynczą spację
-    # („в о́ й н ы.” → „во́йн ы.”). Granice słów daje geometria
-    # (`naprawa_zrodel.serie_rozstrzelone`); decyzja o sklejeniu przyjdzie ze
-    # wspólnego modułu z Reżyserem. Przeniesienia skleja clean_pdf_text.
-    from naprawa_zrodel import zamien_spacje_pua
-    _pua = 0
-    for _i, _p in enumerate(pages):
-        _p, _n = zamien_spacje_pua(_p)
-        if _n:
-            pages[_i], _pua = re.sub(r"\s+", " ", _p).strip(), _pua + _n
-    if _pua:
-        print(f"  PDF: символов-пробелов шрифта Symbol (U+F020) заменено обычным пробелом: {_pua}.")
+    pages, _roz = scal_rozstrzelone(pages, granica=ZNACZNIK_GRANICY)
+    pages = [re.sub(r"\s+", " ", p).strip() for p in pages]
+    if _sym:
+        print(f"  PDF: символов-пробелов шрифта Symbol (U+F020) заменено обычным пробелом: {_sym}.")
+    if _moji:
+        print(f"  PDF: исправлена неверная кодировка (mojibake) в строках: {_moji} "
+              f"({', '.join(f'{k}: {v}' for k, v in sorted(_enc.items()))}).")
+    if any(_roz.values()):
+        print(f"  PDF: текст вразрядку (границы слов по положению букв, серий с границами: "
+              f"{_marked}) — склеено: {_roz['sklejone']}, оставлено (слова нет в документе): "
+              f"{_roz['bez_zmian']}, оставлено (обрывок рядом с другим словом): {_roz['przyklejone']}.")
     print(f"  PDF: {total} страниц, загружено {len(pages)}, пропущено {skipped}.")
     return pages
 
@@ -600,6 +622,15 @@ def load_txt(path, page_size=2000):
     """Загружает текстовый файл и разбивает на псевдостраницы."""
     with open(path, encoding="utf-8") as f:
         raw = f.read()
+    # Mojibake („Áèáëèîòåêà”) — wspólny moduł `czyszczenie_tekstu`; jednostka =
+    # cały plik, akapity = linie.
+    from czyszczenie_tekstu import napraw_mojibake_akapitow
+    from shamanic_locale import alfabety_paczek
+    _lines, _mi = napraw_mojibake_akapitow(raw.split("\n"), alfabety_paczek())
+    if _mi["przekodowane"]:
+        raw = "\n".join(_lines)
+        print(f"  TXT: исправлена неверная кодировка (mojibake) в строках: {_mi['przekodowane']} "
+              f"({', '.join(f'{k}: {v}' for k, v in sorted(_mi['kodowania'].items()))}).")
     pages, text = [], raw.strip()
     # Применяем CUSTOM_PATTERNS
     if CUSTOM_PATTERNS:
@@ -620,21 +651,21 @@ def load_txt(path, page_size=2000):
     return pages
 
 
-def _print_text_cleanup(kind, cz):
-    """Строки отчёта о чистке текста (`naprawa_zrodel.oczysc_akapity`)."""
-    p, x = cz.przeniesienia, cz.przez_akapity
-    if cz.spacje_pua:
+def _print_text_cleanup(kind, c):
+    """Строки отчёта о чистке текста (`czyszczenie_tekstu.oczysc_akapity_docx`)."""
+    if c["spacja_symbol"]:
         print(f"  {kind}: символов-пробелов шрифта Symbol (U+F020) заменено обычным пробелом: "
-              f"{cz.spacje_pua}.")
-    if cz.rozstrzelenia_sklejone or cz.rozstrzelenia_pozostawione:
-        print(f"  {kind}: текст вразрядку — склеено серий: {cz.rozstrzelenia_sklejone}, "
-              f"оставлено (склеенное слово не встречается в документе): "
-              f"{cz.rozstrzelenia_pozostawione}.")
-    if sum(p.values()) or sum(x.values()):
-        print(f"  {kind}: переносы внутри абзацев — склеено: {p[1] + p[3]}, "
-              f"с сохранением дефиса: {p[2]}, оставлено: {p[4]}, не переносы: {p['wykluczone']}; "
-              f"через границу абзаца — склеено: {x[1] + x[3]}, с дефисом: {x[2]}, "
-              f"оставлено: {x[4] + x['wykluczone'] + x['bez_bezpiecznika']}.")
+              f"{c['spacja_symbol']}.")
+    if c["mojibake_akapity"]:
+        print(f"  {kind}: исправлена неверная кодировка (mojibake) в абзацах: {c['mojibake_akapity']}.")
+    if c["rozstrzelone_sklejone"] or c["rozstrzelone_bez_zmian"] or c["rozstrzelone_przyklejone"]:
+        print(f"  {kind}: текст вразрядку — склеено: {c['rozstrzelone_sklejone']}, "
+              f"оставлено (слова нет в документе): {c['rozstrzelone_bez_zmian']}, "
+              f"оставлено (обрывок рядом с другим словом): {c['rozstrzelone_przyklejone']}.")
+    _h = [c.get(f"przeniesienia_{k}", 0) for k in ("1", "2", "3", "4", "wykluczone")]
+    if any(_h):
+        print(f"  {kind}: переносы внутри абзацев — склеено: {_h[0] + _h[2]}, "
+              f"с сохранением дефиса: {_h[1]}, оставлено: {_h[3]}, не переносы: {_h[4]}.")
 
 
 def load_docx(path, page_size=2000):
@@ -645,13 +676,14 @@ def load_docx(path, page_size=2000):
         print("[ВНИМАНИЕ] python-docx не установлен. Выполните: pip install python-docx")
         return []
     doc = Document(path)
-    # DOCX zapisany z PDF — moduł `naprawa_zrodel`, wspólna specyfikacja
-    # z Reżyserem: U+F020 → spacja, rozstrzelenia („у с т о й ч и в о е”),
-    # przeniesienia „по- священного” (reguły 1–4; zawieszony łącznik
-    # „двух- и трёх…”, myślniki i „по-английски” zostają).
-    from naprawa_zrodel import oczysc_akapity
-    _paras, _cz = oczysc_akapity(
-        [p.text for p in doc.paragraphs], [p.style.name for p in doc.paragraphs])
+    # DOCX zapisany z PDF — wspólny moduł `czyszczenie_tekstu` (bliźniak bajt
+    # w bajt z Reżyserem): U+F020 → spacja, mojibake („Áèáëèîòåêà”),
+    # rozstrzelenia („у с т о й ч и в о е”), przeniesienia „по- священного”
+    # (reguły 1–4; zawieszony łącznik „двух- и трёх…”, myślniki
+    # i „по-английски” zostają). Liczba akapitów się nie zmienia.
+    from czyszczenie_tekstu import oczysc_akapity_docx
+    from shamanic_locale import alfabety_paczek
+    _paras, _cz = oczysc_akapity_docx([p.text for p in doc.paragraphs], alfabety_paczek())
     _print_text_cleanup("DOCX", _cz)
     raw = "  ".join(p for p in _paras if p.strip())
     raw = re.sub(r"\s+", " ", raw).strip()
