@@ -60,6 +60,7 @@ jobs:
           python .github/scripts/test_bramka_printow.py
           python .github/scripts/test_audyt_podstaw.py
           python .github/scripts/test_zrodlo_raportu.py
+          python .github/scripts/test_wzorce_raportu.py
           # Wspólny moduł z Reżyserem (bajt w bajt) — runner i wektory też wspólne, sam stdlib.
           python czyszczenie_tekstu_wektory.py
 

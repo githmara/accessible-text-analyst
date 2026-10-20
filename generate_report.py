@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from shamanic_locale import (PODSTAWY, get_ui_lang, kody_regex, lingua_jezyki, nazwy_regex, t,
                              warianty_skrotowcow)
 import zrodlo_raportu
+from czyszczenie_tekstu import CELE_MOJIBAKE, ZRODLA_MOJIBAKE
 
 # Język UI (printy w konsoli) — odczytywany z config.json/ini, fallback 'en'.
 UI_LANG = get_ui_lang()
@@ -239,6 +240,17 @@ _NLP_DOMAIN_WORDS = (
     r"Face|Hugging"
 )
 
+# Warstwa tekstu PDF i czyszczenie źródeł (od 2026-10-20: bramka ToUnicode,
+# naprawa z fontu, OCR stron nieczytelnych, U+F020, mojibake). Bez tego
+# „Symbol” dostawał od lingua lang="pl", „fonttools” lang="fi", a „cid”, „OCR”
+# i „U+F020” zostawały w głosie rosyjskim (zmierzone na raporcie z tymi
+# wydrukami). Nazwy kodowań biorą się ze stałych wspólnego modułu
+# `czyszczenie_tekstu`, nie z listy tutaj — nowa strona kodowa w module
+# dostaje span sama.
+_PDF_TEXT_LAYER_TERMS = r"ToUnicode|fontTools|fonttools|mojibake|easyocr|pypdfium2|OCR|Symbol|cid"
+_KODOWANIA = "|".join(re.escape(k) for k in sorted(set(ZRODLA_MOJIBAKE) | set(CELE_MOJIBAKE),
+                                                    key=len, reverse=True))
+
 # Warianty modeli spaCy w narracji: "Large (lg)", "версии sm", "*_md".
 # Standalone w nawiasach albo poza — w obu przypadkach en. Dłuższe
 # warianty jak `*_lg` są obsługiwane osobnym patternem niżej.
@@ -255,6 +267,23 @@ EN_HARDCODE_PATTERNS = [
     # Kropka w klasie znaków trzonu obsługuje nazwy wielokropkowe w całości
     # (omorfi_recased.describe.hfst, config.example.json).
     (r"\b([A-Za-z][A-Za-z0-9_.-]*\.(?:csv|json|html|docx|py|md|txt|ipynb|yaml|yml|toml|cfg|ini|sh|bat|ps1|hfst))\b",
+     r'<span lang="en">\1</span>'),
+
+    # Para kodowań mojibake „latin-1>cp1251” jako JEDEN span — trzy osobne
+    # spany kazały NVDA przeczytać „>” głosem rosyjskim między nimi.
+    (r"(?<![\w-])((?:" + _KODOWANIA + r")&gt;(?:" + _KODOWANIA + r"))(?![\w-])",
+     r'<span lang="en">\1</span>'),
+    (r"(?<![\w-])(" + _KODOWANIA + r")(?![\w-])",
+     r'<span lang="en">\1</span>'),
+
+    # Polecenie instalacji w całości: „pip install fonttools”.
+    (r"\b(pip install [A-Za-z0-9_.\-]+)",
+     r'<span lang="en">\1</span>'),
+
+    # Punkt kodowy Unicode („U+F020”) i surowy znacznik pdfplumbera „(cid:602)”.
+    (r"(?<![\w+])(U\+[0-9A-Fa-f]{4,6})\b",
+     r'<span lang="en">\1</span>'),
+    (r"(\(cid:\d+\))",
      r'<span lang="en">\1</span>'),
 
     # Nazwy modeli spaCy: pl_core_news_lg, en_core_web_lg, ...
@@ -300,6 +329,10 @@ EN_HARDCODE_PATTERNS = [
     # ============ Nazwy własne, akronimy, terminy domeny ============
     # Czytniki ekranu, TTS
     (r"\b(" + _SCREEN_READERS_AND_TTS + r")\b",
+     r'<span lang="en">\1</span>'),
+
+    # Warstwa tekstu PDF, OCR, mojibake (ToUnicode, fontTools, cid, Symbol…)
+    (r"\b(" + _PDF_TEXT_LAYER_TERMS + r")\b",
      r'<span lang="en">\1</span>'),
 
     # Akronimy techniczne (PDF, HTML, NER, BoW, RAM, ...)
