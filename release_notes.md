@@ -4,6 +4,31 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.11.0 — broken PDF text layers are detected and rebuilt, and a report can only describe its own source
+
+**Theme.** A 551-page Russian dictionary saved by macOS Preview went into the notebook as `(cid:602)(cid:619)…`: the letter map of its fonts stopped after "М", pdfplumber printed the raw glyph numbers, and language detection called the corpus German. Nothing said that the text layer was garbage. This release detects such pages, rebuilds them from the fonts embedded in the PDF where that is possible, cleans up documents converted from PDF to Word, and adds a gate that keeps a report from being written about a different source. Minor bump: new behaviour, a new dependency (`fonttools`) and a new launcher.
+
+### What changed
+- **Text-layer gate for PDFs.** A page whose text is mostly `(cid:N)` markers is never passed on silently. The notebook lists such pages by number, sends them to local OCR when `easyocr` is installed, and otherwise says they were skipped. The corpus language is never chosen from garbage.
+- **Repair from the embedded font** (`naprawa_zrodel.py`, new dependency `fonttools<4.68`). For Type0 fonts the character code leads to the glyph number (`CIDToGIDMap` honoured); the glyph is looked up in the font's own `cmap`, then in its glyph names. Only fonts embedded in the PDF are used. A page counts as repaired only when every unmapped code resolves; otherwise it is reported. On the dictionary: 550 of 550 broken pages repaired, about 10 460 stress marks recovered, letters agreeing with the publisher's Word version on 99.9 % of most sampled pages.
+- **Shared clean-up module `czyszczenie_tekstu.py`**, byte-for-byte identical with the Director's copy, with test vectors and a runner (`python czyszczenie_tekstu_wektory.py`, now in the release self-test). It joins words split at line ends only with evidence from the same document, joins letter-spaced words (in PDFs the word boundaries come from glyph geometry), replaces Symbol-font spaces and re-encodes text saved in the wrong encoding (Cyrillic read as Latin-1 and similar). Edit it only together with the Director. `.gitattributes` keeps its three files in LF.
+- **Source gate in `generate_report.py`** (`zrodlo_raportu.py`, exit code 3, nothing written on refusal). The notebook's printed source path, a completed run, saved outputs and the printed page openings must all match the source in `config.json`. Before, a report about source A could be written into source B's folder, for example after running the notebook in VS Code without saving the outputs. Scans read by OCR, `custom_patterns` and unreadable files make the content check unverifiable instead of refusing.
+- **`run_all.py`** registers the `analyst_env` kernel when it is missing or points to an interpreter that no longer exists, runs the notebook without the interactive cell and saves the outputs, then the report, the local shamanic pipeline and, for Finnish corpora, the Book `scan`. A kernel that fails to start no longer wipes the saved outputs.
+- **The Book of the Unsaid** reads `<meta name="ata-omorfi">` from the folder's report: when omorfi took part, a grammar-leak refusal says the engine itself may need fixing instead of suggesting another run. The skill in `skills/ksiega-niedomowien/` is complete again (backup comparison after `tidy --apply`, entry format, `fill` failures) and documents the real exit codes.
+- **Accessibility of the report.** This cycle's technical terms (`ToUnicode`, `fontTools`, `(cid:N)`, `U+XXXX`, encoding pairs such as `latin-1>cp1251`, `OCR`, `pip install …`) are tagged as English, so NVDA no longer reads them with the Russian or Finnish voice. `generate_report.py` and `run_all.py` write UTF-8 to a redirected console.
+
+### Verified
+- Dictionary PDF through the notebook's `load_pdf`: pages 2–551 repaired, page 1 (an image) read by OCR, 0 leftover `(cid:` markers. Dictionary Word file: clean-up counts identical to the Director's (4 830 joined words, 55 letter-spaced words, 253 spaces).
+- No false re-encoding across 595 files from disk with ATA's real alphabets; correct Spanish stays unchanged.
+- Source gate on 480 files: 0 false refusals; the glitch reproduced before the fix (exit 0, wrong report) and refused after it (exit 3, nothing written).
+- A fresh pre-release audit with proof by execution found 11 issues (the release self-test would have failed on ubuntu without `markdown`, a name-keyed font cache, three false refusals of the source gate, `run_all.py` wiping outputs, a console crash); all fixed with tests.
+- Translation parity, the console hard-code gate, the language basics audit and every self-test pass.
+
+### Distribution
+Source-only release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.10.3 — replaced entries in the Book of the Unsaid are marked and can be cleaned up
 
 **Theme.** v1.10.2 noted that a folder whose chant changed after an entry was written gets its block back under a new id. That happened: the Polish constitutional court corpus got entry 16 for the same block 1 as entry 12, and `status` printed only "entries 2 (no. 12, 16)", which did not say that 12 was out of date. Patch bump: clearer output and one new command.
