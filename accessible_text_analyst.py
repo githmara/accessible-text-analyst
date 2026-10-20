@@ -496,29 +496,65 @@ def load_pdf(path):
     запускался лишь тогда, когда текста не было НИ НА ОДНОЙ странице: в
     смешанном PDF (текст + вставленные сканы) сканы молча выпадали из корпуса.
     Страницы, оставшиеся пустыми и после OCR (или без OCR), перечисляются
-    номерами — их содержимого в корпусе не будет."""
+    номерами — их содержимого в корпусе не будет.
+
+    Bramka warstwy tekstu (od 2026-10-20, moduł `naprawa_zrodel`): font bez
+    pełnej mapy ToUnicode daje w pdfplumberze znaczniki „(cid:N)”. Najpierw
+    `napraw_strone` odczytuje znaki z osadzonego fontu; strona, której font
+    nie rozwiązał w całości, a znaczników jest ≥ 3 i ≥ 2% liter, NIE trafia do
+    korpusu (ani do Lingui) — idzie do OCR jak skan albo jest wymieniona."""
     try:
         import pdfplumber
     except ImportError:
         print("[ВНИМАНИЕ] pdfplumber не установлен. Выполните: pip install pdfplumber")
         return []
+    from naprawa_zrodel import napraw_strone, usun_znaczniki, zakresy_stron, ZNACZNIK_CID
+    _fonts = {}
     with pdfplumber.open(path) as pdf:
         total = len(pdf.pages)
+        # Naprawa PRZED pierwszym extract_text: pdfplumber buforuje mapę tekstu.
+        checks = [napraw_strone(page, _fonts) for page in pdf.pages]
         info = [_page_text_and_number_candidates(page) for page in pdf.pages]
     texts, removed_numbers = _page_numbers_to_drop(info)
     # Pas marginesu znany tylko dla stron z warstwą tekstu; strona z OCR → None.
     margins = [m if t.strip() else None for (t, _f, m) in info]
     if removed_numbers:
         print(f"  PDF: удалено номеров страниц: {removed_numbers}.")
+    repaired = [i for i, c in enumerate(checks) if c.naprawiona]
+    broken = [i for i, c in enumerate(checks) if c.do_zgloszenia]
+    if repaired:
+        print(f"  PDF: карта символов шрифта (ToUnicode) неполная на страницах "
+              f"{zakresy_stron(repaired)} — текст восстановлен по встроенным шрифтам.")
+    if broken:
+        try:
+            import fontTools  # noqa: F401
+            _hint = ""
+        except ImportError:
+            _hint = " Восстановление по шрифтам требует fontTools: pip install fonttools."
+        print(f"  [ВНИМАНИЕ] PDF: текстовый слой нечитаем (неполная карта символов шрифта) "
+              f"на страницах {zakresy_stron(broken)}. Этот текст НЕ попадёт в корпус "
+              f"и в определение языка.{_hint}")
+        for i in broken:
+            texts[i], margins[i] = "", None
+    # Pojedyncze znaczniki poniżej progu bramki (np. symbol bez mapy): usuwane,
+    # nie trafiają do korpusu jako token „cid”.
+    _stray = sum(len(ZNACZNIK_CID.findall(t)) for t in texts)
+    if _stray:
+        texts = [usun_znaczniki(t) for t in texts]
+        print(f"  PDF: удалено одиночных нераспознанных символов шрифта (cid): {_stray}.")
     empty = [i for i, t in enumerate(texts) if not t.strip()]
     if empty and total > 0:
-        if len(empty) == total:
+        _scans = [i for i in empty if i not in set(broken)]
+        if len(_scans) == total:
             print(f"  PDF: ни одна из {total} страниц не содержит извлекаемого текста.")
             print(f"  Предполагается, что это скан. Запуск OCR (языки: {OCR_LANGS})...")
-        else:
+        elif _scans:
             print(f"  PDF: страницы без текстового слоя (вероятно, сканы): "
-                  f"{', '.join(str(i + 1) for i in empty)}. "
+                  f"{', '.join(str(i + 1) for i in _scans)}. "
                   f"Запуск OCR только для них (языки: {OCR_LANGS})...")
+        if broken:
+            print(f"  PDF: страницы с нечитаемым текстовым слоем передаются в OCR "
+                  f"(языки: {OCR_LANGS}): {zakresy_stron(broken)}.")
         for i, text in _pdf_ocr_pages(path, OCR_LANGS, pages=empty).items():
             texts[i] = text
         ocr_ok = [i for i in empty if texts[i].strip()]
@@ -579,7 +615,21 @@ def load_docx(path, page_size=2000):
         print("[ВНИМАНИЕ] python-docx не установлен. Выполните: pip install python-docx")
         return []
     doc = Document(path)
-    raw = "  ".join(p.text for p in doc.paragraphs if p.text.strip())
+    # Przeniesienia z PDF zapisanego jako DOCX („по- священного”) — moduł
+    # `naprawa_zrodel`: przez granicę akapitu tylko formy poświadczone
+    # w dokumencie, wewnątrz akapitu reguły `sklej_przeniesienia`
+    # (zawieszony łącznik „двух- и трёх…”, myślniki i „по-английски” zostają).
+    from naprawa_zrodel import sklej_przeniesienia, sklej_przez_akapity
+    _paras, _cross, _cross_left = sklej_przez_akapity(
+        [p.text for p in doc.paragraphs], [p.style.name for p in doc.paragraphs])
+    _paras, _hyph = sklej_przeniesienia(_paras)
+    if _hyph["sklej"] or _hyph["lacznik"] or _cross:
+        print(f"  DOCX: склеено переносов внутри абзацев: {_hyph['sklej']}, "
+              f"с сохранением дефиса: {_hyph['lacznik']}; через границу абзаца: {_cross}.")
+    if _hyph["zostaw"] or _cross_left:
+        print(f"  DOCX: оставлено без изменений (висячий дефис или нет доказательства): "
+              f"внутри абзацев {_hyph['zostaw']}, на границе абзацев {_cross_left}.")
+    raw = "  ".join(p for p in _paras if p.strip())
     raw = re.sub(r"\s+", " ", raw).strip()
     # Применяем CUSTOM_PATTERNS (если определены)
     if 'CUSTOM_PATTERNS' in globals():
