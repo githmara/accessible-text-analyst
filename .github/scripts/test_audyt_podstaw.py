@@ -286,10 +286,14 @@ class TestAudytPodstaw(unittest.TestCase):
                 return Odp()
             urllib.request.urlopen = urlopen
 
+        # Atrapy HTTPError trzymają strumień odpowiedzi — zamykane w `finally`,
+        # inaczej Python sprząta je sam z ResourceWarning (widoczne w logu CI 2026-10-21).
+        e404 = urllib.error.HTTPError("u", 404, "nf", {}, io.BytesIO())
+        e503 = urllib.error.HTTPError("u", 503, "x", {}, io.BytesIO())
         try:
             for opis, kw, trwaly in (
-                    ("404", {"wyjatek": urllib.error.HTTPError("u", 404, "nf", {}, io.BytesIO())}, True),
-                    ("503", {"wyjatek": urllib.error.HTTPError("u", 503, "x", {}, io.BytesIO())}, False),
+                    ("404", {"wyjatek": e404}, True),
+                    ("503", {"wyjatek": e503}, False),
                     ("dns", {"wyjatek": urllib.error.URLError("dns")}, False),
                     ("json", {"tresc": b"<html>"}, True),
                     ("ksztalt", {"tresc": b'{"models": {}}'}, True)):
@@ -301,6 +305,8 @@ class TestAudytPodstaw(unittest.TestCase):
                     self.assertIn("https://example.invalid/i.json", str(k.exception))
         finally:
             urllib.request.urlopen = oryginal
+            e404.close()
+            e503.close()
 
     def test_siec_nie_zaslania_innych_bledow(self):
         import contextlib
