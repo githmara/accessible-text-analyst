@@ -45,10 +45,13 @@ jobs:
       # 2026-10-16: weryfikacja w CI, nie tylko lokalnie). setup-python zamiast
       # systemowego Pythona: na ubuntu-latest systemowy pip odmawia instalacji
       # (PEP 668). Granice powtarzają manifest — runner nie czyta requirements.txt.
+      # Patch przypięty DOKŁADNIE (2026-10-21): '3.14' dawało najnowszy patch
+      # (runner: 3.14.8 przy lokalnym 3.14.3). Jedno źródło prawdy:
+      # audyt_zaleznosci.PYTHON_PRZETESTOWANY — pilnuje tego test_python_ci.py.
       - name: Python
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
-          python-version: '3.14'
+          python-version: '3.14.3'
 
       # markdown: generate_report.py kończy się sys.exit(1) już przy imporcie bez
       # niego (test_wzorce_raportu go importuje); pdfplumber + fonttools: testy
@@ -65,6 +68,7 @@ jobs:
           python .github/scripts/test_zrodlo_raportu.py
           python .github/scripts/test_wzorce_raportu.py
           python .github/scripts/test_naprawa_zrodel.py
+          python .github/scripts/test_python_ci.py
           # Wspólny moduł z Reżyserem (bajt w bajt) — runner i wektory też wspólne, sam stdlib.
           python czyszczenie_tekstu_wektory.py
 
