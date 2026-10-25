@@ -4,6 +4,26 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.11.1 — Finnish interjections get their verb, names no longer count as grammar leaks, and the first word of a sentence is a documented limit
+
+**Theme.** After a real `run_all`, the Book of the Unsaid refused a Finnish transcript for a grammar leak (1.47 > 1.0) even though omorfi took part in the run. The leak was exactly two keywords out of 136, and neither was stale data. One was a gap in the notebook's Finnish lemma correction, the other a false alarm of the Book's filter. Both are fixed. What cannot be fixed safely is now written down for users. Patch bump: corrections and documentation, no new behaviour.
+
+### What changed
+- **Imperatives used as interjections** (`Oota, miten…` "wait, how…", `Odota`, `Katso`). spaCy tags them INTJ, and omorfi has no INTJ reading. Its noun homograph (*oo*) blocked the rule that accepts omorfi's lemma when only one is possible, so the written form stayed as the lemma. The notebook now takes the lemma of omorfi's imperative verb readings when they agree (`Oota` → `oottaa`). Only the lemma changes; part of speech and morphology stay spaCy's.
+- **Names in the grammar-leak check.** TF-IDF lowercases keywords, so the name *Anna* (Anna Maria Żukowska) became `anna` and looked like the imperative of *antaa* "to give". The Book no longer counts as an inflected form a word that the source uses as a name in mid-sentence.
+- **New README section *Known limitations*** in all six languages. It brings together two limits users should know about: loanword origins are not tagged (documented in v1.4.0, until now only in these notes), and the Finnish first word of a sentence. At the start of a sentence spaCy sometimes takes a capitalized imperative or interjection for a proper name (`Anna kuulua.` "let it be heard" → the name *Anna*). omorfi deliberately never overrides names, because real names would otherwise turn into common words (*Tuskia* → *tuska* "anguish"), so such a word keeps its written form.
+- **The Book skill** (`skills/ksiega-niedomowien/SKILL.md`): when a grammar-leak refusal says omorfi took part, the agent first checks whether the examples occur only at the start of a sentence. If so, it reports the documented limit instead of a new bug.
+
+### Verified
+- The refused transcript: before the fix `oota` and `anna` were in `keywords_tfidf.csv` and the leak was 1.47. After a fresh `run_all` the keyword is `oottaa`, the leak is 0.0 and the folder qualifies (9 blocks).
+- The name exclusion across all 33 Finnish export folders: the leak changed only in that folder. The other 32 kept their values.
+- Translation parity and the language basics audit pass.
+
+### Distribution
+Source-only release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.11.0 — broken PDF text layers are detected and rebuilt, and a report can only describe its own source
 
 **Theme.** A 551-page Russian dictionary saved by macOS Preview went into the notebook as `(cid:602)(cid:619)…`: the letter map of its fonts stopped after "М", pdfplumber printed the raw glyph numbers, and language detection called the corpus German. Nothing said that the text layer was garbage. This release detects such pages, rebuilds them from the fonts embedded in the PDF where that is possible, cleans up documents converted from PDF to Word, and adds a gate that keeps a report from being written about a different source. Minor bump: new behaviour, a new dependency (`fonttools`) and a new launcher.

@@ -32,7 +32,7 @@ When the user asks to process anything else — a thesis, Polish or Russian docu
 
 A folder rejected for a grammar leak can qualify only after it is re-run through the notebook with omorfi enabled. The refusal says what the folder's `analysis_report.html` knows (written by `generate_report.py`), and the advice depends on it:
 - the run had no omorfi (or predates omorfi) — suggest installing omorfi, running `omorfi-download` and re-running the notebook;
-- omorfi DID take part — re-running will not help: the engine itself (the Finnish lemma correction in the notebook) may need fixing, so pass the printed examples on to the user as a bug report;
+- omorfi DID take part — re-running will not help: the engine itself (the Finnish lemma correction in the notebook) may need fixing, so pass the printed examples on to the user as a bug report. Before you do, look each example up in `accessible_text.html`: if it occurs only capitalized at the start of a sentence (`Anna kuulua.`, `Oota, miten…`), it is the documented limit *Finnish: the first word of a sentence* (README, *Known limitations*) — spaCy tagged an imperative or interjection as a name, and omorfi deliberately never overrides names. Say so in the report instead of presenting it as a new bug. Either way, do not edit the exports or the chant to get past the filter;
 - there is no current report — it is unknown which case it is; running `generate_report.py` (or `run_all.py`, which runs the notebook, the report, the local rituals and `scan` for a Finnish corpus) records it.
 
 ## Flow
