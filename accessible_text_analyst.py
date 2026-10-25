@@ -1283,7 +1283,8 @@ def _build_finnish_omorfi(fi_nlp):
     дизамбигуации, поэтому кандидаты фильтруются по UPOS от теггера spaCy;
     если ни один анализ не совпал по UPOS, остаётся значение spaCy — кроме
     случая, когда лемма spaCy не словарная, а omorfi однозначен (тогда
-    берётся только лемма omorfi). Любая проблема (нет пакета, нет автоматов, ошибка
+    берётся только лемма omorfi; для INTJ — лемма повелительных глагольных
+    анализов, напр. Oota -> oottaa). Любая проблема (нет пакета, нет автоматов, ошибка
     загрузки) — возврат модели без изменений.
     """
     from pathlib import Path
@@ -1368,6 +1369,16 @@ def _build_finnish_omorfi(fi_nlp):
                 # (PROPN или прописная буква не в начале предложения): omorfi их
                 # часто не знает и подставил бы нарицательное (Tuskia -> *tuska*).
                 is_name = tok.pos_ == "PROPN" or (tok.text[:1].isupper() and not tok.is_sent_start)
+                if tok.pos_ == "INTJ" and not _om_is_base(tok.lemma_):
+                    # Повелительное наклонение в роли междометия (Oota, Odota,
+                    # Katso): у omorfi нет INTJ, а NOUN-омоним (oo, партитив
+                    # oota) мешает правилу «одна лемма» ниже. Берём лемму
+                    # словарных глагольных анализов с Mood=Imp, если она одна.
+                    imp_lemmas = {a[1] for a in _om_plausible(tok.text)
+                                  if a[0] == "VERB" and a[3] == 0 and "Mood=Imp" in a[2]}
+                    if len(imp_lemmas) == 1:
+                        tok.lemma_ = next(iter(imp_lemmas))
+                        continue
                 if not is_name and not _om_is_base(tok.lemma_):
                     # Только словарные анализы (вес 0): угаданные omorfi сложные
                     # слова (tapa+maa, sama+laki) имеют вес >= 10.

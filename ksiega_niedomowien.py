@@ -313,11 +313,34 @@ def is_content(w):
     return True
 
 
-def grammar_leak(folder, para_tokens):
+_SENT_END_RE = re.compile(r"""[.!?…:;]["'»”)\]]*\s*$|^\s*["'«„“(\[]*\s*$""")
+
+
+def source_names(paras):
+    """Słowa (małymi literami) poświadczone w źródle jako imię: z wielkiej litery
+    w środku zdania i z odczytem PROPN omorfi dla tej formy (Anna, Satu).
+
+    TF-IDF w notatniku obniża wielkość liter, więc lemat PROPN *Anna* trafia do
+    keywords jako *anna* i bez tego wyglądałby jak rozkaźnik od antaa.
+    """
+    names = set()
+    for p in paras:
+        for m in WORD_RE.finditer(p):
+            w = m.group(0)
+            # ogon 8 znaków: sam cudzysłów/spacje = początek akapitu (ostrożnie)
+            if "-" in w or not w[:1].isupper() or _SENT_END_RE.search(p[max(0, m.start() - 8):m.start()]):
+                continue
+            if any(u == "PROPN" for _, u in analyses(w)):
+                names.add(w.lower())
+    return names
+
+
+def grammar_leak(folder, para_tokens, names=frozenset()):
     """Wskaźnik przecieku gramatyki liczony na pełnym keywords_tfidf.csv.
 
     B = znane fińskie formy odmienione (lemmatyzator nie uciął końcówki),
     G = śmieciowe lematy spaCy (np. *mietia* ← mieti, omorfi: miettiä).
+    `names` (source_names) nie liczą się do B: to imiona po obniżeniu liter.
     """
     import csv
     kw = folder / "keywords_tfidf.csv"
@@ -330,7 +353,8 @@ def grammar_leak(folder, para_tokens):
         terms = [r.lower() for r in roots]
     words = {p.lower() for t in terms for p in t.split()}
     toks = sorted(para_tokens)
-    B = sorted(w for w in words if common_lemmas(w) and w not in common_lemmas(w))
+    B = sorted(w for w in words
+               if w not in names and common_lemmas(w) and w not in common_lemmas(w))
     G = []
     for w in words:
         if common_lemmas(w) or len(w) < 4:
@@ -433,7 +457,7 @@ def evaluate_folder(folder):
 
     if not v["reasons"]:
         para_tokens = {t for p in truth.paras for t in tokens_of(p)}
-        rate, B, G = grammar_leak(folder, para_tokens)
+        rate, B, G = grammar_leak(folder, para_tokens, source_names(truth.paras))
         v["grammar_leak"] = round(rate, 2)
         v["leak_examples"] = (B + G)[:8]
         v["omorfi_report"] = omorfi_in_report(folder)
