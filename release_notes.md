@@ -4,6 +4,25 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.12.0 — the language of Cyrillic text comes from the installed alphabets, through a module shared with the Director
+
+**Theme.** Until now every sentence with Cyrillic letters was simply called Russian: the notebook had `ru` written into its language detection. That was right only because Russian is the one Cyrillic language ATA has. The decision now comes from the alphabets of the installed language packs, through a new module shared byte for byte with Reżyser Audio GPT 19.17.0, so a Ukrainian pack would be recognised by its own letters (і, ї, є, ґ) without touching the code. Minor bump: a new shared module and a new basis for detection; with today's packs the result is the same as before.
+
+### What changed
+- **Shared module `detektor_pism.py`** (with `detektor_pism_testy.py`), byte-for-byte identical with the Director's copy. It reads the script of a letter from its Unicode name, counts µ and Ω as Greek, treats modifier letters such as the Ukrainian apostrophe (ʼ) as part of the word rather than a script of their own, and picks the Cyrillic language from the pack alphabets: the pack whose alphabet holds every Cyrillic letter of the text wins, a tie or no winner falls back to Russian. Edit it only together with the Director. `.gitattributes` keeps both files in LF.
+- **`_safe_detect`, step 1.** The trigger is unchanged (any Cyrillic letter in the sentence); the language now comes from `PODSTAWY[*].alfabet` instead of a hardcoded `ru`. Cyrillic letters outside the basic Cyrillic block (supplements, extensions) are now counted as Cyrillic, and combining signs in that block no longer are.
+- **Release self-test** runs `python -m unittest detektor_pism_testy`.
+
+### Verified
+- Every self-test passes locally and on GitHub, including the 14 tests of the shared module; translation parity, the console hard-code gate and the language basics audit are clean.
+- Text without Cyrillic letters takes exactly the old path; a Russian sentence is still detected as Russian.
+- The shared files have identical SHA256 in both repositories.
+
+### Distribution
+Source-only release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.11.1 — Finnish interjections get their verb, names no longer count as grammar leaks, and the first word of a sentence is a documented limit
 
 **Theme.** After a real `run_all`, the Book of the Unsaid refused a Finnish transcript for a grammar leak (1.47 > 1.0) even though omorfi took part in the run. The leak was exactly two keywords out of 136, and neither was stale data. One was a gap in the notebook's Finnish lemma correction, the other a false alarm of the Book's filter. Both are fixed. What cannot be fixed safely is now written down for users. Patch bump: corrections and documentation, no new behaviour.
