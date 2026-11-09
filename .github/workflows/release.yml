@@ -71,6 +71,8 @@ jobs:
           python .github/scripts/test_python_ci.py
           # Wspólny moduł z Reżyserem (bajt w bajt) — runner i wektory też wspólne, sam stdlib.
           python czyszczenie_tekstu_wektory.py
+          # Drugi wspólny moduł (bajt w bajt): pismo tekstu i język cyrylicy z alfabetów.
+          python -m unittest detektor_pism_testy
 
       # Rozjazd tłumaczeń (klucze, placeholdery, struktura i polecenia w README ×6)
       # BLOKUJE wydanie — odpowiednik `--waliduj` z Reżysera.

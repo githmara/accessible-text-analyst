@@ -1980,10 +1980,18 @@ _LANG_DIACRITICS = {_k: diakrytyki(_k) for _k in PODSTAWY if diakrytyki(_k)}
 _MIN_RELIABLE_LEN = 30
 
 
+import detektor_pism
+
+# Алфавиты основ: по ним общий с Режиссёром модуль `detektor_pism` (копия
+# байт в байт) выбирает кириллический язык. Сегодня кириллическая основа одна
+# (ru), но буква, которая есть только в одном алфавите (укр. «ї»), решит
+# выбор, когда появится вторая; ничья или неизвестная буква → ru.
+_ALFABETY = {_k: _p["alfabet"] for _k, _p in PODSTAWY.items()}
+
+
 def _is_cyrillic_char(ch):
-    """Проверяет, попадает ли символ в кириллический Unicode-блок."""
-    code = ord(ch)
-    return 0x0400 <= code <= 0x04FF
+    """Проверяет, является ли символ кириллической буквой."""
+    return detektor_pism.pismo_znaku(ch) == detektor_pism.CYRYLICA
 
 
 def _safe_detect(text, fallback=LANG):
@@ -1996,8 +2004,9 @@ def _safe_detect(text, fallback=LANG):
 
     Стратегия (по приоритету):
 
-    1. Кириллица в тексте → ru. Однозначный сигнал; работает даже на
-       коротких фрагментах ("Тут текст." — 10 знаков).
+    1. Кириллица в тексте → кириллический язык по алфавитам основ
+       (`detektor_pism.jezyk_cyrylicy`, сегодня ru). Однозначный сигнал;
+       работает даже на коротких фрагментах ("Тут текст." — 10 знаков).
 
     2. Слишком короткий фрагмент (<30 символов) → fallback. Lingua на
        коротких латинских фрагментах часто ошибается на именах
@@ -2024,8 +2033,8 @@ def _safe_detect(text, fallback=LANG):
 
     # 1. Кириллица — однозначный сигнал
     if any(_is_cyrillic_char(ch) for ch in text):
-        if "ru" in SUPPORTED_LANGS:
-            return "ru"
+        if detektor_pism.jezyki_cyrylickie(_ALFABETY):
+            return detektor_pism.jezyk_cyrylicy(text, _ALFABETY)
 
     # 2. Короткие → fallback
     if len(text) < _MIN_RELIABLE_LEN:

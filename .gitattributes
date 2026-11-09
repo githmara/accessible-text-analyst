@@ -1,3 +1,5 @@
 czyszczenie_tekstu.py text eol=lf
 czyszczenie_tekstu_wektory.py text eol=lf
 czyszczenie_tekstu_wektory.json text eol=lf
+detektor_pism.py text eol=lf
+detektor_pism_testy.py text eol=lf
