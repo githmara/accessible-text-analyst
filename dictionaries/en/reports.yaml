@@ -162,12 +162,14 @@ deps:
   w_brak: '[WARNING] {nazwa} ({spec}) is required but not installed (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: PyPI could not be reached, the latest version was not checked.'
   w_przeterminowana: '[HOLD EXPIRED] {nazwa} {inst}: {nowa} exists, the bound {spec} dates from v{hold} and the project is already at v{projekt} — test the new release and raise the bound, or renew the hold date.'
+  w_przeterminowana_wiek: '[HOLD EXPIRED] {nazwa} {inst}: {nowa} exists and the bound {spec} (hold v{hold}) has stood for {wiek} days — the limit is {limit}; test the new release and raise the bound, or renew the hold date.'
   w_niedatowana: '[WARNING] {nazwa} {inst}: {nowa} exists and the bound {spec} excludes it, but the bound has no date (add `  # hold: {projekt}` once tested).'
   w_bez_grupy: '[WARNING] {nazwa} has no risk group in audyt_zaleznosci.GRUPY_RYZYKA — a new dependency gets its group in the same commit.'
   grupa_A: 'group A: changes what the analysis finds or how the report reads — test the notebook cells and a full run_all.py on a known corpus.'
   grupa_B: 'group B: talks to an external API — check one real model call (llm_klient / shamanic_ai).'
   grupa_C: 'group C: tooling next to the result — upgrade freely, the tests are enough.'
   podsumowanie: '[SUMMARY] up to date: {ok}, held by a bound: {trzymane}, expired holds: {przeterminowane}, warnings: {ostrzezenia}, optional not installed: {pominiete}.'
+  budzik: '[ALARM CLOCK] The full audit result was saved to {plik} — the maintainer''s session-start reminder reads it.'
   err_missing_lib: '[ERROR] The {lib} library is missing. Run: pip install {pkg}'
 
 run_all:

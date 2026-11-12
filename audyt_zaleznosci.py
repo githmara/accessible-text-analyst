@@ -44,14 +44,23 @@ import importlib.metadata as metadata
 import json
 import platform
 import re
+import subprocess
 import sys
 import urllib.request
+from datetime import date, datetime
 from pathlib import Path
 from typing import NamedTuple, Optional
 
 ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "requirements.txt"
 NOTATKI_WYDAN = ROOT / "release_notes.md"
+# Drugi zegar holdu (budzik, 2026-11-12, bliźniak Reżysera): hold starszy niż
+# tyle dni od commitu, który ostatnio zmienił jego linię, wygasa także bez
+# nowego minora — sam zegar wersji staje, gdy projekt nie wydaje.
+WIEK_HOLDU_DNI = 60
+# Znacznik budzika: wynik ostatniego pełnego audytu. Czyta go hak startu sesji
+# maintainera; `export_results/` jest poza gitem.
+ZNACZNIK_BUDZIKA = ROOT / "export_results" / "audyt_zaleznosci_ostatni.json"
 URL_PYPI = "https://pypi.org/pypi/{}/json"
 TIMEOUT = 15
 # Python, na którym zestaw z manifestu był ostatnio przetestowany (patrz nagłówek
@@ -153,8 +162,39 @@ def werdykt(spec: str, inst: str | None, nowa: str | None, opcja: bool) -> str:
     return "dopuszczona" if (not spec or Version(nowa) in s) else "trzymana"
 
 
+def wiek_linii_manifestu(sciezka: Path = MANIFEST, dzis: date | None = None) -> dict[str, int]:
+    """{pakiet: dni od commitu, który ostatnio zmienił jego linię} z `git blame`.
+
+    Linie opcjonalne (`# pakiet<…`) też się liczą. Bez gita: pusty słownik
+    (wiek nieznany, nie zerowy).
+    """
+    dzis = dzis or date.today()
+    try:
+        wynik = subprocess.run(["git", "blame", "--line-porcelain", "--", sciezka.name],
+                               cwd=sciezka.parent, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    if wynik.returncode != 0:
+        return {}
+    wieki: dict[str, int] = {}
+    czas = None
+    for linia in wynik.stdout.splitlines():
+        if linia.startswith("committer-time "):
+            czas = int(linia.split()[1])
+        elif linia.startswith("\t") and czas is not None:
+            tekst = linia[1:].strip().lstrip("#").strip().partition("#")[0].strip()
+            g = _WPIS.match(tekst)
+            if g and g.group("spec"):
+                dni = (dzis - datetime.fromtimestamp(czas).date()).days
+                wieki.setdefault(g.group("nazwa").lower(), max(dni, 0))
+            czas = None
+    return wieki
+
+
 def ocen_wstrzymanie(w: str, hold: Optional[str],
-                     projekt: Optional[tuple[int, int, int]]) -> str:
+                     projekt: Optional[tuple[int, int, int]],
+                     wiek_dni: Optional[int] = None) -> str:
     """`trzymana` → `niedatowana` / `przeterminowana` wg daty holdu; reszta bez zmian.
 
     Hold liczy się tylko wtedy, gdy granica naprawdę coś wyklucza: pakiet aktualny
@@ -165,10 +205,26 @@ def ocen_wstrzymanie(w: str, hold: Optional[str],
         return w
     if hold is None:
         return "niedatowana"
-    if projekt is None:
-        return w
     major, minor = (int(x) for x in hold.split(".")[:2])
-    return "przeterminowana" if (major, minor) < projekt[:2] else w
+    if projekt is not None and (major, minor) < projekt[:2]:
+        return "przeterminowana"
+    if wiek_dni is not None and wiek_dni > WIEK_HOLDU_DNI:
+        return "przeterminowana_wiek"
+    return w
+
+
+def zapisz_znacznik(do_decyzji: list[str], sciezka: Path | None = None,
+                    dzis: date | None = None) -> bool:
+    """Znacznik budzika po PEŁNYM audycie (format wspólny z Reżyserem: format/data/do_decyzji)."""
+    cel = sciezka or ZNACZNIK_BUDZIKA
+    try:
+        cel.parent.mkdir(parents=True, exist_ok=True)
+        cel.write_text(json.dumps({"format": 1, "data": (dzis or date.today()).isoformat(),
+                                   "zrodlo": "audyt_zaleznosci", "do_decyzji": do_decyzji},
+                                  ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        return False
+    return True
 
 
 def main() -> int:
@@ -185,22 +241,31 @@ def main() -> int:
         return 0
     projekt = wersja_projektu()
     wersja_txt = ".".join(map(str, projekt)) if projekt else "?"
+    wieki = wiek_linii_manifestu()
     licznik: dict[str, int] = {}
+    do_decyzji: list[str] = []
     for wpis in wczytaj_manifest():
         grupa = GRUPY_RYZYKA.get(wpis.nazwa)
         if grupa is None:
             licznik["bez_grupy"] = licznik.get("bez_grupy", 0) + 1
-            print(t(ui, "deps.w_bez_grupy", nazwa=wpis.nazwa))
+            do_decyzji.append(t(ui, "deps.w_bez_grupy", nazwa=wpis.nazwa))
+            print(do_decyzji[-1])
         inst = zainstalowana(wpis.nazwa)
         nowa = najnowsza(wpis.nazwa) if inst else None
-        w = ocen_wstrzymanie(werdykt(wpis.spec, inst, nowa, wpis.opcja), wpis.hold, projekt)
-        licznik[w] = licznik.get(w, 0) + 1
+        w = ocen_wstrzymanie(werdykt(wpis.spec, inst, nowa, wpis.opcja), wpis.hold,
+                             projekt, wieki.get(wpis.nazwa))
+        klucz = "przeterminowana" if w == "przeterminowana_wiek" else w
+        licznik[klucz] = licznik.get(klucz, 0) + 1
         if w in ("ok", "pominieta"):
             continue
-        print(t(ui, f"deps.w_{w}", nazwa=wpis.nazwa, spec=wpis.spec or "-",
-                inst=inst or "-", nowa=nowa or "-", hold=wpis.hold or "-",
-                projekt=wersja_txt))
-        if w in ("przeterminowana", "niedatowana", "dopuszczona") and grupa:
+        linia = t(ui, f"deps.w_{w}", nazwa=wpis.nazwa, spec=wpis.spec or "-",
+                  inst=inst or "-", nowa=nowa or "-", hold=wpis.hold or "-",
+                  projekt=wersja_txt, wiek=wieki.get(wpis.nazwa, "?"),
+                  limit=WIEK_HOLDU_DNI)
+        print(linia)
+        if w not in ("trzymana", "pypi"):
+            do_decyzji.append(linia)
+        if klucz in ("przeterminowana", "niedatowana", "dopuszczona") and grupa:
             print("    " + t(ui, f"deps.grupa_{grupa}"))
     ostrzezenia = sum(licznik.get(k, 0) for k in
                       ("dopuszczona", "poza", "brak", "niedatowana", "bez_grupy"))
@@ -208,6 +273,10 @@ def main() -> int:
             trzymane=licznik.get("trzymana", 0),
             przeterminowane=licznik.get("przeterminowana", 0),
             ostrzezenia=ostrzezenia, pominiete=licznik.get("pominieta", 0)))
+    # Budzik cofa tylko audyt, który porównał wszystko z PyPI: przebieg bez
+    # sieci nie wie, czy upgrade czeka, więc nie może uciszyć przypomnienia.
+    if not licznik.get("pypi") and zapisz_znacznik(do_decyzji):
+        print(t(ui, "deps.budzik", plik=ZNACZNIK_BUDZIKA.relative_to(ROOT).as_posix()))
     return 0
 
 

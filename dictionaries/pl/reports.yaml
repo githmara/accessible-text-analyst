@@ -162,12 +162,14 @@ deps:
   w_brak: '[UWAGA] {nazwa} ({spec}) jest wymagany, ale nie jest zainstalowany (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: brak połączenia z PyPI, najnowszej wersji nie sprawdzono.'
   w_przeterminowana: '[HOLD WYGASŁ] {nazwa} {inst}: jest {nowa}, granica {spec} pochodzi z v{hold}, a projekt jest już w v{projekt} — przetestuj nowe wydanie i podbij granicę albo odnów datę holdu.'
+  w_przeterminowana_wiek: '[HOLD WYGASŁ] {nazwa} {inst}: jest {nowa}, a granica {spec} (hold v{hold}) stoi od {wiek} dni — limit to {limit}; przetestuj nowe wydanie i podbij granicę albo odnów datę holdu.'
   w_niedatowana: '[UWAGA] {nazwa} {inst}: jest {nowa}, granica {spec} je wyklucza, ale nie ma daty (dopisz `  # hold: {projekt}` po przetestowaniu).'
   w_bez_grupy: '[UWAGA] {nazwa} nie ma grupy ryzyka w audyt_zaleznosci.GRUPY_RYZYKA — nowa zależność dostaje grupę w tym samym commicie.'
   grupa_A: 'grupa A: zmienia wynik analizy albo wygląd raportu — przetestuj komórki notatnika i pełne run_all.py na znanym korpusie.'
   grupa_B: 'grupa B: rozmawia z zewnętrznym API — sprawdź jedno prawdziwe wywołanie modelu (llm_klient / shamanic_ai).'
   grupa_C: 'grupa C: narzędzia obok wyniku — podbijaj śmiało, wystarczą testy.'
   podsumowanie: '[PODSUMOWANIE] aktualne: {ok}, wstrzymane granicą: {trzymane}, holdy wygasłe: {przeterminowane}, ostrzeżenia: {ostrzezenia}, opcjonalne niezainstalowane: {pominiete}.'
+  budzik: '[BUDZIK] Zapisano wynik pełnego audytu w {plik} — czyta go przypomnienie na starcie sesji maintainera.'
   err_missing_lib: '[BŁĄD] Brak biblioteki {lib}. Uruchom: pip install {pkg}'
 
 run_all:

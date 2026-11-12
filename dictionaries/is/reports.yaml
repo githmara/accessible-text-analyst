@@ -162,12 +162,14 @@ deps:
   w_brak: '[VIÐVÖRUN] {nazwa} ({spec}) er nauðsynlegt en ekki uppsett (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: ekki náðist samband við PyPI, nýjasta útgáfan var ekki athuguð.'
   w_przeterminowana: '[HALD ÚTRUNNIÐ] {nazwa} {inst}: {nowa} er til, mörkin {spec} eru frá v{hold} og verkefnið er komið í v{projekt} — prófaðu nýju útgáfuna og hækkaðu mörkin, eða endurnýjaðu dagsetningu haldsins.'
+  w_przeterminowana_wiek: '[HALD ÚTRUNNIÐ] {nazwa} {inst}: {nowa} er til og mörkin {spec} (hald v{hold}) hafa staðið í {wiek} daga — hámarkið er {limit}; prófaðu nýju útgáfuna og hækkaðu mörkin, eða endurnýjaðu dagsetningu haldsins.'
   w_niedatowana: '[VIÐVÖRUN] {nazwa} {inst}: {nowa} er til og mörkin {spec} útiloka hana, en mörkin eru ódagsett (bættu við `  # hold: {projekt}` eftir prófun).'
   w_bez_grupy: '[VIÐVÖRUN] {nazwa} hefur engan áhættuflokk í audyt_zaleznosci.GRUPY_RYZYKA — ný pakkaháð fær flokk í sama commit.'
   grupa_A: 'flokkur A: breytir niðurstöðum greiningarinnar eða útliti skýrslunnar — prófaðu hólf vinnubókarinnar og alla keyrslu run_all.py á þekktu safni.'
   grupa_B: 'flokkur B: talar við ytra API — athugaðu eitt raunverulegt líkanakall (llm_klient / shamanic_ai).'
   grupa_C: 'flokkur C: verkfæri við hlið niðurstöðunnar — uppfærðu óhikað, prófanirnar duga.'
   podsumowanie: '[SAMANTEKT] uppfært: {ok}, haldið af mörkum: {trzymane}, útrunnin höld: {przeterminowane}, viðvaranir: {ostrzezenia}, valkvætt ekki uppsett: {pominiete}.'
+  budzik: '[VEKJARI] Niðurstaða fullrar athugunar var vistuð í {plik} — áminning umsjónarmanns í upphafi lotu les hana.'
   err_missing_lib: '[VILLA] Safnið {lib} vantar. Keyrðu: pip install {pkg}'
 
 run_all:
