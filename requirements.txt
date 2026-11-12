@@ -6,41 +6,47 @@
 # 550/550 stron słownika ze zniekształconą mapą ToUnicode, 99 innych PDF-ów bajtowo bez zmian (2026-10-20).
 # Minimalny Python wynika z zależności: 3.12 (numpy 2.5, lingua 2.2).
 # Nowsze wydania sprawdza `python audyt_zaleznosci.py` (tylko ostrzega).
+# KANON ŚRODOWISKA (od 2026-11-12, bliźniak Reżysera 19.18): każda granica nosi
+# `# hold: <wersja ATA>` — wydanie, w którym ją ostatnio PRZETESTOWANO. Hold wygasa
+# z następnym minorem: audyt ostrzega HOLD WYGASŁ, gdy istnieje nowsze wydanie, a
+# release_notes.md jest już w późniejszym minorze. Podbicie granicy albo odnowienie
+# daty = test wg grupy ryzyka pakietu (audyt_zaleznosci.GRUPY_RYZYKA). Daty sprzed
+# 2026-11-12 nadano wstecz z historii gita (pierwszy tag zawierający granicę).
 
 # Środowisko i narzędzia
-ipykernel<7.5
-nbstripout<0.10
-jupytext<1.20
+ipykernel<7.5  # hold: 1.8.0
+nbstripout<0.10  # hold: 1.8.0
+jupytext<1.20  # hold: 1.8.0
 # Wykonanie notatnika bez interfejsu (CI / skrypty): komórki 0–39, z pominięciem
 # interaktywnej cell_qa_rag, która w trybie wsadowym pada na EOF przy input().
 # Sposób uruchomienia — CLAUDE.md, sekcja "Headless execution (nbclient)".
-nbclient<0.12
-pyyaml<6.1
+nbclient<0.12  # hold: 1.10.1
+pyyaml<6.1  # hold: 1.8.0
 
 # Parsowanie plików i ekstrakcja tekstu
-pdfplumber<0.12
+pdfplumber<0.12  # hold: 1.8.0
 # Odczyt znaków z fontu osadzonego w PDF, gdy mapa ToUnicode jest ucięta
 # (pdfplumber oddaje wtedy „(cid:N)”). Brak pakietu => takie strony są zgłaszane i pomijane.
-fonttools<4.68
-python-docx<1.3
-beautifulsoup4<4.16
-lxml<6.2
-requests<2.35
+fonttools<4.68  # hold: 1.11.0
+python-docx<1.3  # hold: 1.8.0
+beautifulsoup4<4.16  # hold: 1.8.0
+lxml<6.2  # hold: 1.8.0
+requests<2.35  # hold: 1.8.0
 
 # Analiza tekstu i NLP
-lingua-language-detector<2.3
-spacy<3.9
-numpy<2.6
-pandas<3.1
-scikit-learn<1.10
-tqdm<4.71
+lingua-language-detector<2.3  # hold: 1.8.0
+spacy<3.9  # hold: 1.8.0
+numpy<2.6  # hold: 1.8.0
+pandas<3.1  # hold: 1.8.0
+scikit-learn<1.10  # hold: 1.8.0
+tqdm<4.71  # hold: 1.8.0
 # Wsparcie dla języka islandzkiego (Hugging Face: IceBERT + MIM-GOLD-22).
 # Odkomentuj obie linie, jeśli analizujesz teksty po islandzku — pozwoli to
 # załadować spaCy + IceBERT-base (wektory) i icelandic-ner-MIM-GOLD-22 (NER)
 # w komórce cell_model. Pobranie tych modeli to ~700 MB przy pierwszym uruchomieniu.
 # Dla pozostałych języków (pl, ru, en, it, fi) te zależności nie są potrzebne.
-# transformers<5.20
-# torch<2.15
+# transformers<5.20  # hold: 1.8.0
+# torch<2.15  # hold: 1.8.0
 # Opcjonalne doprecyzowanie fińskiej morfologii (komórka cell_model).
 # Odkomentuj linię poniżej, a po instalacji pobierz automaty poleceniem:
 #   omorfi-download
@@ -51,13 +57,13 @@ tqdm<4.71
 # a przy niezgodności UPOS — sam lemat, gdy lemat spaCy nie jest słownikowy, a omorfi
 # daje jeden lemat (blokkaa -> blokata zamiast *blokka).
 # Brak pakietu lub automatów => cell_model zostaje przy lematyzatorze spaCy.
-# omorfi<0.11
+# omorfi<0.11  # hold: 1.8.0
 
 # Generowanie raportu
-markdown<3.12
-markdownify<1.3
-openai<3.32
-python-dotenv<1.3
+markdown<3.12  # hold: 1.8.0
+markdownify<1.3  # hold: 1.8.0
+openai<3.32  # hold: 1.8.0
+python-dotenv<1.3  # hold: 1.8.0
 
 # Opcjonalna analiza sentymentu (pożywka dla rytuału Vieno i lokalnego rytuału
 # "prąd podskórny"). Odkomentuj te linie ORAZ ustaw "enable_sentiment": true
@@ -73,16 +79,16 @@ python-dotenv<1.3
 # Brak którejkolwiek z nich => sentyment jest po prostu pomijany (bez fallbacku),
 # a reszta potoku działa jak dotąd. transformers i torch współdzielone z blokami
 # islandzkim/OCR.
-# transformers<5.20
-# torch<2.15
-# sentencepiece<0.3
-# protobuf<7.37
-# tiktoken<0.15
+# transformers<5.20  # hold: 1.8.0
+# torch<2.15  # hold: 1.8.0
+# sentencepiece<0.3  # hold: 1.8.0
+# protobuf<7.37  # hold: 1.8.0
+# tiktoken<0.15  # hold: 1.8.0
 
 # Wsparcie OCR dla skanowanych PDF-ów i obrazów (.png/.jpg/.jpeg/.tif/.tiff/.bmp/.webp).
 # Odkomentuj obie linie, jeśli twój korpus zawiera skany lub obrazy — pozwoli to
 # renderować strony PDF przez pypdfium2 i rozpoznawać tekst przez easyocr.
 # easyocr ciągnie też torch (+ kilkaset MB modeli OCR przy pierwszym uruchomieniu),
 # więc dla korpusów tekstowych nie ma sensu instalować tej pary.
-# pypdfium2<5.15
-# easyocr<1.8
+# pypdfium2<5.15  # hold: 1.8.0
+# easyocr<1.8  # hold: 1.8.0

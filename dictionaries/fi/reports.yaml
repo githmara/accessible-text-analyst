@@ -161,7 +161,13 @@ deps:
   w_poza: '[VAROITUS] {nazwa} {inst} ei täytä requirements.txt-tiedoston rajaa {spec}.'
   w_brak: '[VAROITUS] {nazwa} ({spec}) vaaditaan, mutta sitä ei ole asennettu (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: PyPI:hin ei saatu yhteyttä, uusinta versiota ei tarkistettu.'
-  podsumowanie: '[YHTEENVETO] ajan tasalla: {ok}, rajalla pidätetyt: {trzymane}, varoituksia: {ostrzezenia}, asentamattomia valinnaisia: {pominiete}.'
+  w_przeterminowana: '[PIDÄTYS VANHENTUNUT] {nazwa} {inst}: {nowa} on saatavilla, raja {spec} on versiosta v{hold} ja projekti on jo versiossa v{projekt} — testaa uusi julkaisu ja nosta rajaa tai uusi pidätyksen päiväys.'
+  w_niedatowana: '[VAROITUS] {nazwa} {inst}: {nowa} on saatavilla ja raja {spec} sulkee sen pois, mutta rajalla ei ole päiväystä (lisää `  # hold: {projekt}` testauksen jälkeen).'
+  w_bez_grupy: '[VAROITUS] Paketilla {nazwa} ei ole riskiryhmää kohdassa audyt_zaleznosci.GRUPY_RYZYKA — uusi riippuvuus saa ryhmänsä samassa commitissa.'
+  grupa_A: 'ryhmä A: muuttaa analyysin tuloksia tai raportin ulkoasua — testaa muistion solut ja koko run_all.py tutulla korpuksella.'
+  grupa_B: 'ryhmä B: keskustelee ulkoisen API:n kanssa — tarkista yksi todellinen mallikutsu (llm_klient / shamanic_ai).'
+  grupa_C: 'ryhmä C: työkaluja tuloksen vierellä — päivitä vapaasti, testit riittävät.'
+  podsumowanie: '[YHTEENVETO] ajan tasalla: {ok}, rajalla pidätetyt: {trzymane}, vanhentuneet pidätykset: {przeterminowane}, varoituksia: {ostrzezenia}, asentamattomia valinnaisia: {pominiete}.'
   err_missing_lib: '[VIRHE] Kirjasto {lib} puuttuu. Suorita: pip install {pkg}'
 
 run_all:

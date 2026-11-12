@@ -161,7 +161,13 @@ deps:
   w_poza: '[AVVISO] {nazwa} {inst} non rispetta il limite {spec} di requirements.txt.'
   w_brak: '[AVVISO] {nazwa} ({spec}) è richiesto ma non installato (pip install -r requirements.txt).'
   w_pypi: '[INFO] {nazwa} {inst}: PyPI non raggiungibile, l''ultima versione non è stata verificata.'
-  podsumowanie: '[RIEPILOGO] aggiornati: {ok}, trattenuti dal limite: {trzymane}, avvisi: {ostrzezenia}, opzionali non installati: {pominiete}.'
+  w_przeterminowana: '[TRATTENUTA SCADUTA] {nazwa} {inst}: esiste {nowa}, il limite {spec} risale alla v{hold} e il progetto è già alla v{projekt} — testa la nuova versione e alza il limite, oppure rinnova la data della trattenuta.'
+  w_niedatowana: '[AVVISO] {nazwa} {inst}: esiste {nowa} e il limite {spec} la esclude, ma il limite non ha una data (aggiungi `  # hold: {projekt}` dopo il test).'
+  w_bez_grupy: '[AVVISO] {nazwa} non ha un gruppo di rischio in audyt_zaleznosci.GRUPY_RYZYKA — una nuova dipendenza riceve il suo gruppo nello stesso commit.'
+  grupa_A: 'gruppo A: cambia ciò che l''analisi trova o come si legge il report — testa le celle del notebook e un run_all.py completo su un corpus noto.'
+  grupa_B: 'gruppo B: comunica con un''API esterna — verifica una vera chiamata al modello (llm_klient / shamanic_ai).'
+  grupa_C: 'gruppo C: strumenti accanto al risultato — aggiorna liberamente, bastano i test.'
+  podsumowanie: '[RIEPILOGO] aggiornati: {ok}, trattenuti dal limite: {trzymane}, trattenute scadute: {przeterminowane}, avvisi: {ostrzezenia}, opzionali non installati: {pominiete}.'
   err_missing_lib: '[ERRORE] Manca la libreria {lib}. Esegui: pip install {pkg}'
 
 run_all:
