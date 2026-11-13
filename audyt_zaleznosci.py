@@ -208,13 +208,28 @@ def werdykt(spec: str, inst: str | None, nowa: str | None, opcja: bool) -> str:
     return "dopuszczona" if (not spec or Version(nowa) in s) else "trzymana"
 
 
+def _klon_plytki(katalog: Path) -> bool:
+    """True, gdy repo jest płytkim klonem — wiek z blame jest wtedy fałszywy.
+    Bliźniak Reżysera (`audyt_zaleznosci._klon_plytki`)."""
+    try:
+        wynik = subprocess.run(["git", "rev-parse", "--is-shallow-repository"],
+                               cwd=katalog, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return wynik.returncode == 0 and wynik.stdout.strip() == "true"
+
+
 def wiek_linii_manifestu(sciezka: Path = MANIFEST, dzis: date | None = None) -> dict[str, int]:
     """{pakiet: dni od commitu, który ostatnio zmienił jego linię} z `git blame`.
 
     Linie opcjonalne (`# pakiet<…`) też się liczą. Bez gita: pusty słownik
-    (wiek nieznany, nie zerowy).
+    (wiek nieznany, nie zerowy). Płytki klon (`--depth 1`) też: blame
+    przypisałby każdą linię commitowi granicznemu i odmłodził hold (bliźniak
+    Reżysera, audyt 2026-11-13: 130 dni w pełnej historii, 10 w płytkim klonie).
     """
     dzis = dzis or date.today()
+    if _klon_plytki(sciezka.parent):
+        return {}
     try:
         wynik = subprocess.run(["git", "blame", "--line-porcelain", "--", sciezka.name],
                                cwd=sciezka.parent, capture_output=True, text=True,

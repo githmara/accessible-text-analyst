@@ -101,6 +101,17 @@ class TestWstrzymanie(unittest.TestCase):
                    "# torch<2.16  # hold: 1.13.0\n", "2026-01-01T12:00:00")
             wieki = az.wiek_linii_manifestu(plik, dzis=date(2026, 1, 11))
             self.assertEqual(wieki, {"fonttools": 10, "torch": 10})
+            # Komentarz prozą z `hold:` nad wpisem nie podaje wieku (bliźniak
+            # Reżysera, audyt 2026-11-13) — tu `_WPIS` wymaga całej linii-wpisu.
+            commit("# fonttools: hold: 1.13.0 przedluzony\nfonttools<4.69  # hold: 1.13.0\n",
+                   "2026-01-05T12:00:00")
+            self.assertEqual(az.wiek_linii_manifestu(plik, dzis=date(2026, 1, 11)), {"fonttools": 10})
+            # Płytki klon: blame odmłodziłby hold — wiek nieznany, nie świeży.
+            klon = Path(tmp) / "klon"
+            subprocess.run(["git", "clone", "-q", "--depth", "1", repo.as_uri(), str(klon)],
+                           check=True, capture_output=True)
+            self.assertTrue(az._klon_plytki(klon))
+            self.assertEqual(az.wiek_linii_manifestu(klon / "requirements.txt"), {})
 
     def test_modele_hf_z_notatnika(self):
         """Audyt 2026-11-13: oba modele islandzkie wskazywały nieistniejące
