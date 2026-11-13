@@ -238,9 +238,11 @@ Alla olevat skriptit on tarkoitettu ajettaviksi **järjestyksessä**: jokainen k
 python run_all.py
 # käytä notebookiin jo tallennettuja tulosteita
 python run_all.py --skip-notebook
+# kirjastojen varoitukset virheinä, notebookin kopiossa (diagnostiikka)
+python run_all.py --warnings-as-errors
 ```
 
-Alla olevat vaiheet 1, 2 ja 4 sekä suomenkieliselle korpukselle Sanomattomien kirjan `scan` yhdellä komennolla. Aja se repon `.venv`-ympäristön Pythonilla: jos ydin `analyst_env` puuttuu, se rekisteröidään tälle tulkille. Ketju pysähtyy ensimmäiseen epäonnistuvaan vaiheeseen; paluukoodi 3 tarkoittaa, että raportin lähdetarkistus hylkäsi ajon (ks. vaihe 2).
+Alla olevat vaiheet 1, 2 ja 4 sekä suomenkieliselle korpukselle Sanomattomien kirjan `scan` yhdellä komennolla. Aja se repon `.venv`-ympäristön Pythonilla: jos ydin `analyst_env` puuttuu, se rekisteröidään tälle tulkille. Ketju pysähtyy ensimmäiseen epäonnistuvaan vaiheeseen; paluukoodi 3 tarkoittaa, että raportin lähdetarkistus hylkäsi ajon (ks. vaihe 2). Notebook vaimentaa kirjastojen varoitukset tarkoituksella, jotta ne eivät päädy analyysiraporttiin. `--warnings-as-errors` on erillinen diagnostiikkatila: se ajaa notebookin kopion, jossa jokainen varoitus on virhe, tallentaa viennit väliaikaiskansioon ja tulostaa ensimmäisen varoituksen otsikon alle kirjaston omin sanoin, solun ja rivin kanssa. Notebook ja `export_results/` jäävät koskematta, eikä raporttia tai myöhempiä vaiheita ajeta; paluukoodi 4 = varoitus löytyi, 0 = ei yhtään. Aja se kirjastojen päivittämisen jälkeen.
 
 ### 1. Notebook (pakollinen)
 

@@ -238,9 +238,11 @@ Skriftunum hér að neðan er ætlað að keyra **í röð**: hver tekur við gr
 python run_all.py
 # nota úttakið sem þegar er vistað í minnisbókinni
 python run_all.py --skip-notebook
+# viðvaranir safna sem villur, í afriti af minnisbókinni (greining)
+python run_all.py --warnings-as-errors
 ```
 
-Skref 1, 2 og 4 hér að neðan, auk `scan` fyrir Bók hins ósagða þegar textasafnið er finnskt, í einni skipun. Keyrðu hann með Python úr `.venv` geymslunnar: ef kjarnann `analyst_env` vantar er hann skráður fyrir þann túlk. Keðjan stöðvast við fyrsta skrefið sem mistekst; úttakskóði 3 þýðir að heimildarathugun skýrslunnar hafnaði (sjá skref 2).
+Skref 1, 2 og 4 hér að neðan, auk `scan` fyrir Bók hins ósagða þegar textasafnið er finnskt, í einni skipun. Keyrðu hann með Python úr `.venv` geymslunnar: ef kjarnann `analyst_env` vantar er hann skráður fyrir þann túlk. Keðjan stöðvast við fyrsta skrefið sem mistekst; úttakskóði 3 þýðir að heimildarathugun skýrslunnar hafnaði (sjá skref 2). Minnisbókin þaggar viðvaranir safna viljandi svo þær berist ekki í greiningarskýrsluna. `--warnings-as-errors` er sérstakur greiningarhamur: hann keyrir afrit af minnisbókinni þar sem hver viðvörun er villa, vistar útflutninginn í bráðabirgðamöppu og prentar fyrstu viðvörunina undir fyrirsögn, orðaða af safninu, ásamt hólfi og línu. Minnisbókin og `export_results/` eru ósnert og skýrslan og síðari skref keyra ekki; úttakskóði 4 = viðvörun fannst, 0 = engin. Keyrðu hann eftir uppfærslu safna.
 
 ### 1. Minnisbók (skyldug)
 

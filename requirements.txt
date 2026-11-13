@@ -11,7 +11,8 @@
 # na starych wersjach (docx: identyczne członki XML). Brak ostrzeżeń w komórkach NIE
 # jest dowodem: cell_langdet wycisza wszystkie od drugiej komórki — deprecjacje
 # sprawdził osobny audyt sondami z -W error (pandas, openai, transformers, spaCy,
-# pypdfium2, fonttools, markdown: czysto);
+# pypdfium2, fonttools, markdown: czysto), a cały notatnik `run_all.py
+# --warnings-as-errors` (komórki 0–39 z sentymentem: żadnego ostrzeżenia);
 # modele spaCy 3.8.0 zgodne (spacy validate); jedno żywe wywołanie llm_klient
 # (OpenRouter, tekst + json_schema). pypdfium2/fonttools: 12 PDF-ów identycznych
 # 5.14 → 5.15 we wspólnym czyszczeniu z Reżyserem (19.18, 2026-11-12).

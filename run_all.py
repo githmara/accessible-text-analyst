@@ -15,7 +15,8 @@ launcher rejestruje je dla interpretera, którym sam działa (`ipykernel install
 --user`), więc uruchamiaj go Pythonem z .venv repo.
 
 Kody wyjścia: 0 = łańcuch przeszedł, 1 = krok się wywrócił, 3 = bramka źródła
-odmówiła raportu (jak w generate_report.py).
+odmówiła raportu (jak w generate_report.py), 4 = `--warnings-as-errors`
+znalazł ostrzeżenie (osobny tryb: sam notatnik, na kopii, bez reszty łańcucha).
 """
 import argparse
 import json
@@ -121,6 +122,109 @@ def run_notebook():
     return ok
 
 
+# Tryb --warnings-as-errors. Notatnik celowo wycisza ostrzeżenia
+# (cell_langdet), żeby nie wyciekały do raportu z czystą analizą — przez to
+# deprecjacja albo ostrzeżenie o niespójnych danych nie dociera do nikogo.
+# Ten tryb wykonuje KOPIĘ notatnika z ostrzeżeniami zamienionymi w błędy
+# (jak audyt z `-W error`) i eksportami skierowanymi do katalogu
+# tymczasowego: notatnik w repo i export_results/ zostają nietknięte, więc
+# bramka źródła raportu nie widzi eksportów nowszych niż zapisane wyjścia.
+WARNINGS_TAG = "warnings_as_errors"
+WARNINGS_ERROR = 'warnings.simplefilter("error")'
+# Kotwice łaty: dokładnie jedno trafienie w podanej komórce, inaczej tryb
+# odmawia (notatnik zmienił się pod łatą — test_run_all to wychwyci).
+WARNINGS_ANCHORS = (
+    ("cell_langdet", 'warnings.filterwarnings("ignore")'),
+    ("cell_corpus", 'PROJECT_DIR = Path("export_results") / PROJECT_NAME'),
+)
+
+
+def patch_for_warnings(nb, export_root):
+    """Kopia notatnika: pierwsza komórka zamienia ostrzeżenia w błędy,
+    cell_langdet już ich nie wycisza, PROJECT_DIR leży w export_root.
+    Zwraca nową kopię albo rzuca ValueError z tagiem i kotwicą, która nie trafiła."""
+    import copy
+    import nbformat
+
+    kopia = copy.deepcopy(nb)
+    zamiany = {
+        WARNINGS_ANCHORS[0]: WARNINGS_ERROR,
+        WARNINGS_ANCHORS[1]: f"PROJECT_DIR = Path({str(export_root)!r}) / PROJECT_NAME",
+    }
+    for (tag, kotwica), nowa in zamiany.items():
+        komorki = [c for i, c in enumerate(kopia.cells) if _tag(c, i) == tag]
+        if len(komorki) != 1 or komorki[0].source.count(kotwica) != 1:
+            raise ValueError(f"{tag}: {kotwica}")
+        komorki[0].source = komorki[0].source.replace(kotwica, nowa)
+    pierwsza = nbformat.v4.new_code_cell("import warnings\n" + WARNINGS_ERROR)
+    pierwsza.metadata["tags"] = [WARNINGS_TAG]
+    kopia.cells.insert(0, pierwsza)
+    return kopia
+
+
+def _warning_location(traceback_lines):
+    """Gdzie padło ostrzeżenie, z tracebacku IPythona: linia komórki
+    (`Cell In[11], line 104`) i ostatnia ramka biblioteki (`File ~/…/x.py:12,
+    in f`). Lista 0–2 linii — pusta, gdy żadnej ramki nie ma."""
+    ramki = [ANSI_RE.sub("", linia).strip() for blok in traceback_lines or []
+             for linia in str(blok).splitlines()]
+    komorka = [r for r in ramki if r.startswith("Cell In")]
+    biblioteka = [r for r in ramki if r.startswith("File ")]
+    return komorka[-1:] + biblioteka[-1:]
+
+
+def run_warnings_check():
+    """Kody: 0 = żadnego ostrzeżenia, 4 = ostrzeżenie (wydrukowane pod
+    nagłówkiem, surowe — tekst biblioteki nie ma tłumaczenia), 1 = inna awaria."""
+    import tempfile
+    import nbformat
+    from nbclient import NotebookClient
+    from nbclient.exceptions import CellExecutionError
+
+    nb = nbformat.read(NOTEBOOK, as_version=4)
+    name = nb.metadata.get("kernelspec", {}).get("name", "analyst_env")
+    if not ensure_kernel(name):
+        return 1
+    with tempfile.TemporaryDirectory(prefix="ata_warnings_") as tmp:
+        try:
+            nb = patch_for_warnings(nb, Path(tmp) / "export_results")
+        except ValueError as e:
+            print(t(UI_LANG, "run_all.warnings_patch_failed", anchor=str(e)))
+            return 1
+        print(t(UI_LANG, "run_all.warnings_start", path=tmp))
+        stop = next((i for i, c in enumerate(nb.cells) if _tag(c, i) in QA_TAGS), len(nb.cells))
+        code = [i for i in range(stop) if nb.cells[i].cell_type == "code"]
+        client = NotebookClient(nb, timeout=None, kernel_name=name,
+                                resources={"metadata": {"path": str(ROOT)}})
+        warnings.filterwarnings("ignore", message="Proactor event loop", category=RuntimeWarning)
+        i = code[0]
+        try:
+            with client.setup_kernel(stderr=subprocess.DEVNULL):
+                for n, i in enumerate(code, 1):
+                    print(t(UI_LANG, "run_all.notebook_cell", i=n, total=len(code),
+                            tag=_tag(nb.cells[i], i)), flush=True)
+                    client.execute_cell(nb.cells[i], i)
+        except CellExecutionError as e:
+            ename = getattr(e, "ename", "") or ""
+            evalue = ANSI_RE.sub("", str(getattr(e, "evalue", "") or "")).strip()
+            if ename.endswith("Warning"):
+                print(t(UI_LANG, "run_all.warnings_found", tag=_tag(nb.cells[i], i)))
+                print(f"{ename}: {evalue}")
+                for linia in _warning_location(nb.cells[i].outputs[-1].get("traceback")
+                                               if nb.cells[i].outputs else None):
+                    print(linia)
+                return 4
+            print(t(UI_LANG, "run_all.warnings_cell_failed", tag=_tag(nb.cells[i], i),
+                    error=f"{ename}: {evalue}" if ename else type(e).__name__))
+            return 1
+        except Exception as e:  # noqa: BLE001 — DeadKernelError, jądro nie wstało
+            last = ANSI_RE.sub("", str(e) or type(e).__name__).strip().splitlines()[-1:] or [type(e).__name__]
+            print(t(UI_LANG, "run_all.warnings_cell_failed", tag=_tag(nb.cells[i], i), error=last[0]))
+            return 1
+    print(t(UI_LANG, "run_all.warnings_clean", n=len(code)))
+    return 0
+
+
 def run_script(args):
     r = subprocess.run([sys.executable, *args], cwd=ROOT)
     return r.returncode
@@ -138,8 +242,13 @@ def main(argv=None):
     ap.add_argument("--skip-notebook", action="store_true", help=t(UI_LANG, "run_all.help_skip_notebook"))
     ap.add_argument("--no-shamanic", action="store_true", help=t(UI_LANG, "run_all.help_no_shamanic"))
     ap.add_argument("--no-book", action="store_true", help=t(UI_LANG, "run_all.help_no_book"))
+    ap.add_argument("--warnings-as-errors", action="store_true",
+                    help=t(UI_LANG, "run_all.help_warnings_as_errors"))
     args = ap.parse_args(argv)
     os.chdir(ROOT)
+
+    if args.warnings_as_errors:
+        return run_warnings_check()
 
     total = 4 - args.no_shamanic - args.no_book
     n = 0

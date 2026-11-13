@@ -238,9 +238,11 @@ Gli script numerati di seguito sono pensati per essere eseguiti **in ordine**: o
 python run_all.py
 # riusa gli output già salvati nel notebook
 python run_all.py --skip-notebook
+# avvisi delle librerie come errori, su una copia del notebook (diagnostica)
+python run_all.py --warnings-as-errors
 ```
 
-I passi 1, 2 e 4 qui sotto, più lo `scan` del Libro del non detto per un corpus finlandese, con un solo comando. Eseguilo con il Python del `.venv` del repository: se il kernel `analyst_env` manca, viene registrato per quell'interprete. La catena si ferma al primo passo che fallisce; il codice di uscita 3 significa che il controllo della fonte del report ha rifiutato (vedi passo 2).
+I passi 1, 2 e 4 qui sotto, più lo `scan` del Libro del non detto per un corpus finlandese, con un solo comando. Eseguilo con il Python del `.venv` del repository: se il kernel `analyst_env` manca, viene registrato per quell'interprete. La catena si ferma al primo passo che fallisce; il codice di uscita 3 significa che il controllo della fonte del report ha rifiutato (vedi passo 2). Il notebook silenzia di proposito gli avvisi delle librerie, perché non finiscano nel report di analisi. `--warnings-as-errors` è una modalità diagnostica separata: esegue una copia del notebook in cui ogni avviso è un errore, salva le esportazioni in una cartella temporanea e stampa il primo avviso sotto un'intestazione, nella formulazione della libreria, con cella e riga. Il notebook e `export_results/` restano intatti, il report e i passi successivi non partono; codice di uscita 4 = trovato un avviso, 0 = nessuno. Eseguilo dopo aver aggiornato le librerie.
 
 ### 1. Notebook (obbligatorio)
 

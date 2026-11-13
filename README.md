@@ -238,9 +238,11 @@ The numbered scripts below are intended to be run **in order**: each one consume
 python run_all.py
 # reuse the outputs already saved in the notebook
 python run_all.py --skip-notebook
+# library warnings as errors, on a copy of the notebook (diagnostics)
+python run_all.py --warnings-as-errors
 ```
 
-Steps 1, 2 and 4 below, plus the Book of the Unsaid `scan` for a Finnish corpus, in one command. Run it with the Python of the repo's `.venv`: if the `analyst_env` kernel is missing, it is registered for that interpreter. The chain stops at the first failing step; exit code 3 means that the source gate of the report refused (see step 2).
+Steps 1, 2 and 4 below, plus the Book of the Unsaid `scan` for a Finnish corpus, in one command. Run it with the Python of the repo's `.venv`: if the `analyst_env` kernel is missing, it is registered for that interpreter. The chain stops at the first failing step; exit code 3 means that the source gate of the report refused (see step 2). The notebook deliberately silences library warnings so they stay out of the analysis report. `--warnings-as-errors` is a separate diagnostic mode: it runs a copy of the notebook in which every warning is an error, writes the exports to a temporary folder, and prints the first warning under a heading, worded by the library, with its cell and line. The notebook and `export_results/` are left untouched, and the report and later steps do not run; exit code 4 = a warning was found, 0 = none. Run it after updating libraries.
 
 ### 1. Notebook (mandatory)
 

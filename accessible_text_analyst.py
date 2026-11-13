@@ -1146,6 +1146,8 @@ MODEL_BY_LANG = {_k: _p["spacy"] for _k, _p in PODSTAWY.items() if _p["spacy"]}
 # Hugging Face модели для исландского (нет в spaCy):
 HF_IS_VECTORS = "mideind/IceBERT-base"
 HF_IS_NER = "mideind/icelandic-ner-MIM-GOLD-22"
+# Сбои исландского NER по фрагментам (имя исключения); итог печатает cell_ner.
+IS_NER_FAILURES = []
 
 
 def _silence_hf_progress():
@@ -1224,7 +1226,13 @@ def _build_icelandic_pipeline(blank_nlp):
         _is_ner = pipeline(
             "token-classification",
             model=HF_IS_NER,
+            # Токенизатор модели не задаёт model_max_length, поэтому абзац
+            # длиннее ~512 подтокенов падал внутри модели, а исключение
+            # глоталось — ноль сущностей без единого слова (аудит 2026-11-13).
+            # Явный предел + stride режут длинный текст на перекрывающиеся окна.
+            tokenizer=AutoTokenizer.from_pretrained(HF_IS_NER, model_max_length=512),
             aggregation_strategy="simple",
+            stride=128,
         )
 
         @Language.component("icelandic_ner")
@@ -1235,7 +1243,11 @@ def _build_icelandic_pipeline(blank_nlp):
                 return doc
             try:
                 results = _is_ner(text[:5000]) or []
-            except Exception:
+            except Exception as _e:
+                # Не молча: первый сбой — с причиной, итог считает cell_ner.
+                if not IS_NER_FAILURES:
+                    print(f"[ВНИМАНИЕ] Исландский NER не обработал фрагмент: {_e}")
+                IS_NER_FAILURES.append(type(_e).__name__)
                 return doc
             spans = []
             for r in results:
@@ -1741,6 +1753,9 @@ if all_ents:
         print(f"  {etype:<12}: {cnt}")
 else:
     print("Именованных сущностей не найдено ни в одном документе.")
+if IS_NER_FAILURES:
+    print(f"[ВНИМАНИЕ] Исландский NER не обработал фрагментов: {len(IS_NER_FAILURES)} "
+          f"({', '.join(sorted(set(IS_NER_FAILURES)))}) — сущности в них не найдены.")
 
 # %% [markdown] id="md_bow" tags=["md_bow"]
 # ## 8) Мешок слов (CountVectorizer)
@@ -2566,7 +2581,9 @@ try:
     kw_scores = Xkw.mean(axis=0).A1
     df_keywords_tfidf = (
         pd.DataFrame({"term": kw_terms, "score": kw_scores})
-        .sort_values("score", ascending=False)
+        # Стабильная сортировка с ничьей по термину: порядок равных весов
+        # не зависит от алгоритма сортировки версии numpy/pandas.
+        .sort_values(["score", "term"], ascending=[False, True], kind="stable")
         .reset_index(drop=True)
     )
     print(f"Уникальных терминов: {len(kw_terms)}")
@@ -2735,7 +2752,9 @@ else:
             Xt = vt.fit_transform(subset)
             tt = vt.get_feature_names_out()
             st = Xt.mean(axis=0).A1
-            top_t = pd.DataFrame({"term": tt, "s": st}).sort_values("s", ascending=False).head(8)["term"].tolist()
+            top_t = (pd.DataFrame({"term": tt, "s": st})
+                     .sort_values(["s", "term"], ascending=[False, True], kind="stable")
+                     .head(8)["term"].tolist())
         except Exception:
             top_t = []
         topic_keywords[int(topic_id)] = top_t
@@ -2778,6 +2797,10 @@ else:
             model=SENTIMENT_MODEL,
             truncation=True,
             max_length=512,
+            # Явно CPU и float32: на машине с GPU pipeline сам выбрал бы
+            # cuda, и тональность абзацев отличалась бы от CPU-прогона.
+            device=-1,
+            dtype="float32",
         )
         print("[OK] Модель тональности загружена.")
     except Exception as _exc:

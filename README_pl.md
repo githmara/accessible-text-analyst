@@ -238,9 +238,11 @@ Skrypty numerowane poniżej są uruchamiane **po kolei**: każdy konsumuje artef
 python run_all.py
 # użyj wyjść już zapisanych w notatniku
 python run_all.py --skip-notebook
+# ostrzeżenia bibliotek jako błędy, na kopii notatnika (diagnostyka)
+python run_all.py --warnings-as-errors
 ```
 
-Kroki 1, 2 i 4 poniżej, a dla korpusu fińskiego także `scan` Księgi Niedomówień, jednym poleceniem. Uruchamiaj go Pythonem z `.venv` repo: jeśli brakuje jądra `analyst_env`, zostanie zarejestrowane dla tego interpretera. Łańcuch zatrzymuje się na pierwszym kroku, który się wywróci; kod wyjścia 3 oznacza, że odmówiła bramka źródła raportu (patrz krok 2).
+Kroki 1, 2 i 4 poniżej, a dla korpusu fińskiego także `scan` Księgi Niedomówień, jednym poleceniem. Uruchamiaj go Pythonem z `.venv` repo: jeśli brakuje jądra `analyst_env`, zostanie zarejestrowane dla tego interpretera. Łańcuch zatrzymuje się na pierwszym kroku, który się wywróci; kod wyjścia 3 oznacza, że odmówiła bramka źródła raportu (patrz krok 2). Notatnik celowo wycisza ostrzeżenia bibliotek, żeby nie trafiały do raportu z analizą. `--warnings-as-errors` to osobny tryb diagnostyczny: wykonuje kopię notatnika, w której każde ostrzeżenie jest błędem, eksporty zapisuje w katalogu tymczasowym i wypisuje pierwsze ostrzeżenie pod nagłówkiem, w brzmieniu biblioteki, z komórką i linią. Notatnik i `export_results/` zostają nietknięte, raport i dalsze kroki się nie uruchamiają; kod wyjścia 4 = znaleziono ostrzeżenie, 0 = żadnego. Uruchamiaj go po aktualizacji bibliotek.
 
 ### 1. Notatnik (obowiązkowy)
 
