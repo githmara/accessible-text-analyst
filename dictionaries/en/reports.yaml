@@ -169,6 +169,7 @@ deps:
   grupa_B: 'group B: talks to an external API — check one real model call (llm_klient / shamanic_ai).'
   grupa_C: 'group C: tooling next to the result — upgrade freely, the tests are enough.'
   podsumowanie: '[SUMMARY] up to date: {ok}, held by a bound: {trzymane}, expired holds: {przeterminowane}, warnings: {ostrzezenia}, optional not installed: {pominiete}.'
+  wiek_nieznany: '[WARNING] The age of {ile} dated holds is unknown ({nazwy}) — requirements.txt has no git history, so the {limit}-day clock cannot run and a stale hold would look current. The alarm-clock marker will not be written.'
   budzik: '[ALARM CLOCK] The full audit result was saved to {plik} — the maintainer''s session-start reminder reads it.'
   err_missing_lib: '[ERROR] The {lib} library is missing. Run: pip install {pkg}'
 

@@ -169,6 +169,7 @@ deps:
   grupa_B: 'flokkur B: talar við ytra API — athugaðu eitt raunverulegt líkanakall (llm_klient / shamanic_ai).'
   grupa_C: 'flokkur C: verkfæri við hlið niðurstöðunnar — uppfærðu óhikað, prófanirnar duga.'
   podsumowanie: '[SAMANTEKT] uppfært: {ok}, haldið af mörkum: {trzymane}, útrunnin höld: {przeterminowane}, viðvaranir: {ostrzezenia}, valkvætt ekki uppsett: {pominiete}.'
+  wiek_nieznany: '[VIÐVÖRUN] Aldur {ile} dagsettra halda er óþekktur ({nazwy}) — requirements.txt hefur enga git-sögu, svo {limit} daga klukkan gengur ekki og útrunnið hald liti út fyrir að vera í gildi. Vekjaramerkið verður ekki vistað.'
   budzik: '[VEKJARI] Niðurstaða fullrar athugunar var vistuð í {plik} — áminning umsjónarmanns í upphafi lotu les hana.'
   err_missing_lib: '[VILLA] Safnið {lib} vantar. Keyrðu: pip install {pkg}'
 

@@ -48,7 +48,57 @@ def rozjazdy(katalog: Path, oczekiwana: str) -> list[str]:
     return bledy
 
 
+def granice_manifestu(plik: Path) -> dict[str, str]:
+    """{pakiet (lower): specyfikator} z requirements.txt, także z zakomentowanych wpisów."""
+    wynik = {}
+    for linia in plik.read_text(encoding="utf-8").splitlines():
+        tekst = linia.strip().lstrip("#").strip().split("#", 1)[0].strip()
+        for znak in "<>=!~":
+            if znak in tekst:
+                nazwa, _, reszta = tekst.partition(znak)
+                if nazwa.strip() and " " not in nazwa.strip():
+                    wynik.setdefault(nazwa.strip().lower(), znak + reszta)
+                break
+    return wynik
+
+
+def granice_w_workflow(tekst: str) -> dict[str, str]:
+    """{pakiet: specyfikator} ze wszystkich `"pkg<X"` w liniach `pip install`."""
+    wynik = {}
+    for linia in tekst.splitlines():
+        if "pip install" not in linia:
+            continue
+        for kawalek in linia.split(chr(34))[1::2]:
+            for znak in "<>=!~":
+                if znak in kawalek:
+                    nazwa, _, reszta = kawalek.partition(znak)
+                    wynik[nazwa.strip().lower()] = znak + reszta
+                    break
+    return wynik
+
+
+def rozjazdy_granic(katalog: Path, manifest: dict[str, str]) -> list[str]:
+    bledy = []
+    for wf in sorted(katalog.glob("*.yml")):
+        for nazwa, spec in granice_w_workflow(wf.read_text(encoding="utf-8")).items():
+            if nazwa in manifest and manifest[nazwa] != spec:
+                bledy.append(f"{wf.name}: {nazwa}{spec}, requirements.txt has "
+                             f"{nazwa}{manifest[nazwa]}")
+    return bledy
+
+
 class TestPythonCI(unittest.TestCase):
+    def test_granice_pakietow_w_workflow_zgodne_z_manifestem(self):
+        """Audyt 2026-11-13: po podbiciu fonttools release.yml dalej instalował
+        <4.68, więc bramka wydania testowała starszą wersję niż manifest."""
+        manifest = granice_manifestu(KORZEN / "requirements.txt")
+        self.assertIn("fonttools", manifest)
+        self.assertEqual(rozjazdy_granic(KORZEN / ".github" / "workflows", manifest), [])
+
+    def test_bramka_granic_lapie_rozjazd(self):
+        tekst = f'run: python -m pip install --quiet {chr(34)}fonttools<4.68{chr(34)}'
+        self.assertEqual(granice_w_workflow(tekst), {"fonttools": "<4.68"})
+
     def test_workflowy_zgodne_z_przetestowanym(self):
         oczekiwana = python_przetestowany(KORZEN / "audyt_zaleznosci.py")
         self.assertRegex(oczekiwana, "^[0-9]+[.][0-9]+[.][0-9]+$",

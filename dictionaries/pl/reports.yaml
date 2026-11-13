@@ -169,6 +169,7 @@ deps:
   grupa_B: 'grupa B: rozmawia z zewnętrznym API — sprawdź jedno prawdziwe wywołanie modelu (llm_klient / shamanic_ai).'
   grupa_C: 'grupa C: narzędzia obok wyniku — podbijaj śmiało, wystarczą testy.'
   podsumowanie: '[PODSUMOWANIE] aktualne: {ok}, wstrzymane granicą: {trzymane}, holdy wygasłe: {przeterminowane}, ostrzeżenia: {ostrzezenia}, opcjonalne niezainstalowane: {pominiete}.'
+  wiek_nieznany: '[OSTRZEŻENIE] Wiek {ile} datowanych holdów jest nieznany ({nazwy}) — brak historii gita dla requirements.txt, więc {limit}-dniowy zegar nie działa, a przeterminowany hold wyglądałby na aktualny. Znacznik budzika nie zostanie zapisany.'
   budzik: '[BUDZIK] Zapisano wynik pełnego audytu w {plik} — czyta go przypomnienie na starcie sesji maintainera.'
   err_missing_lib: '[BŁĄD] Brak biblioteki {lib}. Uruchom: pip install {pkg}'
 

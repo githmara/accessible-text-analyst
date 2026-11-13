@@ -8,7 +8,10 @@
 # spacy 3.8.18, fonttools 4.68.0, markdown 3.11.3, openai 3.50.0, sentencepiece 0.2.3,
 # pypdfium2 5.15.2 — run_all.py --no-book (komórki 0–39 z sentymentem, raport,
 # shamanic_pipeline) na korpusie fińskim: każdy eksport bajtowo identyczny z przebiegiem
-# na starych wersjach (docx: identyczne członki XML), zero ostrzeżeń w komórkach;
+# na starych wersjach (docx: identyczne członki XML). Brak ostrzeżeń w komórkach NIE
+# jest dowodem: cell_langdet wycisza wszystkie od drugiej komórki — deprecjacje
+# sprawdził osobny audyt sondami z -W error (pandas, openai, transformers, spaCy,
+# pypdfium2, fonttools, markdown: czysto);
 # modele spaCy 3.8.0 zgodne (spacy validate); jedno żywe wywołanie llm_klient
 # (OpenRouter, tekst + json_schema). pypdfium2/fonttools: 12 PDF-ów identycznych
 # 5.14 → 5.15 we wspólnym czyszczeniu z Reżyserem (19.18, 2026-11-12).

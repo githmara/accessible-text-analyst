@@ -169,6 +169,7 @@ deps:
   grupa_B: 'ryhmä B: keskustelee ulkoisen API:n kanssa — tarkista yksi todellinen mallikutsu (llm_klient / shamanic_ai).'
   grupa_C: 'ryhmä C: työkaluja tuloksen vierellä — päivitä vapaasti, testit riittävät.'
   podsumowanie: '[YHTEENVETO] ajan tasalla: {ok}, rajalla pidätetyt: {trzymane}, vanhentuneet pidätykset: {przeterminowane}, varoituksia: {ostrzezenia}, asentamattomia valinnaisia: {pominiete}.'
+  wiek_nieznany: '[VAROITUS] {ile} päivätyn pidätyksen ikä on tuntematon ({nazwy}) — requirements.txt-tiedostolla ei ole git-historiaa, joten {limit} päivän kello ei toimi ja vanhentunut pidätys näyttäisi ajantasaiselta. Herätyksen merkkitiedostoa ei tallenneta.'
   budzik: '[HERÄTYS] Täyden tarkistuksen tulos tallennettiin tiedostoon {plik} — ylläpitäjän istunnon alun muistutus lukee sen.'
   err_missing_lib: '[VIRHE] Kirjasto {lib} puuttuu. Suorita: pip install {pkg}'
 

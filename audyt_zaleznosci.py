@@ -183,7 +183,12 @@ def wiek_linii_manifestu(sciezka: Path = MANIFEST, dzis: date | None = None) -> 
         if linia.startswith("committer-time "):
             czas = int(linia.split()[1])
         elif linia.startswith("\t") and czas is not None:
-            tekst = linia[1:].strip().lstrip("#").strip().partition("#")[0].strip()
+            # Tylko linie z `hold:` (twin Reżysera 19.18): komentarz nagłówka
+            # „# fonttools 4.67.0: naprawa…" stał PRZED wpisem i `setdefault`
+            # dawał fonttools wiek tego komentarza zamiast linii z granicą.
+            surowa = linia[1:].strip()
+            tekst = (surowa.lstrip("#").strip().partition("#")[0].strip()
+                     if "hold:" in surowa else "")
             g = _WPIS.match(tekst)
             if g and g.group("spec"):
                 dni = (dzis - datetime.fromtimestamp(czas).date()).days
@@ -244,7 +249,14 @@ def main() -> int:
     wieki = wiek_linii_manifestu()
     licznik: dict[str, int] = {}
     do_decyzji: list[str] = []
-    for wpis in wczytaj_manifest():
+    manifest = wczytaj_manifest()
+    # Hold bez znanego wieku (brak gita, paczka „Source code”, błąd blame):
+    # 60-dniowy zegar stoi, więc audyt mówi to głośno i NIE cofa budzika.
+    bez_wieku = sorted(w.nazwa for w in manifest if w.hold and w.nazwa.lower() not in wieki)
+    if bez_wieku:
+        print(t(ui, "deps.wiek_nieznany", ile=len(bez_wieku),
+                nazwy=", ".join(bez_wieku[:5]), limit=WIEK_HOLDU_DNI))
+    for wpis in manifest:
         grupa = GRUPY_RYZYKA.get(wpis.nazwa)
         if grupa is None:
             licznik["bez_grupy"] = licznik.get("bez_grupy", 0) + 1
@@ -275,7 +287,7 @@ def main() -> int:
             ostrzezenia=ostrzezenia, pominiete=licznik.get("pominieta", 0)))
     # Budzik cofa tylko audyt, który porównał wszystko z PyPI: przebieg bez
     # sieci nie wie, czy upgrade czeka, więc nie może uciszyć przypomnienia.
-    if not licznik.get("pypi") and zapisz_znacznik(do_decyzji):
+    if not licznik.get("pypi") and not bez_wieku and zapisz_znacznik(do_decyzji):
         print(t(ui, "deps.budzik", plik=ZNACZNIK_BUDZIKA.relative_to(ROOT).as_posix()))
     return 0
 

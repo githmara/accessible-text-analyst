@@ -77,6 +77,31 @@ class TestWstrzymanie(unittest.TestCase):
         self.assertIn("numpy", wieki)
         self.assertIn("torch", wieki)          # linia opcjonalna tez sie liczy
 
+    def test_wiek_tylko_z_linii_hold(self):
+        """Komentarz nagłówka „# fonttools 4.67.0: …” stał przed wpisem i dawał
+        fonttools wiek komentarza zamiast linii z granicą (audyt 2026-11-13)."""
+        import os
+        import subprocess
+        from datetime import date
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            plik = repo / "requirements.txt"
+            env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                   "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+            def commit(tresc, data):
+                plik.write_text(tresc, encoding="utf-8")
+                e = {**env, "GIT_AUTHOR_DATE": data, "GIT_COMMITTER_DATE": data}
+                subprocess.run(["git", "add", "."], cwd=repo, check=True, env=e)
+                subprocess.run(["git", "commit", "-qm", "x"], cwd=repo, check=True, env=e)
+
+            subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+            commit("# fonttools 4.67.0: stary komentarz\n", "2020-01-01T12:00:00")
+            commit("# fonttools 4.67.0: stary komentarz\nfonttools<4.69  # hold: 1.13.0\n"
+                   "# torch<2.16  # hold: 1.13.0\n", "2026-01-01T12:00:00")
+            wieki = az.wiek_linii_manifestu(plik, dzis=date(2026, 1, 11))
+            self.assertEqual(wieki, {"fonttools": 10, "torch": 10})
+
     def test_znacznik_budzika(self):
         import json
         from datetime import date

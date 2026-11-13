@@ -169,6 +169,7 @@ deps:
   grupa_B: 'gruppo B: comunica con un''API esterna — verifica una vera chiamata al modello (llm_klient / shamanic_ai).'
   grupa_C: 'gruppo C: strumenti accanto al risultato — aggiorna liberamente, bastano i test.'
   podsumowanie: '[RIEPILOGO] aggiornati: {ok}, trattenuti dal limite: {trzymane}, trattenute scadute: {przeterminowane}, avvisi: {ostrzezenia}, opzionali non installati: {pominiete}.'
+  wiek_nieznany: '[AVVISO] L''età di {ile} vincoli datati è sconosciuta ({nazwy}) — requirements.txt non ha storia git, quindi l''orologio di {limit} giorni non può funzionare e un vincolo scaduto sembrerebbe valido. Il marcatore della sveglia non verrà scritto.'
   budzik: '[SVEGLIA] Il risultato della verifica completa è stato salvato in {plik} — lo legge il promemoria di inizio sessione del maintainer.'
   err_missing_lib: '[ERRORE] Manca la libreria {lib}. Esegui: pip install {pkg}'
 
