@@ -40,9 +40,9 @@ Pipeline NLP multilingue progettata per **l'accessibilità con i lettori di sche
 | en     | inglese   | `en_core_web_lg`       | spaCy          |
 | it     | italiano  | `it_core_news_lg`      | spaCy          |
 | fi     | finlandese| `fi_core_news_lg`      | spaCy          |
-| is     | islandese | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT-base` (vettori), `mideind/icelandic-ner-MIM-GOLD-22` (NER) |
+| is     | islandese | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT` (vettori), `grammatek/icelandic-ner-bert` (NER) |
 
-Non esiste un modello spaCy completo per l'islandese, quindi due modelli Hugging Face vengono innestati in una pipeline vuota. Il primo download richiede ~700 MB di spazio su disco e una connessione internet; le esecuzioni successive riutilizzano la cache HF.
+Non esiste un modello spaCy completo per l'islandese, quindi due modelli Hugging Face vengono innestati in una pipeline vuota. Il primo download richiede ~1,3 GB di spazio su disco e una connessione internet; le esecuzioni successive riutilizzano la cache HF.
 
 **Miglioramento opzionale della morfologia finlandese (omorfi).** Il lemmatizzatore statistico di `fi_core_news_lg` fatica con la morfologia agglutinante finlandese — produce regolarmente lemmi spazzatura come *kytköknen* o *pisttää*. Se il pacchetto `omorfi` (puro Python) è installato e i suoi automi FST sono stati scaricati (vedi Installazione, passo 5), il notebook aggiunge un componente `omorfi_lemmas` che sostituisce lemmi e tratti morfologici UD con le analisi del dizionario ovunque queste concordino con la parte del discorso del tagger spaCy (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Senza il pacchetto o gli automi la pipeline mantiene silenziosamente il comportamento standard di spaCy.
 
@@ -72,7 +72,7 @@ Gli outlier che sopravvivono all'euristica vengono elencati nell'output di `cell
 ## Requisiti
 
 - Python 3.12 o superiore (le dipendenze sono testate su Python 3.14).
-- ~1,5 GB di spazio libero su disco per i modelli `_lg` di spaCy (uno per lingua). Aggiungi ~700 MB se attivi il supporto per l'islandese (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
+- ~1,5 GB di spazio libero su disco per i modelli `_lg` di spaCy (uno per lingua). Aggiungi ~1,3 GB se attivi il supporto per l'islandese (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert).
 - Aggiungi ~700 MB se attivi il supporto OCR (`easyocr` scarica `torch` insieme ai propri modelli di rilevamento e riconoscimento alla prima chiamata OCR). Se hai abilitato anche l'islandese, il costo di `torch` è condiviso tra le due.
 - Aggiungi ~130 MB se attivi il miglioramento della morfologia finlandese (gli automi FST di `omorfi` scaricati con `omorfi-download`).
 - Connessione internet alla prima esecuzione (download dei modelli).
@@ -138,7 +138,7 @@ python -m spacy download fi_core_news_lg
 
 # 3. (Opzionale) Supporto islandese — decommenta `transformers` e
 # `torch` in requirements.txt e riesegui `pip install -r requirements.txt`.
-# IceBERT e MIM-GOLD-22 vengono poi scaricati da Hugging Face alla prima esecuzione.
+# IceBERT e icelandic-ner-bert vengono poi scaricati da Hugging Face alla prima esecuzione.
 
 # 4. (Opzionale) Analisi del sentiment — decommenta `transformers`, `torch`,
 # `sentencepiece`, `protobuf` e `tiktoken` in requirements.txt, riesegui
@@ -238,11 +238,11 @@ Gli script numerati di seguito sono pensati per essere eseguiti **in ordine**: o
 python run_all.py
 # riusa gli output già salvati nel notebook
 python run_all.py --skip-notebook
-# avvisi delle librerie come errori, su una copia del notebook (diagnostica)
+# diagnostica completa degli avvisi delle librerie, indipendente dal config
 python run_all.py --warnings-as-errors
 ```
 
-I passi 1, 2 e 4 qui sotto, più lo `scan` del Libro del non detto per un corpus finlandese, con un solo comando. Eseguilo con il Python del `.venv` del repository: se il kernel `analyst_env` manca, viene registrato per quell'interprete. La catena si ferma al primo passo che fallisce; il codice di uscita 3 significa che il controllo della fonte del report ha rifiutato (vedi passo 2). Il notebook silenzia di proposito gli avvisi delle librerie, perché non finiscano nel report di analisi. `--warnings-as-errors` è una modalità diagnostica separata: esegue una copia del notebook in cui ogni avviso è un errore, salva le esportazioni in una cartella temporanea e stampa il primo avviso sotto un'intestazione, nella formulazione della libreria, con cella e riga. Il notebook e `export_results/` restano intatti, il report e i passi successivi non partono; codice di uscita 4 = trovato un avviso, 0 = nessuno. Eseguilo dopo aver aggiornato le librerie.
+I passi 1, 2 e 4 qui sotto, più lo `scan` del Libro del non detto per un corpus finlandese, con un solo comando. Eseguilo con il Python del `.venv` del repository: se il kernel `analyst_env` manca, viene registrato per quell'interprete. La catena si ferma al primo passo che fallisce; il codice di uscita 3 significa che il controllo della fonte del report ha rifiutato (vedi passo 2). Il notebook silenzia di proposito gli avvisi delle librerie, perché non finiscano nel report di analisi. `--warnings-as-errors` è una modalità separata di diagnostica completa: ignora `config.json` e fa passare una copia del notebook con un corpus sintetico attraverso ogni componente (un PDF con riparazione dei font e una pagina scansionata per l’OCR, tutti i formati di input e un URL da un server locale, sentiment, islandese, omorfi). Registra ogni avviso, anche quelli sollevati in codice che intercetta le eccezioni, e li stampa tutti sotto l’intestazione della cella, nella formulazione della libreria, con il punto in cui sono stati sollevati. Gli avvisi noti e innocui (`diagnostyka.ZNANE_OSTRZEZENIA`) hanno una riga a parte e non contano. La modalità richiede tutte le dipendenze opzionali di `requirements.txt` e il modello `fi_core_news_lg`, e un componente che non si carica la ferma con un messaggio. Il notebook e `export_results/` restano intatti, il report e i passi successivi non partono; codice di uscita 4 = nuovi avvisi, 0 = nessuno. Eseguilo dopo aver aggiornato le librerie.
 
 ### 1. Notebook (obbligatorio)
 
@@ -405,7 +405,7 @@ Ogni sottodirectory contiene:
 Questo è il valore centrale del progetto. Tutto ciò che segue è intenzionale e deve essere preservato quando la pipeline viene modificata:
 
 - **Niente colori ANSI, emoji o pseudografica in stdout.** Un lettore di schermo legge ogni carattere alla lettera — `[OK]` invece di "🟢", `---` invece di "───━━━".
-- **Barre di progresso silenziate** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` silenzia le barre di caricamento e gli avvisi di Hugging Face/torch prima di scaricare IceBERT e MIM-GOLD-22 per l'islandese; `cell_corpus._silence_ocr_progress()` fa lo stesso per `easyocr`.
+- **Barre di progresso silenziate** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` silenzia le barre di caricamento e gli avvisi di Hugging Face/torch prima di scaricare IceBERT e icelandic-ner-bert per l'islandese; `cell_corpus._silence_ocr_progress()` fa lo stesso per `easyocr`.
 - **Marcatura `lang` per paragrafo e per frase nell'export.** `accessible_text.html` e `accessible_text.docx` portano un codice ISO 639-1 su ogni paragrafo (e su ogni frase all'interno di paragrafi / run misti per lingua). NVDA, JAWS, Narrator, VoiceOver, Word e SAPI rispettano questi tag e cambiano voce automaticamente — anche offline.
 - **Marcatura inglese cablata nel report HTML.** `generate_report.py` avvolge sempre i frammenti tecnici inglesi — tag POS (`NOUN`, `VERB`, `ADJ`), etichette NER (`PER`, `ORG`, `[orgName]`), identificativi dei modelli spaCy / Hugging Face, percorsi ASCII, blocchi di codice — in `<span lang="en">`, così non vengono più pronunciati con la voce russa predefinita del documento.
 - **Marcatura per frammento del corpus straniero in HTML.** Quando il corpus non è russo, gli output strutturati (estratti di frasi, elenchi di parole chiave, parole di argomenti, righe di ranking RAG, tabelle di lemmatizzazione) vengono avvolti in `<span lang="target_lang">`.

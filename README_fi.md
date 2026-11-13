@@ -40,9 +40,9 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 | en    | englanti   | `en_core_web_lg`       | spaCy          |
 | it    | italia     | `it_core_news_lg`      | spaCy          |
 | fi    | suomi      | `fi_core_news_lg`      | spaCy          |
-| is    | islanti    | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT-base` (vektorit), `mideind/icelandic-ner-MIM-GOLD-22` (NER) |
+| is    | islanti    | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT` (vektorit), `grammatek/icelandic-ner-bert` (NER) |
 
-Islannille ei ole täyttä spaCy-mallia, joten tyhjään putkeen on liitetty kaksi Hugging Face -mallia. Ensimmäinen lataus vaatii ~700 MB levytilaa ja internetyhteyden; seuraavat ajot käyttävät HF-välimuistia.
+Islannille ei ole täyttä spaCy-mallia, joten tyhjään putkeen on liitetty kaksi Hugging Face -mallia. Ensimmäinen lataus vaatii ~1,3 GB levytilaa ja internetyhteyden; seuraavat ajot käyttävät HF-välimuistia.
 
 **Valinnainen suomen morfologian parannus (omorfi).** `fi_core_news_lg`:n tilastollinen lemmatisoija pärjää huonosti suomen agglutinatiiviselle morfologialle — se tuottaa säännöllisesti roskalemmoja kuten *kytköknen* tai *pisttää*. Kun puhtaasti pythonilainen `omorfi`-paketti on asennettu ja sen FST-automaatit ladattu (ks. Asennus, vaihe 5), notebook lisää komponentin `omorfi_lemmas`, joka korvaa lemmat ja UD-morfologiset piirteet sanakirja-analyyseilla aina, kun ne ovat yhtä mieltä spaCy-taggerin sanaluokan kanssa (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Ilman pakettia tai automaatteja putki jatkaa hiljaa spaCyn vakiokäyttäytymisellä.
 
@@ -72,7 +72,7 @@ Heuristiikasta selviytyneet poikkeamat listataan `cell_para`:n ulostulossa manua
 ## Vaatimukset
 
 - Python 3.12 tai uudempi (riippuvuudet on testattu Pythonilla 3.14).
-- ~1,5 GB vapaata levytilaa spaCyn `_lg`-malleja varten (yksi per kieli). Lisää ~700 MB, jos otat käyttöön islanninkielisen tuen (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
+- ~1,5 GB vapaata levytilaa spaCyn `_lg`-malleja varten (yksi per kieli). Lisää ~1,3 GB, jos otat käyttöön islanninkielisen tuen (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert).
 - Lisää ~700 MB, jos otat käyttöön OCR-tuen (`easyocr` lataa `torch`:n sekä omat tunnistus- ja luonnistusmallinsa ensimmäisellä OCR-kutsulla). Jos otit käyttöön myös islanninkielen, `torch`:n kustannus jaetaan näiden välillä.
 - Lisää ~130 MB, jos otat käyttöön suomen morfologian parannuksen (`omorfi`:n FST-automaatit, jotka ladataan komennolla `omorfi-download`).
 - Internet-yhteys ensimmäisellä ajolla (mallien lataus).
@@ -138,7 +138,7 @@ python -m spacy download fi_core_news_lg
 
 # 3. (Valinnainen) Islanninkielinen tuki — poista kommenttimerkit `transformers`:in ja
 # `torch`:in edestä tiedostossa requirements.txt ja aja uudelleen `pip install -r requirements.txt`.
-# IceBERT ja MIM-GOLD-22 ladataan sitten Hugging Facelta ensimmäisellä ajolla.
+# IceBERT ja icelandic-ner-bert ladataan sitten Hugging Facelta ensimmäisellä ajolla.
 
 # 4. (Valinnainen) Sentimenttianalyysi — poista kommenttimerkit `transformers`:in, `torch`:in,
 # `sentencepiece`:n, `protobuf`:in ja `tiktoken`:in edestä tiedostossa requirements.txt, aja
@@ -238,11 +238,11 @@ Alla olevat skriptit on tarkoitettu ajettaviksi **järjestyksessä**: jokainen k
 python run_all.py
 # käytä notebookiin jo tallennettuja tulosteita
 python run_all.py --skip-notebook
-# kirjastojen varoitukset virheinä, notebookin kopiossa (diagnostiikka)
+# kirjastojen varoitusten täysi diagnostiikka configista riippumatta
 python run_all.py --warnings-as-errors
 ```
 
-Alla olevat vaiheet 1, 2 ja 4 sekä suomenkieliselle korpukselle Sanomattomien kirjan `scan` yhdellä komennolla. Aja se repon `.venv`-ympäristön Pythonilla: jos ydin `analyst_env` puuttuu, se rekisteröidään tälle tulkille. Ketju pysähtyy ensimmäiseen epäonnistuvaan vaiheeseen; paluukoodi 3 tarkoittaa, että raportin lähdetarkistus hylkäsi ajon (ks. vaihe 2). Notebook vaimentaa kirjastojen varoitukset tarkoituksella, jotta ne eivät päädy analyysiraporttiin. `--warnings-as-errors` on erillinen diagnostiikkatila: se ajaa notebookin kopion, jossa jokainen varoitus on virhe, tallentaa viennit väliaikaiskansioon ja tulostaa ensimmäisen varoituksen otsikon alle kirjaston omin sanoin, solun ja rivin kanssa. Notebook ja `export_results/` jäävät koskematta, eikä raporttia tai myöhempiä vaiheita ajeta; paluukoodi 4 = varoitus löytyi, 0 = ei yhtään. Aja se kirjastojen päivittämisen jälkeen.
+Alla olevat vaiheet 1, 2 ja 4 sekä suomenkieliselle korpukselle Sanomattomien kirjan `scan` yhdellä komennolla. Aja se repon `.venv`-ympäristön Pythonilla: jos ydin `analyst_env` puuttuu, se rekisteröidään tälle tulkille. Ketju pysähtyy ensimmäiseen epäonnistuvaan vaiheeseen; paluukoodi 3 tarkoittaa, että raportin lähdetarkistus hylkäsi ajon (ks. vaihe 2). Notebook vaimentaa kirjastojen varoitukset tarkoituksella, jotta ne eivät päädy analyysiraporttiin. `--warnings-as-errors` on erillinen täyden diagnostiikan tila: se ohittaa `config.json`-tiedoston ja ajaa notebookin kopion synteettisellä korpuksella jokaisen komponentin läpi (PDF fontin korjauksella ja OCR:ää varten skannatulla sivulla, kaikki syötemuodot ja URL paikalliselta palvelimelta, sävyanalyysi, islanti, omorfi). Se kirjaa jokaisen varoituksen, myös poikkeuksia sieppaavassa koodissa syntyneet, ja tulostaa ne kaikki solun otsikon alle kirjaston omin sanoin ja syntypaikan kanssa. Tunnetut, harmittomat varoitukset (`diagnostyka.ZNANE_OSTRZEZENIA`) saavat oman rivinsä eivätkä vaikuta tulokseen. Tila vaatii kaikki `requirements.txt`-tiedoston valinnaiset riippuvuudet ja mallin `fi_core_news_lg`, ja komponentti, joka ei lataudu, pysäyttää sen ilmoituksella. Notebook ja `export_results/` jäävät koskematta, eikä raporttia tai myöhempiä vaiheita ajeta; paluukoodi 4 = uusia varoituksia, 0 = ei yhtään. Aja se kirjastojen päivittämisen jälkeen.
 
 ### 1. Notebook (pakollinen)
 
@@ -405,7 +405,7 @@ Jokainen alihakemisto sisältää:
 Tämä on projektin keskeinen arvo. Kaikki alla oleva on tarkoituksellista ja on säilytettävä, kun putkea muokataan:
 
 - **Ei ANSI-värejä, emojeita tai pseudografiikkaa stdoutissa.** Ruudunlukija lukee jokaisen merkin kirjaimellisesti — `[OK]` "🟢":n sijaan, `---` "───━━━":n sijaan.
-- **Vaiennetut edistymispalkit** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` mykistää Hugging Face/torch -latauspalkit ja varoitukset ennen IceBERT:in ja MIM-GOLD-22:n lataamista islanninkieltä varten; `cell_corpus._silence_ocr_progress()` tekee saman `easyocr`:lle.
+- **Vaiennetut edistymispalkit** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` mykistää Hugging Face/torch -latauspalkit ja varoitukset ennen IceBERT:in ja icelandic-ner-bert:n lataamista islanninkieltä varten; `cell_corpus._silence_ocr_progress()` tekee saman `easyocr`:lle.
 - **Kappale- ja lausekohtainen `lang`-merkintä viennissä.** `accessible_text.html` ja `accessible_text.docx` kantavat ISO 639-1 -koodin jokaisessa kappaleessa (ja jokaisessa lauseessa sekakielisten kappaleiden / runejen sisällä). NVDA, JAWS, Narrator, VoiceOver, Word ja SAPI kunnioittavat näitä tageja ja vaihtavat ääntä automaattisesti — jopa offline-tilassa.
 - **Kovakoodattu englannin merkintä HTML-raportissa.** `generate_report.py` kääräisee aina teknisen englannin katkelmat — POS-tagit (`NOUN`, `VERB`, `ADJ`), NER-tunnisteet (`PER`, `ORG`, `[orgName]`), spaCy / Hugging Face -mallien tunnisteet, ASCII-polut, koodilohkot — tagiin `<span lang="en">`, jolloin niitä ei enää ääntää dokumentin oletusvenäläisellä äänellä.
 - **Vieraskielisen korpuksen pir-katkelmamerkintä HTML:ssä.** Kun korpus ei ole venäläinen, jäsennellyt ulostulot (lauseotteet, avainsanaluettelot, aihesanat, RAG-järjestysrivit, lemmatisointitaulukot) käärätään tagiin `<span lang="target_lang">`.

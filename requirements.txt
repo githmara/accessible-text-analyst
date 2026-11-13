@@ -11,8 +11,10 @@
 # na starych wersjach (docx: identyczne członki XML). Brak ostrzeżeń w komórkach NIE
 # jest dowodem: cell_langdet wycisza wszystkie od drugiej komórki — deprecjacje
 # sprawdził osobny audyt sondami z -W error (pandas, openai, transformers, spaCy,
-# pypdfium2, fonttools, markdown: czysto), a cały notatnik `run_all.py
-# --warnings-as-errors` (komórki 0–39 z sentymentem: żadnego ostrzeżenia);
+# pypdfium2, fonttools, markdown: czysto), a pełna diagnostyka `run_all.py
+# --warnings-as-errors` (korpus syntetyczny, wszystkie komponenty): jedyne nowe
+# ostrzeżenia to deprecjacja torch.ao.quantization z easyocr (quantize=True)
+# — do decyzji; pin_memory i TqdmWarning są na liście znanych, nieszkodliwych;
 # modele spaCy 3.8.0 zgodne (spacy validate); jedno żywe wywołanie llm_klient
 # (OpenRouter, tekst + json_schema). pypdfium2/fonttools: 12 PDF-ów identycznych
 # 5.14 → 5.15 we wspólnym czyszczeniu z Reżyserem (19.18, 2026-11-12).
@@ -52,10 +54,10 @@ numpy<2.6  # hold: 1.8.0
 pandas<3.2  # hold: 1.13.0
 scikit-learn<1.10  # hold: 1.8.0
 tqdm<4.71  # hold: 1.8.0
-# Wsparcie dla języka islandzkiego (Hugging Face: IceBERT + MIM-GOLD-22).
+# Wsparcie dla języka islandzkiego (Hugging Face: IceBERT + icelandic-ner-bert).
 # Odkomentuj obie linie, jeśli analizujesz teksty po islandzku — pozwoli to
-# załadować spaCy + IceBERT-base (wektory) i icelandic-ner-MIM-GOLD-22 (NER)
-# w komórce cell_model. Pobranie tych modeli to ~700 MB przy pierwszym uruchomieniu.
+# załadować spaCy + mideind/IceBERT (wektory) i grammatek/icelandic-ner-bert (NER)
+# w komórce cell_model. Pobranie tych modeli to ~1,3 GB przy pierwszym uruchomieniu.
 # Dla pozostałych języków (pl, ru, en, it, fi) te zależności nie są potrzebne.
 # transformers<5.23  # hold: 1.13.0
 # torch<2.16  # hold: 1.13.0
@@ -104,3 +106,12 @@ python-dotenv<1.3  # hold: 1.8.0
 # więc dla korpusów tekstowych nie ma sensu instalować tej pary.
 # pypdfium2<5.16  # hold: 1.13.0
 # easyocr<1.8  # hold: 1.8.0
+
+# Pełna diagnostyka ostrzeżeń (`python run_all.py --warnings-as-errors`). Tryb
+# pomija config i przepuszcza syntetyczny korpus przez KAŻDY komponent, bo
+# ostrzeżenie w komponencie nieużywanym przez config nigdy by nie wyszło. Wymaga
+# więc WSZYSTKICH bloków opcjonalnych powyżej (islandzki, omorfi + omorfi-download,
+# sentyment, OCR) i jednego modelu spaCy: fi_core_news_lg. Pillow rysuje
+# syntetyczny skan; easyocr i pypdfium2 i tak go ciągną, ale diagnostyka
+# importuje go sama, więc stoi tu jawnie.
+# pillow<12.4  # hold: 1.13.0

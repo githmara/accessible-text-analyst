@@ -1127,7 +1127,7 @@ print(f"\n[РЕЗУЛЬТАТ] Выбран язык: {LANG_NAMES.get(LANG, LANG
 # | Russian | `ru` | `ru_core_news_lg` |
 # | Italian | `it` | `it_core_news_lg` |
 # | Finnish | `fi` | `fi_core_news_lg` |
-# | Icelandic | `is` | `spacy.blank("is")` + IceBERT (векторы) + MIM-GOLD-22 (NER) |
+# | Icelandic | `is` | `spacy.blank("is")` + IceBERT (векторы) + icelandic-ner-bert (NER, MIM-GOLD-NER) |
 #
 # Если модель не установлена, ноутбук использует базовый токенизатор (`spacy.blank`) и сообщает команду для установки.
 #
@@ -1144,8 +1144,17 @@ from shamanic_locale import PODSTAWY
 MODEL_BY_LANG = {_k: _p["spacy"] for _k, _p in PODSTAWY.items() if _p["spacy"]}
 
 # Hugging Face модели для исландского (нет в spaCy):
-HF_IS_VECTORS = "mideind/IceBERT-base"
-HF_IS_NER = "mideind/icelandic-ner-MIM-GOLD-22"
+# До 2026-11-13 здесь стояли mideind/IceBERT-base и mideind/icelandic-ner-MIM-GOLD-22 —
+# таких репозиториев на Hugging Face нет (HTTP 401), поэтому исландский конвейер
+# с первого коммита работал без векторов и NER. Существование идентификаторов
+# проверяет audyt_zaleznosci.py, а загрузку — run_all.py --warnings-as-errors.
+HF_IS_VECTORS = "mideind/IceBERT"
+HF_IS_NER = "grammatek/icelandic-ner-bert"
+# Метки модели (Person, Location, …) -> метки spaCy, которые читает остальной
+# конвейер (shamanic_pipeline ищет PER/LOC/ORG).
+IS_NER_LABELS = {"Person": "PER", "Location": "LOC", "Organization": "ORG",
+                 "Miscellaneous": "MISC", "Date": "DATE", "Time": "TIME",
+                 "Money": "MONEY", "Percent": "PERCENT"}
 # Сбои исландского NER по фрагментам (имя исключения); итог печатает cell_ner.
 IS_NER_FAILURES = []
 
@@ -1187,7 +1196,7 @@ def _build_icelandic_pipeline(blank_nlp):
         print("  Пайплайн для исландского остаётся базовым (без NER и векторов).")
         return blank_nlp
 
-    # --- Векторы через IceBERT-base ---
+    # --- Векторы через IceBERT ---
     try:
         print(f"  Загрузка эмбеддингов: {HF_IS_VECTORS} ...")
         _is_tok = AutoTokenizer.from_pretrained(HF_IS_VECTORS)
@@ -1220,7 +1229,7 @@ def _build_icelandic_pipeline(blank_nlp):
         print(f"[ВНИМАНИЕ] Не удалось загрузить {HF_IS_VECTORS}: {_e}")
         print("  Тематизация будет пропущена.")
 
-    # --- NER через icelandic-ner-MIM-GOLD-22 ---
+    # --- NER через icelandic-ner-bert (MIM-GOLD-NER) ---
     try:
         print(f"  Загрузка NER: {HF_IS_NER} ...")
         _is_ner = pipeline(
@@ -1231,7 +1240,9 @@ def _build_icelandic_pipeline(blank_nlp):
             # глоталось — ноль сущностей без единого слова (аудит 2026-11-13).
             # Явный предел + stride режут длинный текст на перекрывающиеся окна.
             tokenizer=AutoTokenizer.from_pretrained(HF_IS_NER, model_max_length=512),
-            aggregation_strategy="simple",
+            # "first": метка слова по первому подтокену. "simple" резал
+            # исландские имена на куски (G, ##uð, ##rú вместо Guðrúnu).
+            aggregation_strategy="first",
             stride=128,
         )
 
@@ -1242,7 +1253,10 @@ def _build_icelandic_pipeline(blank_nlp):
             if not text.strip():
                 return doc
             try:
-                results = _is_ner(text[:5000]) or []
+                # Весь текст: окна stride обрабатывают любую длину. Раньше
+                # срез [:5000] оставлял без сущностей всё после 5000 знаков
+                # документа (cell_ner получает документ целиком).
+                results = _is_ner(text) or []
             except Exception as _e:
                 # Не молча: первый сбой — с причиной, итог считает cell_ner.
                 if not IS_NER_FAILURES:
@@ -1254,6 +1268,7 @@ def _build_icelandic_pipeline(blank_nlp):
                 start_c = int(r.get("start", 0))
                 end_c = int(r.get("end", 0))
                 label = str(r.get("entity_group") or r.get("entity") or "MISC")
+                label = IS_NER_LABELS.get(label, label)
                 if end_c <= start_c:
                     continue
                 span = doc.char_span(start_c, end_c, label=label,

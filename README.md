@@ -40,9 +40,9 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 | en   | English    | `en_core_web_lg`       | spaCy          |
 | it   | Italian    | `it_core_news_lg`      | spaCy          |
 | fi   | Finnish    | `fi_core_news_lg`      | spaCy          |
-| is   | Icelandic  | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT-base` (vectors), `mideind/icelandic-ner-MIM-GOLD-22` (NER) |
+| is   | Icelandic  | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT` (vectors), `grammatek/icelandic-ner-bert` (NER) |
 
-There is no full spaCy model for Icelandic, so two Hugging Face models are wired into a blank pipeline. The first download requires ~700 MB of disk space and an internet connection; subsequent runs reuse the HF cache.
+There is no full spaCy model for Icelandic, so two Hugging Face models are wired into a blank pipeline. The first download requires ~1.3 GB of disk space and an internet connection; subsequent runs reuse the HF cache.
 
 **Optional Finnish morphology upgrade (omorfi).** The statistical lemmatizer in `fi_core_news_lg` struggles with Finnish agglutinative morphology — it routinely produces garbage lemmas such as *kytköknen* or *pisttää*. When the pure-Python `omorfi` package is installed and its FST automata downloaded (see Installation step 5), the notebook appends an `omorfi_lemmas` component that overrides lemmas and UD morphological features with dictionary analyses wherever they agree with the spaCy tagger's part of speech (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Without the package or the automata the pipeline silently keeps the stock spaCy behaviour.
 
@@ -72,7 +72,7 @@ Outliers that survive the heuristic are listed in the `cell_para` output for man
 ## Requirements
 
 - Python 3.12 or newer (the dependency set is tested on Python 3.14).
-- ~1.5 GB of free disk space for spaCy `_lg` models (one per language you install). Add ~700 MB if you opt into Icelandic support (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
+- ~1.5 GB of free disk space for spaCy `_lg` models (one per language you install). Add ~1.3 GB if you opt into Icelandic support (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert).
 - Add ~700 MB if you opt into OCR support (`easyocr` pulls `torch` plus its detection and recognition models on the first OCR call). If you also enabled Icelandic, the `torch` cost is shared between the two.
 - Add ~130 MB if you opt into the Finnish morphology upgrade (the `omorfi` FST automata downloaded by `omorfi-download`).
 - An internet connection on the first run (model downloads).
@@ -138,7 +138,7 @@ python -m spacy download fi_core_news_lg
 
 # 3. (Optional) Icelandic support — uncomment `transformers` and `torch`
 # in requirements.txt and re-run `pip install -r requirements.txt`.
-# IceBERT and MIM-GOLD-22 are then pulled from Hugging Face on first run.
+# IceBERT and icelandic-ner-bert are then pulled from Hugging Face on first run.
 
 # 4. (Optional) Sentiment analysis — uncomment `transformers`, `torch`,
 # `sentencepiece`, `protobuf` and `tiktoken` in requirements.txt, re-run the
@@ -238,11 +238,11 @@ The numbered scripts below are intended to be run **in order**: each one consume
 python run_all.py
 # reuse the outputs already saved in the notebook
 python run_all.py --skip-notebook
-# library warnings as errors, on a copy of the notebook (diagnostics)
+# full diagnostics of library warnings, independent of the config
 python run_all.py --warnings-as-errors
 ```
 
-Steps 1, 2 and 4 below, plus the Book of the Unsaid `scan` for a Finnish corpus, in one command. Run it with the Python of the repo's `.venv`: if the `analyst_env` kernel is missing, it is registered for that interpreter. The chain stops at the first failing step; exit code 3 means that the source gate of the report refused (see step 2). The notebook deliberately silences library warnings so they stay out of the analysis report. `--warnings-as-errors` is a separate diagnostic mode: it runs a copy of the notebook in which every warning is an error, writes the exports to a temporary folder, and prints the first warning under a heading, worded by the library, with its cell and line. The notebook and `export_results/` are left untouched, and the report and later steps do not run; exit code 4 = a warning was found, 0 = none. Run it after updating libraries.
+Steps 1, 2 and 4 below, plus the Book of the Unsaid `scan` for a Finnish corpus, in one command. Run it with the Python of the repo's `.venv`: if the `analyst_env` kernel is missing, it is registered for that interpreter. The chain stops at the first failing step; exit code 3 means that the source gate of the report refused (see step 2). The notebook deliberately silences library warnings so they stay out of the analysis report. `--warnings-as-errors` is a separate full-diagnostics mode: it ignores `config.json` and runs a copy of the notebook with a synthetic corpus through every component (a PDF with font repair and a scanned page for OCR, every input format and a URL from a local server, sentiment, Icelandic, omorfi). It records every warning, including those raised in code that catches exceptions, and prints them all under the cell heading, worded by the library, with the place they were raised. Known, harmless warnings (`diagnostyka.ZNANE_OSTRZEZENIA`) get a separate line and do not count. The mode needs every optional dependency in `requirements.txt` and the `fi_core_news_lg` model, and a component that fails to load stops it with a message. The notebook and `export_results/` are left untouched, and the report and later steps do not run; exit code 4 = new warnings, 0 = none. Run it after updating libraries.
 
 ### 1. Notebook (mandatory)
 
@@ -405,7 +405,7 @@ Each subdirectory contains:
 This is the project's central value. Everything below is intentional and must be preserved when the pipeline is modified:
 
 - **No ANSI colors, emoji, or pseudographics in stdout.** A screen reader reads every character literally — `[OK]` instead of "🟢", `---` instead of "───━━━".
-- **Silenced progress bars** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` mutes Hugging Face/torch loading bars and warnings before pulling IceBERT and MIM-GOLD-22 for Icelandic; `cell_corpus._silence_ocr_progress()` does the same for `easyocr`.
+- **Silenced progress bars** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` mutes Hugging Face/torch loading bars and warnings before pulling IceBERT and icelandic-ner-bert for Icelandic; `cell_corpus._silence_ocr_progress()` does the same for `easyocr`.
 - **Per-paragraph and per-sentence `lang` tagging in the export.** `accessible_text.html` and `accessible_text.docx` carry an ISO 639-1 code on every paragraph (and on every sentence inside mixed-language paragraphs / runs). NVDA, JAWS, Narrator, VoiceOver, Word, and SAPI all honour those tags and switch voice automatically — even offline.
 - **Hardcoded English tagging in the HTML report.** `generate_report.py` always wraps technical English fragments — POS tags (`NOUN`, `VERB`, `ADJ`), NER labels (`PER`, `ORG`, `[orgName]`), spaCy / Hugging Face model identifiers, ASCII filenames, code blocks — in `<span lang="en">`, so they are no longer pronounced through the document-default Russian voice.
 - **Per-fragment foreign-corpus tagging in HTML.** When the corpus is non-Russian, structured outputs (sentence excerpts, keyword lists, topic words, RAG ranking rows, lemmatization tables) are wrapped in `<span lang="target_lang">`.

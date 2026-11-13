@@ -40,9 +40,9 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 | en   | angielski  | `en_core_web_lg`       | spaCy          |
 | it   | włoski     | `it_core_news_lg`      | spaCy          |
 | fi   | fiński     | `fi_core_news_lg`      | spaCy          |
-| is   | islandzki  | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT-base` (wektory), `mideind/icelandic-ner-MIM-GOLD-22` (NER) |
+| is   | islandzki  | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT` (wektory), `grammatek/icelandic-ner-bert` (NER) |
 
-Dla islandzkiego nie ma pełnego modelu spaCy, więc do pustego potoku wpięte są dwa modele Hugging Face. Pierwsze pobranie zajmuje ~700 MB na dysku i wymaga połączenia z Internetem; kolejne uruchomienia korzystają z cache HF.
+Dla islandzkiego nie ma pełnego modelu spaCy, więc do pustego potoku wpięte są dwa modele Hugging Face. Pierwsze pobranie zajmuje ~1,3 GB na dysku i wymaga połączenia z Internetem; kolejne uruchomienia korzystają z cache HF.
 
 **Opcjonalne ulepszenie fińskiej morfologii (omorfi).** Statystyczny lematyzator w `fi_core_news_lg` słabo radzi sobie z fińską morfologią aglutynacyjną — regularnie produkuje śmieciowe lematy w rodzaju *kytköknen* czy *pisttää*. Jeśli zainstalowany jest czysto pythonowy pakiet `omorfi`, a jego automaty FST zostały pobrane (patrz Instalacja, krok 5), notatnik dokłada komponent `omorfi_lemmas`, który nadpisuje lematy i cechy morfologiczne UD analizami słownikowymi wszędzie tam, gdzie zgadzają się one z częścią mowy z taggera spaCy (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Bez pakietu lub automatów potok po cichu zostaje przy standardowym zachowaniu spaCy.
 
@@ -72,7 +72,7 @@ Outliery, które przetrwały heurystykę, są wypisywane w wyjściu `cell_para` 
 ## Wymagania
 
 - Python 3.12 lub nowszy (zależności przetestowane na Pythonie 3.14).
-- ~1,5 GB wolnego miejsca na dysku na modele `_lg` spaCy (po jednym na język). Dodaj ~700 MB, jeśli włączasz wsparcie dla islandzkiego (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
+- ~1,5 GB wolnego miejsca na dysku na modele `_lg` spaCy (po jednym na język). Dodaj ~1,3 GB, jeśli włączasz wsparcie dla islandzkiego (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert).
 - Dodaj ~700 MB, jeśli włączasz wsparcie OCR (`easyocr` pobiera `torch` oraz własne modele detekcji i rozpoznawania przy pierwszym wywołaniu OCR). Jeśli włączyłeś też islandzki, koszt `torch` jest dzielony między oba.
 - Dodaj ~130 MB, jeśli włączasz ulepszenie fińskiej morfologii (automaty FST `omorfi` pobierane poleceniem `omorfi-download`).
 - Połączenie z Internetem przy pierwszym uruchomieniu (pobieranie modeli).
@@ -138,7 +138,7 @@ python -m spacy download fi_core_news_lg
 
 # 3. (Opcjonalnie) Wsparcie dla islandzkiego — odkomentuj `transformers` i
 # `torch` w requirements.txt i ponownie uruchom `pip install -r requirements.txt`.
-# IceBERT i MIM-GOLD-22 są wtedy pobierane z Hugging Face przy pierwszym uruchomieniu.
+# IceBERT i icelandic-ner-bert są wtedy pobierane z Hugging Face przy pierwszym uruchomieniu.
 
 # 4. (Opcjonalnie) Analiza sentymentu — odkomentuj `transformers`, `torch`,
 # `sentencepiece`, `protobuf` i `tiktoken` w requirements.txt, ponownie uruchom
@@ -238,11 +238,11 @@ Skrypty numerowane poniżej są uruchamiane **po kolei**: każdy konsumuje artef
 python run_all.py
 # użyj wyjść już zapisanych w notatniku
 python run_all.py --skip-notebook
-# ostrzeżenia bibliotek jako błędy, na kopii notatnika (diagnostyka)
+# pełna diagnostyka ostrzeżeń bibliotek, niezależna od configa
 python run_all.py --warnings-as-errors
 ```
 
-Kroki 1, 2 i 4 poniżej, a dla korpusu fińskiego także `scan` Księgi Niedomówień, jednym poleceniem. Uruchamiaj go Pythonem z `.venv` repo: jeśli brakuje jądra `analyst_env`, zostanie zarejestrowane dla tego interpretera. Łańcuch zatrzymuje się na pierwszym kroku, który się wywróci; kod wyjścia 3 oznacza, że odmówiła bramka źródła raportu (patrz krok 2). Notatnik celowo wycisza ostrzeżenia bibliotek, żeby nie trafiały do raportu z analizą. `--warnings-as-errors` to osobny tryb diagnostyczny: wykonuje kopię notatnika, w której każde ostrzeżenie jest błędem, eksporty zapisuje w katalogu tymczasowym i wypisuje pierwsze ostrzeżenie pod nagłówkiem, w brzmieniu biblioteki, z komórką i linią. Notatnik i `export_results/` zostają nietknięte, raport i dalsze kroki się nie uruchamiają; kod wyjścia 4 = znaleziono ostrzeżenie, 0 = żadnego. Uruchamiaj go po aktualizacji bibliotek.
+Kroki 1, 2 i 4 poniżej, a dla korpusu fińskiego także `scan` Księgi Niedomówień, jednym poleceniem. Uruchamiaj go Pythonem z `.venv` repo: jeśli brakuje jądra `analyst_env`, zostanie zarejestrowane dla tego interpretera. Łańcuch zatrzymuje się na pierwszym kroku, który się wywróci; kod wyjścia 3 oznacza, że odmówiła bramka źródła raportu (patrz krok 2). Notatnik celowo wycisza ostrzeżenia bibliotek, żeby nie trafiały do raportu z analizą. `--warnings-as-errors` to osobny tryb pełnej diagnostyki: pomija `config.json` i przepuszcza kopię notatnika z syntetycznym korpusem przez każdy komponent (PDF z naprawą fontu i skanem do OCR, wszystkie formaty wejścia i adres URL z lokalnego serwera, sentyment, islandzki, omorfi). Rejestruje każde ostrzeżenie, także w kodzie, który łapie wyjątki, i wypisuje je wszystkie pod nagłówkiem komórki, w brzmieniu biblioteki, z miejscem wywołania. Znane, nieszkodliwe ostrzeżenia (`diagnostyka.ZNANE_OSTRZEZENIA`) dostają osobną linię i nie liczą się do wyniku. Tryb wymaga wszystkich zależności opcjonalnych z `requirements.txt` i modelu `fi_core_news_lg`, a komponent, który się nie załaduje, zatrzymuje go z komunikatem. Notatnik i `export_results/` zostają nietknięte, raport i dalsze kroki się nie uruchamiają; kod wyjścia 4 = są nowe ostrzeżenia, 0 = żadnego. Uruchamiaj go po aktualizacji bibliotek.
 
 ### 1. Notatnik (obowiązkowy)
 
@@ -405,7 +405,7 @@ Każdy podkatalog zawiera:
 To jest centralna wartość projektu. Wszystko poniżej jest celowe i musi być zachowane przy modyfikacjach potoku:
 
 - **Bez kolorów ANSI, emoji i pseudografiki w stdout.** Czytnik ekranu czyta dosłownie każdy znak — `[OK]` zamiast „🟢”, `---` zamiast „───━━━”.
-- **Wyciszone paski postępu** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` wycisza paski ładowania Hugging Face/torch i ostrzeżenia przed pobraniem IceBERT i MIM-GOLD-22 dla islandzkiego; `cell_corpus._silence_ocr_progress()` robi to samo dla `easyocr`.
+- **Wyciszone paski postępu** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` wycisza paski ładowania Hugging Face/torch i ostrzeżenia przed pobraniem IceBERT i icelandic-ner-bert dla islandzkiego; `cell_corpus._silence_ocr_progress()` robi to samo dla `easyocr`.
 - **Tagi `lang` per akapit i per zdanie w eksporcie.** `accessible_text.html` i `accessible_text.docx` mają kod ISO 639-1 na każdym akapicie (i na każdym zdaniu w akapitach mieszanych językowo / runach). NVDA, JAWS, Narrator, VoiceOver, Word i SAPI respektują te tagi i przełączają głos automatycznie — nawet offline.
 - **Twardo wpisane oznaczanie angielskiego w raporcie HTML.** `generate_report.py` zawsze owija technicznie angielskie fragmenty — tagi POS (`NOUN`, `VERB`, `ADJ`), etykiety NER (`PER`, `ORG`, `[orgName]`), identyfikatory modeli spaCy / Hugging Face, ścieżki ASCII, bloki kodu — w `<span lang="en">`, więc nie są już wymawiane domyślnym rosyjskim głosem dokumentu.
 - **Per-fragmentowe oznaczanie obcego korpusu w HTML.** Gdy korpus nie jest rosyjski, ustrukturyzowane wyjścia (cytaty zdań, listy słów kluczowych, słowa tematów, wiersze rankingu RAG, tabele lematyzacji) są owinięte w `<span lang="target_lang">`.

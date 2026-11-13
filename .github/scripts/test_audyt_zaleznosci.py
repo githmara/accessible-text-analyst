@@ -102,6 +102,31 @@ class TestWstrzymanie(unittest.TestCase):
             wieki = az.wiek_linii_manifestu(plik, dzis=date(2026, 1, 11))
             self.assertEqual(wieki, {"fonttools": 10, "torch": 10})
 
+    def test_modele_hf_z_notatnika(self):
+        """Audyt 2026-11-13: oba modele islandzkie wskazywały nieistniejące
+        repozytoria — audyt musi widzieć każdą nazwę, także wciętą w komórce."""
+        modele = az.modele_hf()
+        self.assertIn("grammatek/icelandic-ner-bert", modele)
+        self.assertIn("mideind/IceBERT", modele)
+        self.assertIn("cardiffnlp/twitter-xlm-roberta-base-sentiment", modele)
+        p = _plik('HF_X = "a/b"\n    SENTIMENT_MODEL = "c/d-1.0"\nHF_X = "a/b"\nINNE = "e/f"\n')
+        self.assertEqual(az.modele_hf(p), ["a/b", "c/d-1.0"])
+
+    def test_model_hf_istnieje_rozroznia_brak_od_sieci(self):
+        import io
+        import urllib.error
+        from unittest import mock
+
+        def blad(kod):
+            return urllib.error.HTTPError("u", kod, "x", {}, io.BytesIO())
+
+        with mock.patch("urllib.request.urlopen", side_effect=blad(401)):
+            self.assertIs(az.model_hf_istnieje("mideind/IceBERT-base"), False)
+        with mock.patch("urllib.request.urlopen", side_effect=blad(503)):
+            self.assertIsNone(az.model_hf_istnieje("x/y"))
+        with mock.patch("urllib.request.urlopen", side_effect=OSError("offline")):
+            self.assertIsNone(az.model_hf_istnieje("x/y"))
+
     def test_znacznik_budzika(self):
         import json
         from datetime import date

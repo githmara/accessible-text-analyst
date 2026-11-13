@@ -6,7 +6,7 @@ lingua: ICELANDIC
 nazwa_ru: исландский
 locale: is-IS
 # spaCy nie ma dziś modelu islandzkiego: notatnik buduje potok Hugging Face
-# (IceBERT + MIM-GOLD-22). Audyt sonduje indeks spaCy i pada, gdy model się
+# (mideind/IceBERT + grammatek/icelandic-ner-bert). Audyt sonduje indeks spaCy i pada, gdy model się
 # pojawi — wtedy wpisz jego nazwę tutaj i rozważ, czy gałąź HF jest jeszcze potrzebna.
 spacy: null
 

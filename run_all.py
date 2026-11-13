@@ -125,102 +125,276 @@ def run_notebook():
 # Tryb --warnings-as-errors. Notatnik celowo wycisza ostrzeżenia
 # (cell_langdet), żeby nie wyciekały do raportu z czystą analizą — przez to
 # deprecjacja albo ostrzeżenie o niespójnych danych nie dociera do nikogo.
-# Ten tryb wykonuje KOPIĘ notatnika z ostrzeżeniami zamienionymi w błędy
-# (jak audyt z `-W error`) i eksportami skierowanymi do katalogu
-# tymczasowego: notatnik w repo i export_results/ zostają nietknięte, więc
-# bramka źródła raportu nie widzi eksportów nowszych niż zapisane wyjścia.
+# Ten tryb wykonuje KOPIĘ notatnika, w której każde ostrzeżenie jest
+# REJESTROWANE (`simplefilter("always")` + własny `showwarning`), a eksporty
+# idą do katalogu tymczasowego: notatnik w repo i export_results/ zostają
+# nietknięte, więc bramka źródła raportu nie widzi eksportów nowszych niż
+# zapisane wyjścia. Każde zarejestrowane ostrzeżenie to błąd PRZEBIEGU (kod 4),
+# ale nie wyjątek w komórce: pierwsza wersja (2026-11-13) robiła
+# `simplefilter("error")` jak audyt z `-W error` i to zmieniało zachowanie
+# notatnika — UserWarning torcha w easyocr stał się wyjątkiem, który
+# `_ocr_image_array` połknął (`except Exception` -> pusty tekst), więc zamiast
+# ostrzeżenia wyszedł „niedziałający OCR”. Rejestr widzi też ostrzeżenia
+# z kodu, który łapie wyjątki, i zbiera wszystkie, nie tylko pierwsze.
+# Config użytkownika NIE decyduje, co się wykona: kopia dostaje syntetyczny
+# korpus z diagnostyka.py (PDF z naprawą fontu i skanem, islandzki, wszystkie
+# loadery, adres URL z lokalnego serwera) i włączony sentyment — ostrzeżenie
+# w komponencie, którego config akurat nie używa, też musi wyjść.
 WARNINGS_TAG = "warnings_as_errors"
-WARNINGS_ERROR = 'warnings.simplefilter("error")'
+WARNINGS_ALWAYS = 'warnings.simplefilter("always")'
+# Pierwsza komórka kopii: rejestr ostrzeżeń w jądrze. `catch_warnings` bibliotek
+# przywraca nasz `showwarning`, więc rejestr przeżywa ich lokalne filtry.
+WARNINGS_RECORDER = "\n".join([
+    "import warnings",
+    "_ATA_OSTRZEZENIA = []",
+    "def _ata_rejestruj(message, category, filename, lineno, file=None, line=None):",
+    "    _ATA_OSTRZEZENIA.append([category.__name__, str(message), f'{filename}:{lineno}'])",
+    "warnings.showwarning = _ata_rejestruj",
+    WARNINGS_ALWAYS,
+])
+# Po każdej komórce run_all wykonuje tę sondę: wypisuje i czyści rejestr.
+WARNINGS_PROBE_MARK = "ATA_WARNINGS_JSON:"
+WARNINGS_PROBE = ("import json as _ata_json\n"
+                  f"print({WARNINGS_PROBE_MARK!r} + _ata_json.dumps(_ATA_OSTRZEZENIA))\n"
+                  "_ATA_OSTRZEZENIA.clear()")
+LOADERS_TAG = "diag_loaders"
+COMPONENTS_TAG = "diag_components"
+# Komórki kontrolne rzucają RuntimeError z tym prefiksem, gdy komponent jest
+# zainstalowany, ale w notatniku nie zadziałał (np. model się nie pobrał).
+DIAG_MARKER = "ATA_DIAG_MISSING: "
 # Kotwice łaty: dokładnie jedno trafienie w podanej komórce, inaczej tryb
 # odmawia (notatnik zmienił się pod łatą — test_run_all to wychwyci).
 WARNINGS_ANCHORS = (
     ("cell_langdet", 'warnings.filterwarnings("ignore")'),
     ("cell_corpus", 'PROJECT_DIR = Path("export_results") / PROJECT_NAME'),
+    ("cell_corpus", "from shamanic_locale import wielkie_litery"),
 )
 
 
-def patch_for_warnings(nb, export_root):
-    """Kopia notatnika: pierwsza komórka zamienia ostrzeżenia w błędy,
+def _code_cell(tag, source):
+    import nbformat
+    komorka = nbformat.v4.new_code_cell(source)
+    komorka.metadata["tags"] = [tag]
+    return komorka
+
+
+def _loaders_source(fixtures, url):
+    """Komórka po cell_corpus: każdy loader na swojej próbce + custom_patterns."""
+    import diagnostyka as dg
+    wywolania = [(k, f"load_{'image' if k == 'png' else k}({str(fixtures[k])!r})")
+                 for k in ("txt", "md", "html", "docx", "png")]
+    wywolania.append(("url", f"load_url({url!r})"))
+    linie = ["_DIAG_WYNIK = {}"]
+    linie += [f"_DIAG_WYNIK[{k!r}] = ' '.join({w})" for k, w in wywolania]
+    linie += [
+        f"_DIAG_BRAKI = [k for k, s in {dg.SLOWA_LOADEROW!r}.items()",
+        "               if s.lower() not in _DIAG_WYNIK[k].lower()]",
+        f"if {dg.ROSKA!r} in _DIAG_WYNIK['txt']:",
+        "    _DIAG_BRAKI.append('custom_patterns')",
+        "if _DIAG_BRAKI:",
+        f"    raise RuntimeError({DIAG_MARKER!r} + 'loader ' + ', '.join(_DIAG_BRAKI))",
+    ]
+    return "\n".join(linie)
+
+
+def _components_source():
+    """Komórka na końcu: czy każdy komponent opcjonalny naprawdę pracował."""
+    import diagnostyka as dg
+    return "\n".join([
+        "_DIAG_BRAKI = []",
+        "if 'omorfi_lemmas' not in get_nlp('fi').pipe_names:",
+        "    _DIAG_BRAKI.append('omorfi')",
+        "_DIAG_IS = get_nlp('is')",
+        "for _k in ('icebert_vectors', 'icelandic_ner'):",
+        "    if _k not in _DIAG_IS.pipe_names:",
+        "        _DIAG_BRAKI.append(_k)",
+        "if 'icelandic_ner' in _DIAG_IS.pipe_names and not _DIAG_IS("
+        + repr(dg.IS_STRONA[0]) + ").ents:",
+        "    _DIAG_BRAKI.append('icelandic_ner (0 entities)')",
+        "if IS_NER_FAILURES:",
+        "    _DIAG_BRAKI.append('icelandic_ner failures: ' + ', '.join(sorted(set(IS_NER_FAILURES))))",
+        "if _OCR_READER is None:",
+        "    _DIAG_BRAKI.append('easyocr')",
+        "if not (PROJECT_DIR / 'sentiment.csv').is_file():",
+        "    _DIAG_BRAKI.append('sentiment')",
+        "_DIAG_TXT = ' '.join(corpus)",
+        f"if {dg.SLOWO_NAPRAWY!r} not in _DIAG_TXT or '(cid:' in _DIAG_TXT:",
+        "    _DIAG_BRAKI.append('naprawa_zrodel (fontTools)')",
+        "if 'SKANNATTU' not in _DIAG_TXT.upper():",
+        "    _DIAG_BRAKI.append('pdf ocr (pypdfium2)')",
+        "if _DIAG_BRAKI:",
+        f"    raise RuntimeError({DIAG_MARKER!r} + ', '.join(_DIAG_BRAKI))",
+    ])
+
+
+def patch_for_warnings(nb, export_root, fixtures=None, url=""):
+    """Kopia notatnika: pierwsza komórka rejestruje każde ostrzeżenie,
     cell_langdet już ich nie wycisza, PROJECT_DIR leży w export_root.
+    Z `fixtures` (diagnostyka.zbuduj) config zostaje zastąpiony korpusem
+    syntetycznym, a dochodzą komórki loaderów i kontroli komponentów.
     Zwraca nową kopię albo rzuca ValueError z tagiem i kotwicą, która nie trafiła."""
     import copy
-    import nbformat
+    import diagnostyka as dg
 
     kopia = copy.deepcopy(nb)
-    zamiany = {
-        WARNINGS_ANCHORS[0]: WARNINGS_ERROR,
-        WARNINGS_ANCHORS[1]: f"PROJECT_DIR = Path({str(export_root)!r}) / PROJECT_NAME",
-    }
-    for (tag, kotwica), nowa in zamiany.items():
+    zamiany = [
+        (WARNINGS_ANCHORS[0], WARNINGS_ALWAYS),
+        (WARNINGS_ANCHORS[1], f"PROJECT_DIR = Path({str(export_root)!r}) / PROJECT_NAME"),
+    ]
+    if fixtures:
+        nadpisanie = "\n".join([
+            "# --- run_all --warnings-as-errors: config zastąpiony korpusem syntetycznym ---",
+            f"SOURCE_FILE = {str(fixtures['pdf'])!r}",
+            f"CUSTOM_PATTERNS = [{dg.WZORZEC_ROSKI!r}]",
+            f"OCR_LANGS = {dg.OCR_JEZYKI!r}",
+            "ENABLE_SENTIMENT = True",
+            "",
+        ])
+        zamiany.append((WARNINGS_ANCHORS[2], nadpisanie + WARNINGS_ANCHORS[2][1]))
+    for (tag, kotwica), nowa in zamiany:
         komorki = [c for i, c in enumerate(kopia.cells) if _tag(c, i) == tag]
         if len(komorki) != 1 or komorki[0].source.count(kotwica) != 1:
             raise ValueError(f"{tag}: {kotwica}")
         komorki[0].source = komorki[0].source.replace(kotwica, nowa)
-    pierwsza = nbformat.v4.new_code_cell("import warnings\n" + WARNINGS_ERROR)
-    pierwsza.metadata["tags"] = [WARNINGS_TAG]
-    kopia.cells.insert(0, pierwsza)
+    if fixtures:
+        po_korpusie = next(i for i, c in enumerate(kopia.cells) if _tag(c, i) == "cell_corpus") + 1
+        kopia.cells.insert(po_korpusie, _code_cell(LOADERS_TAG, _loaders_source(fixtures, url)))
+        stop = next((i for i, c in enumerate(kopia.cells) if _tag(c, i) in QA_TAGS), len(kopia.cells))
+        kopia.cells.insert(stop, _code_cell(COMPONENTS_TAG, _components_source()))
+    kopia.cells.insert(0, _code_cell(WARNINGS_TAG, WARNINGS_RECORDER))
     return kopia
 
 
-def _warning_location(traceback_lines):
-    """Gdzie padło ostrzeżenie, z tracebacku IPythona: linia komórki
-    (`Cell In[11], line 104`) i ostatnia ramka biblioteki (`File ~/…/x.py:12,
-    in f`). Lista 0–2 linii — pusta, gdy żadnej ramki nie ma."""
-    ramki = [ANSI_RE.sub("", linia).strip() for blok in traceback_lines or []
-             for linia in str(blok).splitlines()]
-    komorka = [r for r in ramki if r.startswith("Cell In")]
-    biblioteka = [r for r in ramki if r.startswith("File ")]
-    return komorka[-1:] + biblioteka[-1:]
+def _local_server(katalog):
+    """Serwer HTTP na 127.0.0.1 (losowy port) dla `load_url` — bez sieci."""
+    import functools
+    import http.server
+    import threading
+
+    class _Cichy(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    serwer = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), functools.partial(_Cichy, directory=str(katalog)))
+    threading.Thread(target=serwer.serve_forever, daemon=True).start()
+    return serwer
+
+
+def _probe_warnings(client, probe):
+    """Wykonuje sondę rejestru i zwraca listę [kategoria, treść, miejsce]."""
+    import json
+    probe.outputs = []
+    client.execute_cell(probe, 0)
+    for wyjscie in probe.outputs:
+        for linia in str(wyjscie.get("text", "")).splitlines():
+            if linia.startswith(WARNINGS_PROBE_MARK):
+                return json.loads(linia[len(WARNINGS_PROBE_MARK):])
+    return []
+
+
+def _print_warnings(per_cell):
+    """Raport: nagłówek per komórka (zlokalizowany), pod nim ostrzeżenia
+    w brzmieniu biblioteki — bez powtórzeń, z miejscem wywołania. Znane,
+    nieszkodliwe (diagnostyka.ZNANE_OSTRZEZENIA) idą jedną linią [INFO].
+    Zwraca liczbę ostrzeżeń spoza tej listy."""
+    import diagnostyka
+
+    nowe_razem = 0
+    for tag, lista in per_cell:
+        unikalne = list(dict.fromkeys(tuple(w) for w in lista))
+        nowe = [w for w in unikalne if not diagnostyka.znane(w[0], w[1])]
+        znane = [w for w in unikalne if diagnostyka.znane(w[0], w[1])]
+        if nowe:
+            print(t(UI_LANG, "run_all.warnings_found", tag=tag, n=len(nowe)))
+            for kategoria, tresc, miejsce in nowe:
+                print(f"{kategoria}: {tresc}")
+                print(f"  {miejsce}")
+        if znane:
+            print(t(UI_LANG, "run_all.warnings_known", tag=tag, n=len(znane),
+                    names=", ".join(sorted({w[0] for w in znane}))))
+        nowe_razem += len(nowe)
+    return nowe_razem
 
 
 def run_warnings_check():
     """Kody: 0 = żadnego ostrzeżenia, 4 = ostrzeżenie (wydrukowane pod
-    nagłówkiem, surowe — tekst biblioteki nie ma tłumaczenia), 1 = inna awaria."""
+    nagłówkiem, surowe — tekst biblioteki nie ma tłumaczenia), 1 = inna awaria
+    albo niepełna diagnostyka (brak komponentu przed startem lub w notatniku)."""
     import tempfile
     import nbformat
-    from nbclient import NotebookClient
-    from nbclient.exceptions import CellExecutionError
 
+    import diagnostyka
+
+    # Najpierw komplet: bez któregoś komponentu jego ostrzeżenia by nie wyszły,
+    # a „czysto” znaczyłoby tylko „nie sprawdzono”.
+    braki = diagnostyka.brakujace()
+    if braki:
+        print(t(UI_LANG, "run_all.warnings_missing", missing=", ".join(braki)))
+        return 1
     nb = nbformat.read(NOTEBOOK, as_version=4)
     name = nb.metadata.get("kernelspec", {}).get("name", "analyst_env")
     if not ensure_kernel(name):
         return 1
     with tempfile.TemporaryDirectory(prefix="ata_warnings_") as tmp:
+        fixtures = diagnostyka.zbuduj(Path(tmp) / "diag")
+        serwer = _local_server(fixtures["html"].parent)
+        url = f"http://127.0.0.1:{serwer.server_address[1]}/{fixtures['html'].name}"
         try:
-            nb = patch_for_warnings(nb, Path(tmp) / "export_results")
-        except ValueError as e:
-            print(t(UI_LANG, "run_all.warnings_patch_failed", anchor=str(e)))
-            return 1
-        print(t(UI_LANG, "run_all.warnings_start", path=tmp))
-        stop = next((i for i, c in enumerate(nb.cells) if _tag(c, i) in QA_TAGS), len(nb.cells))
-        code = [i for i in range(stop) if nb.cells[i].cell_type == "code"]
-        client = NotebookClient(nb, timeout=None, kernel_name=name,
-                                resources={"metadata": {"path": str(ROOT)}})
-        warnings.filterwarnings("ignore", message="Proactor event loop", category=RuntimeWarning)
-        i = code[0]
-        try:
-            with client.setup_kernel(stderr=subprocess.DEVNULL):
-                for n, i in enumerate(code, 1):
-                    print(t(UI_LANG, "run_all.notebook_cell", i=n, total=len(code),
-                            tag=_tag(nb.cells[i], i)), flush=True)
+            try:
+                nb = patch_for_warnings(nb, Path(tmp) / "export_results", fixtures, url)
+            except ValueError as e:
+                print(t(UI_LANG, "run_all.warnings_patch_failed", anchor=str(e)))
+                return 1
+            print(t(UI_LANG, "run_all.warnings_start", path=tmp))
+            return _execute_warnings_copy(nb, name)
+        finally:
+            serwer.shutdown()
+            serwer.server_close()
+
+
+def _execute_warnings_copy(nb, name):
+    import nbformat
+    from nbclient import NotebookClient
+    from nbclient.exceptions import CellExecutionError
+
+    stop = next((i for i, c in enumerate(nb.cells) if _tag(c, i) in QA_TAGS), len(nb.cells))
+    code = [i for i in range(stop) if nb.cells[i].cell_type == "code"]
+    client = NotebookClient(nb, timeout=None, kernel_name=name,
+                            resources={"metadata": {"path": str(ROOT)}})
+    warnings.filterwarnings("ignore", message="Proactor event loop", category=RuntimeWarning)
+    probe = nbformat.v4.new_code_cell(WARNINGS_PROBE)
+    per_cell = []
+    i = code[0]
+    try:
+        with client.setup_kernel(stderr=subprocess.DEVNULL):
+            for n, i in enumerate(code, 1):
+                print(t(UI_LANG, "run_all.notebook_cell", i=n, total=len(code),
+                        tag=_tag(nb.cells[i], i)), flush=True)
+                try:
                     client.execute_cell(nb.cells[i], i)
-        except CellExecutionError as e:
-            ename = getattr(e, "ename", "") or ""
-            evalue = ANSI_RE.sub("", str(getattr(e, "evalue", "") or "")).strip()
-            if ename.endswith("Warning"):
-                print(t(UI_LANG, "run_all.warnings_found", tag=_tag(nb.cells[i], i)))
-                print(f"{ename}: {evalue}")
-                for linia in _warning_location(nb.cells[i].outputs[-1].get("traceback")
-                                               if nb.cells[i].outputs else None):
-                    print(linia)
-                return 4
-            print(t(UI_LANG, "run_all.warnings_cell_failed", tag=_tag(nb.cells[i], i),
-                    error=f"{ename}: {evalue}" if ename else type(e).__name__))
+                finally:
+                    zlapane = _probe_warnings(client, probe)
+                    if zlapane:
+                        per_cell.append((_tag(nb.cells[i], i), zlapane))
+    except CellExecutionError as e:
+        ename = getattr(e, "ename", "") or ""
+        evalue = ANSI_RE.sub("", str(getattr(e, "evalue", "") or "")).strip()
+        _print_warnings(per_cell)
+        if evalue.startswith(DIAG_MARKER):
+            print(t(UI_LANG, "run_all.warnings_components", tag=_tag(nb.cells[i], i),
+                    missing=evalue[len(DIAG_MARKER):]))
             return 1
-        except Exception as e:  # noqa: BLE001 — DeadKernelError, jądro nie wstało
-            last = ANSI_RE.sub("", str(e) or type(e).__name__).strip().splitlines()[-1:] or [type(e).__name__]
-            print(t(UI_LANG, "run_all.warnings_cell_failed", tag=_tag(nb.cells[i], i), error=last[0]))
-            return 1
+        print(t(UI_LANG, "run_all.warnings_cell_failed", tag=_tag(nb.cells[i], i),
+                error=f"{ename}: {evalue}" if ename else type(e).__name__))
+        return 1
+    except Exception as e:  # noqa: BLE001 — DeadKernelError, jądro nie wstało
+        _print_warnings(per_cell)
+        last = ANSI_RE.sub("", str(e) or type(e).__name__).strip().splitlines()[-1:] or [type(e).__name__]
+        print(t(UI_LANG, "run_all.warnings_cell_failed", tag=_tag(nb.cells[i], i), error=last[0]))
+        return 1
+    if _print_warnings(per_cell):
+        return 4
     print(t(UI_LANG, "run_all.warnings_clean", n=len(code)))
     return 0
 

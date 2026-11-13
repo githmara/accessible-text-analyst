@@ -40,9 +40,9 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 | en   | enska      | `en_core_web_lg`       | spaCy          |
 | it   | ítalska    | `it_core_news_lg`      | spaCy          |
 | fi   | finnska    | `fi_core_news_lg`      | spaCy          |
-| is   | íslenska   | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT-base` (vektorar), `mideind/icelandic-ner-MIM-GOLD-22` (NER) |
+| is   | íslenska   | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT` (vektorar), `grammatek/icelandic-ner-bert` (NER) |
 
-Það er ekkert fullt spaCy-líkan fyrir íslensku, því eru tvö Hugging Face líkön tengd inn í auða leiðslu. Fyrsta niðurhal krefst ~700 MB á diski og nettenginga; síðari keyrslur nota HF-skyndiminni.
+Það er ekkert fullt spaCy-líkan fyrir íslensku, því eru tvö Hugging Face líkön tengd inn í auða leiðslu. Fyrsta niðurhal krefst ~1,3 GB á diski og nettenginga; síðari keyrslur nota HF-skyndiminni.
 
 **Valfrjáls endurbót á finnskri beygingarfræði (omorfi).** Tölfræðilega lemmunarvélin í `fi_core_news_lg` ræður illa við finnska viðskeytabeygingarfræði — hún framleiðir reglulega ruslmyndir eins og *kytköknen* eða *pisttää*. Þegar hreini Python-pakkinn `omorfi` er uppsettur og FST-stýrivélar hans sóttar (sjá Uppsetningu, skref 5), bætir minnisbókin við íhlutnum `omorfi_lemmas`, sem skiptir út lemmum og UD-beygingareinkennum fyrir orðabókargreiningar alls staðar þar sem þær eru sammála orðflokki spaCy-taggarans (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Án pakkans eða stýrivélanna heldur leiðslan hljóðlega venjulegri spaCy-hegðun.
 
@@ -72,7 +72,7 @@ Hvati reglu 6 er hreint hljóðfræðilegur: ensk rödd sem les finnsk/pólsk/í
 ## Kröfur
 
 - Python 3.12 eða nýrri (pakkarnir eru prófaðir á Python 3.14).
-- ~1,5 GB af lausu plássi fyrir spaCy `_lg`-líkön (eitt per tungumál). Bættu við ~700 MB ef þú vilt íslenskustuðning (Hugging Face `transformers` + `torch` + IceBERT + MIM-GOLD-22).
+- ~1,5 GB af lausu plássi fyrir spaCy `_lg`-líkön (eitt per tungumál). Bættu við ~1,3 GB ef þú vilt íslenskustuðning (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert).
 - Bættu við ~700 MB ef þú vilt OCR-stuðning (`easyocr` sækir `torch` ásamt sínum greiningar- og þekkingarlíkönum við fyrsta OCR-kall). Ef þú virkjaðir líka íslensku deilist kostnaður `torch` milli beggja.
 - Bættu við ~130 MB ef þú vilt endurbót á finnskri beygingarfræði (FST-stýrivélar `omorfi`, sóttar með `omorfi-download`).
 - Nettenging við fyrstu keyrslu (niðurhal líkana).
@@ -138,7 +138,7 @@ python -m spacy download fi_core_news_lg
 
 # 3. (Valfrjálst) Íslenskustuðningur — afkommenta `transformers` og
 # `torch` í requirements.txt og keyrðu aftur `pip install -r requirements.txt`.
-# IceBERT og MIM-GOLD-22 eru þá sótt frá Hugging Face við fyrstu keyrslu.
+# IceBERT og icelandic-ner-bert eru þá sótt frá Hugging Face við fyrstu keyrslu.
 
 # 4. (Valfrjálst) Tilfinningagreining — afkommenta `transformers`, `torch`,
 # `sentencepiece`, `protobuf` og `tiktoken` í requirements.txt, keyrðu aftur
@@ -238,11 +238,11 @@ Skriftunum hér að neðan er ætlað að keyra **í röð**: hver tekur við gr
 python run_all.py
 # nota úttakið sem þegar er vistað í minnisbókinni
 python run_all.py --skip-notebook
-# viðvaranir safna sem villur, í afriti af minnisbókinni (greining)
+# full greining á viðvörunum safna, óháð config
 python run_all.py --warnings-as-errors
 ```
 
-Skref 1, 2 og 4 hér að neðan, auk `scan` fyrir Bók hins ósagða þegar textasafnið er finnskt, í einni skipun. Keyrðu hann með Python úr `.venv` geymslunnar: ef kjarnann `analyst_env` vantar er hann skráður fyrir þann túlk. Keðjan stöðvast við fyrsta skrefið sem mistekst; úttakskóði 3 þýðir að heimildarathugun skýrslunnar hafnaði (sjá skref 2). Minnisbókin þaggar viðvaranir safna viljandi svo þær berist ekki í greiningarskýrsluna. `--warnings-as-errors` er sérstakur greiningarhamur: hann keyrir afrit af minnisbókinni þar sem hver viðvörun er villa, vistar útflutninginn í bráðabirgðamöppu og prentar fyrstu viðvörunina undir fyrirsögn, orðaða af safninu, ásamt hólfi og línu. Minnisbókin og `export_results/` eru ósnert og skýrslan og síðari skref keyra ekki; úttakskóði 4 = viðvörun fannst, 0 = engin. Keyrðu hann eftir uppfærslu safna.
+Skref 1, 2 og 4 hér að neðan, auk `scan` fyrir Bók hins ósagða þegar textasafnið er finnskt, í einni skipun. Keyrðu hann með Python úr `.venv` geymslunnar: ef kjarnann `analyst_env` vantar er hann skráður fyrir þann túlk. Keðjan stöðvast við fyrsta skrefið sem mistekst; úttakskóði 3 þýðir að heimildarathugun skýrslunnar hafnaði (sjá skref 2). Minnisbókin þaggar viðvaranir safna viljandi svo þær berist ekki í greiningarskýrsluna. `--warnings-as-errors` er sérstakur hamur fullrar greiningar: hann hunsar `config.json` og keyrir afrit af minnisbókinni með tilbúnu textasafni gegnum hvern íhlut (PDF með letursviðgerð og skannaðri síðu fyrir OCR, öll inntakssnið og URL frá staðbundnum þjóni, tilfinningagreiningu, íslensku, omorfi). Hann skráir hverja viðvörun, líka þær sem koma upp í kóða sem grípur undantekningar, og prentar þær allar undir fyrirsögn hólfsins, orðaðar af safninu, ásamt staðnum þar sem þær komu upp. Þekktar, skaðlausar viðvaranir (`diagnostyka.ZNANE_OSTRZEZENIA`) fá sérstaka línu og teljast ekki með. Hamurinn krefst allra valfrjálsra pakka í `requirements.txt` og líkansins `fi_core_news_lg`, og íhlutur sem hleðst ekki stöðvar hann með skilaboðum. Minnisbókin og `export_results/` eru ósnert og skýrslan og síðari skref keyra ekki; úttakskóði 4 = nýjar viðvaranir, 0 = engin. Keyrðu hann eftir uppfærslu safna.
 
 ### 1. Minnisbók (skyldug)
 
@@ -405,7 +405,7 @@ Hver undirmappa inniheldur:
 Þetta er kjarnagildi verkefnisins. Allt hér að neðan er ásetningsvert og verður að varðveita við breytingar á leiðslunni:
 
 - **Engir ANSI-litir, tjáningartákn eða gervigrafík í stdout.** Skjálesari les hvern staf bókstaflega — `[OK]` í stað „🟢", `---` í stað „───━━━".
-- **Þaggaðar framvinduslíkur** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` þaggar Hugging Face/torch hleðslulínur og viðvaranir áður en IceBERT og MIM-GOLD-22 eru sótt fyrir íslensku; `cell_corpus._silence_ocr_progress()` gerir það sama fyrir `easyocr`.
+- **Þaggaðar framvinduslíkur** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` þaggar Hugging Face/torch hleðslulínur og viðvaranir áður en IceBERT og icelandic-ner-bert eru sótt fyrir íslensku; `cell_corpus._silence_ocr_progress()` gerir það sama fyrir `easyocr`.
 - **Per-málsgreinar og per-setningar `lang`-merking í útflutningi.** `accessible_text.html` og `accessible_text.docx` bera ISO 639-1 kóða á hverri málsgrein (og á hverri setningu innan málsgreina/runa með blönduðu tungumáli). NVDA, JAWS, Narrator, VoiceOver, Word og SAPI virða þessi merki og skipta um rödd sjálfkrafa — jafnvel án nets.
 - **Harðkóðuð enskumerking í HTML-skýrslunni.** `generate_report.py` vefur alltaf tæknileg ensk brot — POS-merki (`NOUN`, `VERB`, `ADJ`), NER-merki (`PER`, `ORG`, `[orgName]`), auðkenni spaCy / Hugging Face líkana, ASCII-slóðir, kóðablokkir — inn í `<span lang="en">`, þannig að þau eru ekki lengur lesin með sjálfgefnu rússnesku rödd skjalsins.
 - **Per-brot merking erlends safns í HTML.** Þegar safnið er ekki rússneskt eru uppbyggð úttök (setningarútdrættir, lykilorðalistar, þemorðsorð, RAG-röðunarraðir, uppsláttartöflur) vafin í `<span lang="target_lang">`.

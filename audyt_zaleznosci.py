@@ -63,6 +63,13 @@ WIEK_HOLDU_DNI = 60
 ZNACZNIK_BUDZIKA = ROOT / "export_results" / "audyt_zaleznosci_ostatni.json"
 URL_PYPI = "https://pypi.org/pypi/{}/json"
 TIMEOUT = 15
+# Modele Hugging Face, które notatnik pobiera po nazwie. Do 2026-11-13 oba modele
+# islandzkie wskazywały repozytoria, których nie ma (HTTP 401) — loader łapał
+# wyjątek, a islandzki od pierwszego commita działał bez wektorów i NER. Audyt
+# pyta więc API Hubu o każdą nazwę: stała `HF_*` albo `*_MODEL` = "org/model".
+NOTATNIK = ROOT / "accessible_text_analyst.py"
+URL_HF = "https://huggingface.co/api/models/{}"
+_RE_MODEL_HF = re.compile(r'^\s*(?:HF_\w+|\w+_MODEL)\s*=\s*"([\w.-]+/[\w.-]+)"', re.M)
 # Python, na którym zestaw z manifestu był ostatnio przetestowany (patrz nagłówek
 # requirements.txt). Jedno miejsce — audyt porównuje z nim bieżący interpreter.
 PYTHON_PRZETESTOWANY = "3.14.3"
@@ -77,6 +84,7 @@ GRUPY_RYZYKA: dict[str, str] = {
         "pdfplumber", "fonttools", "python-docx", "beautifulsoup4", "lxml",
         "markdown", "markdownify", "omorfi", "transformers", "torch",
         "sentencepiece", "protobuf", "tiktoken", "pypdfium2", "easyocr", "pyyaml",
+        "pillow",
     ), "A"),
     **dict.fromkeys(("openai", "requests", "python-dotenv"), "B"),
     **dict.fromkeys(("ipykernel", "nbstripout", "jupytext", "nbclient", "tqdm"), "C"),
@@ -144,6 +152,24 @@ def najnowsza(nazwa: str) -> str | None:
         with urllib.request.urlopen(URL_PYPI.format(nazwa), timeout=TIMEOUT) as odp:
             return json.load(odp)["info"]["version"]
     except Exception:  # noqa: BLE001 — sieć/PyPI: werdykt „nie sprawdzono”, nie wyjątek
+        return None
+
+
+def modele_hf(sciezka: Path = NOTATNIK) -> list[str]:
+    """Nazwy modeli Hubu ze stałych notatnika, w kolejności, bez powtórzeń."""
+    return list(dict.fromkeys(_RE_MODEL_HF.findall(sciezka.read_text(encoding="utf-8"))))
+
+
+def model_hf_istnieje(model: str) -> bool | None:
+    """True = repozytorium jest publiczne, False = Hub go nie zna (401/404),
+    None = brak odpowiedzi (sieć) — wtedy nic nie wiadomo."""
+    import urllib.error
+    try:
+        with urllib.request.urlopen(URL_HF.format(model), timeout=TIMEOUT) as odp:
+            return odp.status == 200
+    except urllib.error.HTTPError as e:
+        return False if e.code in (401, 403, 404) else None
+    except (OSError, ValueError):
         return None
 
 
@@ -279,8 +305,19 @@ def main() -> int:
             do_decyzji.append(linia)
         if klucz in ("przeterminowana", "niedatowana", "dopuszczona") and grupa:
             print("    " + t(ui, f"deps.grupa_{grupa}"))
+    for model in modele_hf():
+        jest = model_hf_istnieje(model)
+        if jest:
+            continue
+        # Brak sieci liczy się jak brak PyPI: audyt nie był pełny, budzik stoi.
+        klucz = "model_hf" if jest is False else "pypi"
+        licznik[klucz] = licznik.get(klucz, 0) + 1
+        linia = t(ui, f"deps.w_{klucz}_model", model=model)
+        print(linia)
+        if jest is False:
+            do_decyzji.append(linia)
     ostrzezenia = sum(licznik.get(k, 0) for k in
-                      ("dopuszczona", "poza", "brak", "niedatowana", "bez_grupy"))
+                      ("dopuszczona", "poza", "brak", "niedatowana", "bez_grupy", "model_hf"))
     print(t(ui, "deps.podsumowanie", ok=licznik.get("ok", 0),
             trzymane=licznik.get("trzymana", 0),
             przeterminowane=licznik.get("przeterminowana", 0),
