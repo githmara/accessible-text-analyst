@@ -12,9 +12,11 @@
 # jest dowodem: cell_langdet wycisza wszystkie od drugiej komórki — deprecjacje
 # sprawdził osobny audyt sondami z -W error (pandas, openai, transformers, spaCy,
 # pypdfium2, fonttools, markdown: czysto), a pełna diagnostyka `run_all.py
-# --warnings-as-errors` (korpus syntetyczny, wszystkie komponenty): jedyne nowe
-# ostrzeżenia to deprecjacja torch.ao.quantization z easyocr (quantize=True)
-# — do decyzji; pin_memory i TqdmWarning są na liście znanych, nieszkodliwych;
+# --warnings-as-errors` (korpus syntetyczny, wszystkie komponenty): czysto, gdy
+# OCR idzie bez kwantyzacji (torch.ao.quantization przestarzałe; easyocr 1.7.2
+# kwantyzował detektor mimo quantize=False — obejście w _get_ocr_reader; bez
+# kwantyzacji 20–30% szybciej na CPU, tekst praktycznie ten sam na 5 skanach
+# i 5 zdjęciach); pin_memory i TqdmWarning są na liście znanych, nieszkodliwych;
 # modele spaCy 3.8.0 zgodne (spacy validate); jedno żywe wywołanie llm_klient
 # (OpenRouter, tekst + json_schema). pypdfium2/fonttools: 12 PDF-ów identycznych
 # 5.14 → 5.15 we wspólnym czyszczeniu z Reżyserem (19.18, 2026-11-12).

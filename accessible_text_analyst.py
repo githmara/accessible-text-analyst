@@ -310,7 +310,19 @@ def _get_ocr_reader(langs):
         return None
     print(f"  Инициализация OCR (easyocr, языки: {list(langs)})...")
     try:
-        _OCR_READER = easyocr.Reader(list(langs), gpu=False, verbose=False)
+        # quantize=False: квантизация easyocr идёт через torch.ao.quantization,
+        # который torch объявил устаревшим (удаление = тихо пропавший OCR).
+        # Замер 2026-11-13 (CPU): без квантизации быстрее на 20–30%, текст
+        # практически тот же (совпадение слов 0,93–1,0, покрытие эталона ±1 слово).
+        # В easyocr 1.7.2 `self.quantize=quantize,` (лишняя запятая) делает
+        # из флага кортеж (False,), т.е. истину, и ДЕТЕКТОР всё равно
+        # квантизуется. Поэтому детектор создаётся отдельно, после исправления
+        # флага; при исправленном easyocr этот путь даёт тот же результат.
+        _reader = easyocr.Reader(list(langs), gpu=False, verbose=False,
+                                 quantize=False, detector=False)
+        _reader.quantize = False
+        _reader.setDetector("craft")
+        _OCR_READER = _reader
         _OCR_READER_LANGS = key
     except Exception as _e:
         print(f"[ВНИМАНИЕ] Не удалось инициализировать easyocr: {_e}")
