@@ -57,6 +57,20 @@ class TestWzorceRaportu(unittest.TestCase):
             with self.subTest(kodowanie=k):
                 self.assertIn(f'<span lang="en">{k}</span>', otaguj(f"кодировка {k} найдена"))
 
+    def test_modele_hf_notatnika_w_jednym_spanie(self):
+        # Audyt 2026-11-13: po zmianie modelu NER na grammatek/... organizacji
+        # brakowało w _HF_ORG_PREFIXES i NVDA czytała nazwę głosem rosyjskim.
+        # Lista modeli idzie z tego samego źródła co audyt zależności.
+        import audyt_zaleznosci
+        modele = audyt_zaleznosci.modele_hf()
+        self.assertTrue(modele)
+        for m in modele:
+            with self.subTest(model=m):
+                # Sąsiednie spany się sklejają („NER: model”), więc wymóg to:
+                # cała nazwa wewnątrz jednego spana lang="en".
+                self.assertRegex(otaguj(f"  Загрузка NER: {m} ..."),
+                                 '<span lang="en">[^<]*' + re.escape(m) + "[^<]*</span>")
+
     def test_rosyjskie_slowa_nietkniete(self):
         linia = "  PDF: текст вразрядку — склеено: 342, оставлено: 10."
         self.assertNotIn("вразрядку</span>", otaguj(linia))

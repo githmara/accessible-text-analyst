@@ -152,11 +152,18 @@ WARNINGS_RECORDER = "\n".join([
     "warnings.showwarning = _ata_rejestruj",
     WARNINGS_ALWAYS,
 ])
-# Po każdej komórce run_all wykonuje tę sondę: wypisuje i czyści rejestr.
+# Po każdej komórce run_all wykonuje tę sondę: wypisuje i czyści rejestr oraz
+# mówi, czy rejestr nadal jest podpięty (`logging.captureWarnings(True)` albo
+# biblioteka podmieniająca `showwarning` na stałe dałyby ciche „czysto”).
 WARNINGS_PROBE_MARK = "ATA_WARNINGS_JSON:"
 WARNINGS_PROBE = ("import json as _ata_json\n"
-                  f"print({WARNINGS_PROBE_MARK!r} + _ata_json.dumps(_ATA_OSTRZEZENIA))\n"
+                  f"print({WARNINGS_PROBE_MARK!r} + _ata_json.dumps({{"
+                  "'w': _ATA_OSTRZEZENIA, 'ok': warnings.showwarning is _ata_rejestruj}))\n"
                   "_ATA_OSTRZEZENIA.clear()")
+# Limit na komórkę w kopii: cały przebieg na korpusie syntetycznym trwa
+# dziesiątki sekund (plus jednorazowe pobranie modeli), a zawieszone pobieranie
+# z HF bez limitu blokowałoby tryb na zawsze.
+WARNINGS_CELL_TIMEOUT = 1800
 LOADERS_TAG = "diag_loaders"
 COMPONENTS_TAG = "diag_components"
 # Komórki kontrolne rzucają RuntimeError z tym prefiksem, gdy komponent jest
@@ -168,7 +175,11 @@ WARNINGS_ANCHORS = (
     ("cell_langdet", 'warnings.filterwarnings("ignore")'),
     ("cell_corpus", 'PROJECT_DIR = Path("export_results") / PROJECT_NAME'),
     ("cell_corpus", "from shamanic_locale import wielkie_litery"),
+    ("cell_corpus", 'for _name in ("config.json", "config.ini"):'),
 )
+# Kopia z korpusem syntetycznym nie czyta configa wcale: klucz configa dodany
+# kiedyś do notatnika, a nieobjęty nadpisaniem, nie przecieknie do diagnostyki.
+WARNINGS_NO_CONFIG = "for _name in ():  # run_all --warnings-as-errors: config nie jest czytany"
 
 
 def _code_cell(tag, source):
@@ -204,6 +215,10 @@ def _components_source():
         "_DIAG_BRAKI = []",
         "if 'omorfi_lemmas' not in get_nlp('fi').pipe_names:",
         "    _DIAG_BRAKI.append('omorfi')",
+        # get_nlp('is') poniżej sam ładuje model, więc bez tego warunku kontrola
+        # przeszłaby, nawet gdyby korpus nigdy nie poszedł ścieżką islandzką.
+        "if 'is' not in para_langs:",
+        "    _DIAG_BRAKI.append('icelandic path (no paragraph detected as is)')",
         "_DIAG_IS = get_nlp('is')",
         "for _k in ('icebert_vectors', 'icelandic_ner'):",
         "    if _k not in _DIAG_IS.pipe_names:",
@@ -251,6 +266,7 @@ def patch_for_warnings(nb, export_root, fixtures=None, url=""):
             "",
         ])
         zamiany.append((WARNINGS_ANCHORS[2], nadpisanie + WARNINGS_ANCHORS[2][1]))
+        zamiany.append((WARNINGS_ANCHORS[3], WARNINGS_NO_CONFIG))
     for (tag, kotwica), nowa in zamiany:
         komorki = [c for i, c in enumerate(kopia.cells) if _tag(c, i) == tag]
         if len(komorki) != 1 or komorki[0].source.count(kotwica) != 1:
@@ -282,25 +298,27 @@ def _local_server(katalog):
 
 
 def _probe_warnings(client, probe):
-    """Wykonuje sondę rejestru i zwraca listę [kategoria, treść, miejsce]."""
+    """Wykonuje sondę rejestru. Zwraca (lista [kategoria, treść, miejsce],
+    czy rejestr nadal podpięty). Brak linii sondy = rejestru nie ma."""
     import json
     probe.outputs = []
     client.execute_cell(probe, 0)
     for wyjscie in probe.outputs:
         for linia in str(wyjscie.get("text", "")).splitlines():
             if linia.startswith(WARNINGS_PROBE_MARK):
-                return json.loads(linia[len(WARNINGS_PROBE_MARK):])
-    return []
+                dane = json.loads(linia[len(WARNINGS_PROBE_MARK):])
+                return dane["w"], bool(dane["ok"])
+    return [], False
 
 
 def _print_warnings(per_cell):
     """Raport: nagłówek per komórka (zlokalizowany), pod nim ostrzeżenia
     w brzmieniu biblioteki — bez powtórzeń, z miejscem wywołania. Znane,
     nieszkodliwe (diagnostyka.ZNANE_OSTRZEZENIA) idą jedną linią [INFO].
-    Zwraca liczbę ostrzeżeń spoza tej listy."""
+    Zwraca (liczba ostrzeżeń spoza tej listy, liczba znanych)."""
     import diagnostyka
 
-    nowe_razem = 0
+    nowe_razem = znane_razem = 0
     for tag, lista in per_cell:
         unikalne = list(dict.fromkeys(tuple(w) for w in lista))
         nowe = [w for w in unikalne if not diagnostyka.znane(w[0], w[1])]
@@ -314,7 +332,8 @@ def _print_warnings(per_cell):
             print(t(UI_LANG, "run_all.warnings_known", tag=tag, n=len(znane),
                     names=", ".join(sorted({w[0] for w in znane}))))
         nowe_razem += len(nowe)
-    return nowe_razem
+        znane_razem += len(znane)
+    return nowe_razem, znane_razem
 
 
 def run_warnings_check():
@@ -360,12 +379,16 @@ def _execute_warnings_copy(nb, name):
 
     stop = next((i for i, c in enumerate(nb.cells) if _tag(c, i) in QA_TAGS), len(nb.cells))
     code = [i for i in range(stop) if nb.cells[i].cell_type == "code"]
-    client = NotebookClient(nb, timeout=None, kernel_name=name,
+    # Komórki notatnika — bez trzech wstrzykniętych przez sam tryb.
+    wlasne = sum(1 for i in code if _tag(nb.cells[i], i) not in
+                 (WARNINGS_TAG, LOADERS_TAG, COMPONENTS_TAG))
+    client = NotebookClient(nb, timeout=WARNINGS_CELL_TIMEOUT, kernel_name=name,
                             resources={"metadata": {"path": str(ROOT)}})
     warnings.filterwarnings("ignore", message="Proactor event loop", category=RuntimeWarning)
     probe = nbformat.v4.new_code_cell(WARNINGS_PROBE)
     per_cell = []
     i = code[0]
+    rejestr_utracony = None
     try:
         with client.setup_kernel(stderr=subprocess.DEVNULL):
             for n, i in enumerate(code, 1):
@@ -374,9 +397,18 @@ def _execute_warnings_copy(nb, name):
                 try:
                     client.execute_cell(nb.cells[i], i)
                 finally:
-                    zlapane = _probe_warnings(client, probe)
+                    zlapane, podpiety = _probe_warnings(client, probe)
                     if zlapane:
                         per_cell.append((_tag(nb.cells[i], i), zlapane))
+                if not podpiety:
+                    rejestr_utracony = _tag(nb.cells[i], i)
+                    break
+    except KeyboardInterrupt:
+        # Sprzątanie (jądro, temp, serwer) robią menedżery kontekstu; tu
+        # tylko nie gubimy tego, co już zebrane, i trzymamy kontrakt kodów.
+        _print_warnings(per_cell)
+        print(t(UI_LANG, "run_all.warnings_interrupted", tag=_tag(nb.cells[i], i)))
+        return 1
     except CellExecutionError as e:
         ename = getattr(e, "ename", "") or ""
         evalue = ANSI_RE.sub("", str(getattr(e, "evalue", "") or "")).strip()
@@ -393,9 +425,16 @@ def _execute_warnings_copy(nb, name):
         last = ANSI_RE.sub("", str(e) or type(e).__name__).strip().splitlines()[-1:] or [type(e).__name__]
         print(t(UI_LANG, "run_all.warnings_cell_failed", tag=_tag(nb.cells[i], i), error=last[0]))
         return 1
-    if _print_warnings(per_cell):
+    nowe, znane = _print_warnings(per_cell)
+    if rejestr_utracony:
+        print(t(UI_LANG, "run_all.warnings_recorder_lost", tag=rejestr_utracony))
+        return 1
+    if nowe:
         return 4
-    print(t(UI_LANG, "run_all.warnings_clean", n=len(code)))
+    if znane:
+        print(t(UI_LANG, "run_all.warnings_clean_known", n=wlasne, k=znane))
+    else:
+        print(t(UI_LANG, "run_all.warnings_clean", n=wlasne))
     return 0
 
 

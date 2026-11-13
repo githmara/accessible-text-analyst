@@ -196,7 +196,7 @@ _SPACY_PIPELINE_COMPONENTS = (
 )
 
 _HF_ORG_PREFIXES = (
-    r"cardiffnlp|mideind|nlptown|sentence-transformers|google|microsoft|"
+    r"cardiffnlp|mideind|grammatek|nlptown|sentence-transformers|google|microsoft|"
     r"openai|facebook|meta-llama|deepset|allenai|huggingface|spacy|"
     r"bert-base|distilbert-base|xlm-roberta-base"
 )

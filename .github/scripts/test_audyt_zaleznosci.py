@@ -109,8 +109,16 @@ class TestWstrzymanie(unittest.TestCase):
         self.assertIn("grammatek/icelandic-ner-bert", modele)
         self.assertIn("mideind/IceBERT", modele)
         self.assertIn("cardiffnlp/twitter-xlm-roberta-base-sentiment", modele)
-        p = _plik('HF_X = "a/b"\n    SENTIMENT_MODEL = "c/d-1.0"\nHF_X = "a/b"\nINNE = "e/f"\n')
-        self.assertEqual(az.modele_hf(p), ["a/b", "c/d-1.0"])
+        p = _plik('HF_X = "a/b"\n    SENTIMENT_MODEL = "c/d-1.0"\nHF_X = "a/b"\nINNE = "e/f"\n'
+                  "OPENROUTER_MODEL = 'anthropic/claude'\n"
+                  "NER: str = 'g/h'\n"
+                  "pipeline('ner', model=HF_X, tokenizer=AutoTokenizer.from_pretrained(NER))\n"
+                  "pipeline('x', model=SENTIMENT_MODEL)\n"
+                  'AutoModel.from_pretrained("i/j")\n'
+                  "pipeline('y', model='k/l')\n")
+        # Od użycia: stała nieprzekazana do modelu (OPENROUTER_MODEL, INNE) nie
+        # jest nazwą Hubu; apostrofy, adnotacja i literał w wywołaniu — są.
+        self.assertEqual(az.modele_hf(p), ["a/b", "g/h", "c/d-1.0", "i/j", "k/l"])
 
     def test_model_hf_istnieje_rozroznia_brak_od_sieci(self):
         import io

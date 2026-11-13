@@ -37,7 +37,9 @@ def _indeks(nb, tag):
 class TestLataOstrzezen(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = Path(tempfile.mkdtemp())
+        katalog = tempfile.TemporaryDirectory(prefix="ata_test_run_all_")
+        cls.addClassCleanup(katalog.cleanup)
+        cls.tmp = Path(katalog.name)
         cls.fixtures = diagnostyka.zbuduj(cls.tmp / "diag")
 
     def setUp(self):
@@ -64,6 +66,12 @@ class TestLataOstrzezen(unittest.TestCase):
         # Nadpisanie stoi PO wczytaniu configa, więc config nic nie zmienia.
         self.assertGreater(nadpisanie, korpus.index("_CONFIG_PATH = None"))
         self.assertIn("ENABLE_SENTIMENT = True", korpus[nadpisanie:])
+        # Config nie jest nawet czytany: pętla po plikach configa jest pusta.
+        self.assertNotIn(run_all.WARNINGS_ANCHORS[3][1], korpus)
+        self.assertIn(run_all.WARNINGS_NO_CONFIG, korpus)
+        ns = {"Path": Path}
+        exec(korpus[korpus.index("_CONFIG_PATH = None"):korpus.index("if _CONFIG_PATH is not None")], ns)
+        self.assertIsNone(ns["_CONFIG_PATH"])
         self.assertIn(f"OCR_LANGS = {diagnostyka.OCR_JEZYKI!r}", korpus[nadpisanie:])
         self.assertEqual(_indeks(kopia, run_all.LOADERS_TAG), _indeks(kopia, "cell_corpus") + 1)
         qa = next(i for i, c in enumerate(kopia.cells) if run_all._tag(c, i) in run_all.QA_TAGS)
@@ -107,17 +115,48 @@ class TestRejestr(unittest.TestCase):
         nowe = ["FutureWarning", "something changes", "y.py:2"]
         bufor = io.StringIO()
         with contextlib.redirect_stdout(bufor):
-            self.assertEqual(run_all._print_warnings([("cell_a", [pin, pin]), ("cell_b", [nowe])]), 1)
-            self.assertEqual(run_all._print_warnings([("cell_a", [pin])]), 0)
+            self.assertEqual(run_all._print_warnings([("cell_a", [pin, pin]), ("cell_b", [nowe])]), (1, 1))
+            self.assertEqual(run_all._print_warnings([("cell_a", [pin])]), (0, 1))
         self.assertIn("FutureWarning: something changes", bufor.getvalue())
         self.assertNotIn("'pin_memory' argument", bufor.getvalue())
+
+
+    def _sonda(self, ns):
+        bufor = io.StringIO()
+        with contextlib.redirect_stdout(bufor):
+            exec(run_all.WARNINGS_PROBE, ns)
+        linia = bufor.getvalue().strip()
+        self.assertTrue(linia.startswith(run_all.WARNINGS_PROBE_MARK))
+        import json
+        return json.loads(linia[len(run_all.WARNINGS_PROBE_MARK):])
+
+    def test_sonda_wykrywa_podmieniony_rejestr(self):
+        """`logging.captureWarnings(True)` podmienia showwarning — bez tej
+        kontroli tryb kończył się kodem 0 mimo ostrzeżenia (audyt 2026-11-13)."""
+        import logging
+        ns = {}
+        with warnings.catch_warnings():
+            exec(run_all.WARNINGS_RECORDER, ns)
+            warnings.warn("x", FutureWarning)
+            dane = self._sonda(ns)
+            self.assertTrue(dane["ok"])
+            self.assertEqual(dane["w"][0][:2], ["FutureWarning", "x"])
+            self.assertEqual(ns["_ATA_OSTRZEZENIA"], [])
+            logging.captureWarnings(True)
+            try:
+                warnings.warn("y", FutureWarning)
+                self.assertFalse(self._sonda(ns)["ok"])
+            finally:
+                logging.captureWarnings(False)
 
 
 class TestFikstury(unittest.TestCase):
     def test_pdf_ma_wszystkie_sciezki(self):
         import pdfplumber
         import naprawa_zrodel
-        pliki = diagnostyka.zbuduj(Path(tempfile.mkdtemp()))
+        katalog = tempfile.TemporaryDirectory(prefix="ata_test_run_all_")
+        self.addCleanup(katalog.cleanup)
+        pliki = diagnostyka.zbuduj(Path(katalog.name))
         with pdfplumber.open(pliki["pdf"]) as pdf:
             self.assertEqual(len(pdf.pages), 6)
             teksty = [s.extract_text() or "" for s in pdf.pages]

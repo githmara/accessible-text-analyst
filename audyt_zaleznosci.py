@@ -66,10 +66,22 @@ TIMEOUT = 15
 # Modele Hugging Face, które notatnik pobiera po nazwie. Do 2026-11-13 oba modele
 # islandzkie wskazywały repozytoria, których nie ma (HTTP 401) — loader łapał
 # wyjątek, a islandzki od pierwszego commita działał bez wektorów i NER. Audyt
-# pyta więc API Hubu o każdą nazwę: stała `HF_*` albo `*_MODEL` = "org/model".
+# pyta więc API Hubu o każdą nazwę, którą notatnik POBIERA: argument `model=`
+# albo `from_pretrained(` — literał "org/model" wprost albo stała, której
+# przypisanie (dowolny cudzysłów, z adnotacją typu lub bez) daje taki literał.
+# Od użycia, nie od nazwy stałej (audyt 2026-11-13): sam wzorzec nazw `HF_*`/
+# `*_MODEL` gubił literał w wywołaniu i apostrofy, a łapał `OPENROUTER_MODEL =
+# "anthropic/…"`, którego Hub nie zna — fałszywe ostrzeżenie w audycie.
 NOTATNIK = ROOT / "accessible_text_analyst.py"
 URL_HF = "https://huggingface.co/api/models/{}"
-_RE_MODEL_HF = re.compile(r'^\s*(?:HF_\w+|\w+_MODEL)\s*=\s*"([\w.-]+/[\w.-]+)"', re.M)
+_NAZWA_HF = r"[\w.-]+/[\w.-]+"
+_RE_UZYCIE_HF = re.compile(
+    r"""(?:\bmodel\s*=\s*|\bfrom_pretrained\(\s*)"""
+    rf"""(?:(["'])({_NAZWA_HF})\1|([A-Za-z_]\w*)\b)""")
+
+
+def _re_stala_hf(nazwa: str) -> re.Pattern:
+    return re.compile(rf"""^\s*{re.escape(nazwa)}\s*(?::[^=\n]+)?=\s*(["'])({_NAZWA_HF})\1""", re.M)
 # Python, na którym zestaw z manifestu był ostatnio przetestowany (patrz nagłówek
 # requirements.txt). Jedno miejsce — audyt porównuje z nim bieżący interpreter.
 PYTHON_PRZETESTOWANY = "3.14.3"
@@ -156,8 +168,16 @@ def najnowsza(nazwa: str) -> str | None:
 
 
 def modele_hf(sciezka: Path = NOTATNIK) -> list[str]:
-    """Nazwy modeli Hubu ze stałych notatnika, w kolejności, bez powtórzeń."""
-    return list(dict.fromkeys(_RE_MODEL_HF.findall(sciezka.read_text(encoding="utf-8"))))
+    """Nazwy modeli Hubu, które notatnik pobiera, w kolejności, bez powtórzeń.
+    Ścieżka istniejąca na dysku (model lokalny) nie jest nazwą Hubu."""
+    tekst = sciezka.read_text(encoding="utf-8")
+    wynik = []
+    for m in _RE_UZYCIE_HF.finditer(tekst):
+        if m.group(2):
+            wynik.append(m.group(2))
+        elif m.group(3):
+            wynik += [s.group(2) for s in _re_stala_hf(m.group(3)).finditer(tekst)]
+    return [n for n in dict.fromkeys(wynik) if not (sciezka.parent / n).exists()]
 
 
 def model_hf_istnieje(model: str) -> bool | None:
