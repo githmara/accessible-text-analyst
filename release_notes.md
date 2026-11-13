@@ -4,6 +4,40 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v1.13.0 — Icelandic gets real vectors and NER, a diagnostic mode reports every warning, and dependency holds expire
+
+**Theme.** Since the initial commit, Icelandic ran without word vectors and without named-entity recognition. The two Hugging Face model ids in the notebook (`mideind/IceBERT-base`, `mideind/icelandic-ner-MIM-GOLD-22`) never existed. The loader caught the error, printed a warning nobody read, and went on. This release replaces them with real models and adds a diagnostic mode, so such a silent failure is caught the next time. It also updates the environment under a new rule: every dependency bound is dated and expires. Minor bump: new models, a new run mode and new dependency versions.
+
+### What changed
+- **Icelandic.** Vectors come from `mideind/IceBERT` (CC-BY-4.0), and NER from `grammatek/icelandic-ner-bert` (Apache-2.0, trained on MIM-GOLD-NER). NER now reads the whole document in overlapping 512-token windows. Before, it stopped after 5000 characters and the model silently cut the text at 512 subtokens: on a test text, 123 entities instead of 247. Labels are mapped to the PER/LOC/ORG set the rest of the pipeline reads. Cost: about 4,000 characters per second on CPU, so a book takes a few minutes.
+- **`run_all.py --warnings-as-errors`.** Runs a copy of the notebook on a synthetic corpus that drives every component: PDF with repeated headers and a broken font, a scanned page, Icelandic, txt/md/html/docx/png and a local URL. Every Python warning of every cell is recorded with its origin. Known harmless warnings get one info line; anything new exits with code 4. The copy does not read `config.json`, and the notebook and `export_results/` stay untouched. The mode refuses to start when an optional package or model is missing, and fails when an installed component did not actually work. If a library replaces the warnings recorder, or you press Ctrl+C, it exits 1 instead of reporting a false clean.
+- **OCR without quantization.** easyocr quantized its networks through `torch.ao.quantization`, which torch has deprecated; its removal would switch OCR off silently and block upgrades. OCR now runs unquantized. easyocr 1.7.2 ignores `quantize=False` for the detector (a stray comma turns the flag into a tuple), so the detector is rebuilt explicitly. Measured on 5 real scans and 5 photos: 20–30% faster on CPU, word agreement 0.93–1.0.
+- **Stable keyword order.** Keywords and topics with equal TF-IDF weight are ordered alphabetically, so the order no longer depends on numpy's sort algorithm. Sentiment is pinned to the CPU in float32.
+- **Environment.** pandas 3.1.1, transformers 5.22.2, torch 2.15.0, spacy 3.8.18, fonttools 4.68.0, markdown 3.11.3, openai 3.50.0, sentencepiece 0.2.3, pypdfium2 5.15.2. Every export of a full Finnish run is byte-identical to the run on the old versions.
+- **Dependency audit (`audyt_zaleznosci.py`, twin of Reżyser 19.18).**
+  - Every bound carries `# hold: <version>`, and every package has a risk group (A analysis and report, B external API, C tooling) that says what to test before raising the bound.
+  - A hold expires with the next minor, or 60 days after its line last changed. A source archive or a shallow clone makes the age unknown, and the audit says so.
+  - A full audit writes a marker that the maintainer's session start reads.
+  - Every Hugging Face model the notebook downloads is checked against the Hub, which is the check that found the dead Icelandic ids.
+- **CI gates.**
+  - The upper bound of every package a workflow installs must equal the manifest's bound, compared semantically and step by step.
+  - The Python version gate reads `*.yaml` workflows too.
+  - The report test checks that each downloaded model's name sits in one English span.
+
+### Verified
+- Every release self-test passes locally, translation parity and the language basics audit are clean.
+- `run_all.py --warnings-as-errors` exits 0 with the line "no new warnings in 20 notebook cells; 3 known". With `logging.captureWarnings` switched on, the mode exits 1.
+- The dependency audit reports 29 packages up to date and 0 expired holds.
+- Live calls through `llm_klient` succeeded with OpenAI and with OpenRouter, both as text and as `json_schema`.
+
+### Deferred
+- pillow 13.0.0 (used only by the full diagnostics) is held at `<12.4` until it is tested.
+
+### Distribution
+Source-only release. The GitHub-generated source-code asset attached to the tag is the canonical artefact.
+
+---
+
 ## v1.12.0 — the language of Cyrillic text comes from the installed alphabets, through a module shared with the Director
 
 **Theme.** Until now every sentence with Cyrillic letters was simply called Russian: the notebook had `ru` written into its language detection. That was right only because Russian is the one Cyrillic language ATA has. The decision now comes from the alphabets of the installed language packs, through a new module shared byte for byte with Reżyser Audio GPT 19.17.0, so a Ukrainian pack would be recognised by its own letters (і, ї, є, ґ) without touching the code. Minor bump: a new shared module and a new basis for detection; with today's packs the result is the same as before.
