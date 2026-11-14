@@ -98,6 +98,7 @@ GRUPY_RYZYKA: dict[str, str] = {
         "sentencepiece", "protobuf", "tiktoken", "pypdfium2", "easyocr", "pyyaml",
         "pillow", "winrt-runtime", "winrt-windows.media.ocr", "winrt-windows.graphics.imaging",
         "winrt-windows.storage.streams", "winrt-windows.globalization", "winrt-windows.foundation",
+        "islenska", "islenska-data",
     ), "A"),
     **dict.fromkeys(("openai", "requests", "python-dotenv"), "B"),
     **dict.fromkeys(("ipykernel", "nbstripout", "jupytext", "nbclient", "tqdm"), "C"),

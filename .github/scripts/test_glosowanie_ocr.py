@@ -150,7 +150,16 @@ class TestPlan(unittest.TestCase):
             with self.assertRaises(g.BladGlosowania) as e:
                 g.zaplanuj(["pl"])
         self.assertIn("brak pywinrt", e.exception.problemy[0].szczegol)
-        self.assertIn("easyocr niezainstalowany", e.exception.problemy[0].szczegol)
+        self.assertIn("easyocr not installed", e.exception.problemy[0].szczegol)
+
+    def test_nieznany_kod_jest_problemem_nie_wyjatkiem(self):
+        # Stare configi miały kody easyocr spoza podstaw (np. "de"): komunikat, nie KeyError.
+        with mock.patch.object(g.ow, "dostepne_jezyki", return_value=["pl"]), \
+                mock.patch.object(g.ow, "silnik_dostepny", return_value=True), \
+                mock.patch.object(g, "slownik", side_effect=lambda k: SLOWNIKI[k]):
+            with self.assertRaises(g.BladGlosowania) as e:
+                g.zaplanuj(["pl", "xx"])
+        self.assertEqual([(p.kod, p.przyczyna) for p in e.exception.problemy], [("xx", "nieznany_jezyk")])
 
     def test_plan_kompletny(self):
         with mock.patch.object(g.ow, "dostepne_jezyki", return_value=["pl", "fi"]), \

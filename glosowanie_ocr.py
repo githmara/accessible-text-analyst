@@ -48,7 +48,9 @@ _LITERY = re.compile(r"[^\W\d_]+", re.UNICODE)
 
 @dataclass(frozen=True)
 class Problem:
-    """Język, którego nie da się włączyć do głosowania. `przyczyna`: `brak_silnika` albo `brak_slownika`."""
+    """Język, którego nie da się włączyć do głosowania. `przyczyna`: `nieznany_jezyk`, `brak_silnika`
+    albo `brak_slownika`; `szczegol` po angielsku (techniczny, z poleceniem naprawy) — notatnik
+    dokłada nagłówek we własnym języku."""
 
     kod: str
     przyczyna: str
@@ -78,6 +80,7 @@ class Slownik:
     alfabet: frozenset
     zna_forme: Callable[[str], bool]
     zrodlo: str
+    uznanie: str = ""  # uznanie autorstwa wymagane licencją danych; notatnik drukuje je przy użyciu
 
     def ocen(self, slowo: str) -> Optional[bool]:
         """True = forma słownikowa; False = nie; None = brak głosu (mniej niż 2 litery, liczba, znak)."""
@@ -103,12 +106,12 @@ def _slownik_spacy(kod: str, model: str) -> Slownik:
                                      "morphologizer", "senter", "trainable_lemmatizer"])
     wek = nlp.vocab.vectors
     if wek.mode != "default":
-        raise LookupError(f"wektory {model} w trybie {wek.mode} nie są skończoną listą form")
+        raise LookupError(f"{model} vectors are in mode {wek.mode}, not a finite word list")
     s = nlp.vocab.strings
     formy = frozenset(s[k] for k in wek.keys() if k in s)
     del nlp, wek, s
     gc.collect()
-    return Slownik(kod, _alfabet(kod), formy.__contains__, f"spaCy {model} ({len(formy)} form)")
+    return Slownik(kod, _alfabet(kod), formy.__contains__, f"spaCy {model} ({len(formy)} forms)")
 
 
 def _slownik_omorfi(kod: str) -> Slownik:
@@ -117,7 +120,7 @@ def _slownik_omorfi(kod: str) -> Slownik:
 
     sciezka = next((p for n in AUTOMATY_OMORFI for p in (Path.cwd() / n, KATALOG / n) if p.exists()), None)
     if sciezka is None:
-        raise LookupError("brak automatów omorfi (*.hfst) — uruchom omorfi-download w katalogu repo")
+        raise LookupError("omorfi automata (*.hfst) missing: run omorfi-download in the repository folder")
     om = Omorfi()
     om.load_analyser(str(sciezka))
 
@@ -141,7 +144,7 @@ def _slownik_bin(kod: str) -> Slownik:
     from islenska import Bin
 
     b = Bin(add_compounds=True)
-    return Slownik(kod, _alfabet(kod), lambda forma: bool(b.lookup(forma)[1]), "BÍN (islenska)")
+    return Slownik(kod, _alfabet(kod), lambda forma: bool(b.lookup(forma)[1]), "BÍN (islenska)", UZNANIE_BIN)
 
 
 @lru_cache(maxsize=None)
@@ -156,10 +159,10 @@ def slownik(kod: str) -> Slownik:
         if model:
             return _slownik_spacy(kod, model)
     except ImportError as e:
-        raise LookupError(f"brak pakietu: {e.name}") from e
+        raise LookupError(f"package {e.name} missing: uncomment it in requirements.txt and install") from e
     except OSError as e:  # spacy.load: model niezainstalowany
-        raise LookupError(f"brak modelu spaCy {model}: python -m spacy download {model}") from e
-    raise LookupError("język nie ma źródła słownika (ani wektorów spaCy, ani leksykonu)")
+        raise LookupError(f"spaCy model {model} missing: python -m spacy download {model}") from e
+    raise LookupError("no lexicon source for this language (neither spaCy vectors nor a lexicon)")
 
 
 # ---------------------------------------------------------------- silniki
@@ -192,6 +195,9 @@ def zaplanuj(kody: list[str]) -> PlanOcr:
     except ow.OcrNiedostepny as e:
         windows_dziala, powod_windows = False, str(e)
     for kod in kody:
+        if kod not in PODSTAWY:
+            problemy.append(Problem(kod, "nieznany_jezyk", "supported: " + ", ".join(sorted(PODSTAWY))))
+            continue
         tag = PODSTAWY[kod]["locale"]
         if windows_dziala and ow.silnik_dostepny(tag):
             plan.windows[kod] = tag
@@ -200,9 +206,10 @@ def zaplanuj(kody: list[str]) -> PlanOcr:
             if easy:
                 plan.easyocr.append(kod)
             else:
-                brak = ("silnik Windows niedostępny: " + powod_windows) if not windows_dziala else \
-                    f"Windows nie ma silnika {tag} (Ustawienia > Język > pakiet z rozpoznawaniem tekstu)"
-                dalej = "easyocr niezainstalowany" if easy is None else "easyocr nie zna tego języka"
+                brak = ("Windows OCR unavailable: " + powod_windows) if not windows_dziala else \
+                    (f"Windows has no OCR engine for {tag} (Settings > Time & language > Language & region: "
+                     "add the language with the optical character recognition feature)")
+                dalej = "easyocr not installed" if easy is None else "easyocr does not support this language"
                 problemy.append(Problem(kod, "brak_silnika", f"{brak}; {dalej}"))
                 continue
         try:
@@ -433,7 +440,7 @@ def odczytaj(obraz, kody: list[str], plan: Optional[PlanOcr] = None) -> WynikGlo
     if plan.windows:
         w = ow.rozpoznaj(obraz, list(plan.windows.values()))
         if w.bez_silnika:  # silnik zniknął między planem a odczytem (np. odinstalowany pakiet)
-            raise BladGlosowania([Problem(k, "brak_silnika", f"Windows nie ma silnika {t}")
+            raise BladGlosowania([Problem(k, "brak_silnika", f"Windows OCR engine {t} disappeared during the run")
                                   for k, t in plan.windows.items() if t in w.bez_silnika])
         for kod, tag in plan.windows.items():
             kandydaci[kod] = w.slowa[tag]

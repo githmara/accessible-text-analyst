@@ -117,6 +117,11 @@ python-dotenv<1.3  # hold: 1.8.0
 # winrt-Windows.Storage.Streams<4!10.0.28001  # hold: 1.14.0
 # winrt-Windows.Globalization<4!10.0.28001  # hold: 1.14.0
 # winrt-Windows.Foundation<4!10.0.28001  # hold: 1.14.0
+# Słownik islandzki do głosowania OCR (glosowanie_ocr.py): BÍN przez islenska
+# (~62 MB danych). Potrzebny tylko, gdy `ocr_languages` zawiera "is"; licencja
+# danych CC BY-SA 4.0 — notatnik drukuje uznanie autorstwa przy każdym użyciu.
+# islenska<2.2  # hold: 1.14.0
+# islenska-data<5.1  # hold: 1.14.0
 
 # Pełna diagnostyka ostrzeżeń (`python run_all.py --warnings-as-errors`). Tryb
 # pomija config i przepuszcza syntetyczny korpus przez KAŻDY komponent, bo

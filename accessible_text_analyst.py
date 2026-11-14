@@ -58,10 +58,11 @@ from shamanic_locale import t
 
 SOURCE_FILE = ""
 CUSTOM_PATTERNS = []
-# Языки для OCR (easyocr). В одной инстанции Reader можно сочетать только
-# языки одного скрипта: например ["ru", "en"] для кириллицы или
-# ["en", "pl", "it", "fi", "is"] для латиницы. Если корпус — скан или
-# изображение, выставите ocr_languages в config.json под скрипт документа.
+# Языки ТЕКСТА сканов и изображений (коды из dictionaries/<код>/podstawy.yaml).
+# Каждый язык читает свой движок OCR, словарь выбирает слова (glosowanie_ocr.py),
+# поэтому указывайте только языки, которые действительно есть в документе:
+# лишний язык замедляет OCR и даёт словарю ложных кандидатов. Смешивать
+# латиницу и кириллицу можно (например ["fi", "ru"]).
 OCR_LANGS = ["en"]
 # Опциональный анализ тональности (по умолчанию выключен). Включается ключом
 # "enable_sentiment": true в config.json. Это тяжёлая опция (~1,1 ГБ модель
@@ -276,11 +277,22 @@ def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge
     return cleaned, bp_exact | bp_core
 
 # ============================================================
-# OCR: распознавание сканов PDF и изображений через easyocr.
-# Загружаем Reader лениво — модели ~70 МБ скачиваются при первом вызове.
+# OCR: распознавание сканов PDF и изображений ГОЛОСОВАНИЕМ (glosowanie_ocr.py).
+# Движок OCR знает один язык за раз: польский меняет финские ä, финский теряет
+# ą/ę/ł, русский вставляет кириллицу в латинские слова. Поэтому страницу читает
+# движок КАЖДОГО языка из ocr_languages (встроенный OCR Windows; для языка без
+# него — easyocr, сегодня исландский), а из каждого результата берутся
+# словарные формы. Нехватка движка или словаря — ОШИБКА, а не тихо пропавший
+# текст (решение 2026-11-13): исправление — изменить ocr_languages или
+# установить недостающий компонент.
 # ============================================================
-_OCR_READER = None
-_OCR_READER_LANGS = None
+_OCR_PLAN = None
+_OCR_PLAN_LANGS = None
+_OCR_PRICHINY = {
+    "nieznany_jezyk": "язык не поддерживается",
+    "brak_silnika": "нет движка OCR",
+    "brak_slownika": "нет словаря",
+}
 
 
 def _silence_ocr_progress():
@@ -295,75 +307,59 @@ def _silence_ocr_progress():
         pass
 
 
-def _get_ocr_reader(langs):
-    """Возвращает (и кэширует) easyocr.Reader для заданного списка языков.
-    При смене языков пересоздаёт инстанс."""
-    global _OCR_READER, _OCR_READER_LANGS
+def _ocr_plan(langs):
+    """План OCR (движок и словарь каждого языка) — один раз на набор языков:
+    словари загружаются секундами. Любая нехватка — RuntimeError после
+    печати ВСЕХ проблем сразу, чтобы пользователь исправил их за один заход."""
+    global _OCR_PLAN, _OCR_PLAN_LANGS
     key = tuple(langs)
-    if _OCR_READER is not None and _OCR_READER_LANGS == key:
-        return _OCR_READER
+    if _OCR_PLAN is not None and _OCR_PLAN_LANGS == key:
+        return _OCR_PLAN
+    _silence_ocr_progress()
+    import glosowanie_ocr
+    print(f"  Подготовка OCR (языки: {list(langs)}): движки и словари...")
     try:
-        _silence_ocr_progress()
-        import easyocr
-    except ImportError:
-        print("[ВНИМАНИЕ] easyocr не установлен. Выполните: pip install easyocr")
-        return None
-    print(f"  Инициализация OCR (easyocr, языки: {list(langs)})...")
-    try:
-        # quantize=False: квантизация easyocr идёт через torch.ao.quantization,
-        # который torch объявил устаревшим (удаление = тихо пропавший OCR).
-        # Замер 2026-11-13 (CPU): без квантизации быстрее на 20–30%, текст
-        # практически тот же (совпадение слов 0,93–1,0, покрытие эталона ±1 слово).
-        # В easyocr 1.7.2 `self.quantize=quantize,` (лишняя запятая) делает
-        # из флага кортеж (False,), т.е. истину, и ДЕТЕКТОР всё равно
-        # квантизуется. Поэтому детектор создаётся отдельно, после исправления
-        # флага; при исправленном easyocr этот путь даёт тот же результат.
-        _reader = easyocr.Reader(list(langs), gpu=False, verbose=False,
-                                 quantize=False, detector=False)
-        _reader.quantize = False
-        _reader.setDetector("craft")
-        _OCR_READER = _reader
-        _OCR_READER_LANGS = key
-    except Exception as _e:
-        print(f"[ВНИМАНИЕ] Не удалось инициализировать easyocr: {_e}")
-        return None
-    return _OCR_READER
+        plan = glosowanie_ocr.zaplanuj(list(langs))
+    except glosowanie_ocr.BladGlosowania as _e:
+        print("[ОШИБКА] OCR не может работать с языками из ocr_languages:")
+        for _p in _e.problemy:
+            print(f"  {_p.kod}: {_OCR_PRICHINY.get(_p.przyczyna, _p.przyczyna)} — {_p.szczegol}")
+        print("  Исправление: убрать язык из ocr_languages в config.json "
+              "или установить недостающий компонент.")
+        raise RuntimeError(f"OCR: {_e}") from None
+    for _k, _tag in plan.windows.items():
+        print(f"    {_k}: движок Windows ({_tag}), словарь: {plan.slowniki[_k].zrodlo}")
+    for _k in plan.easyocr:
+        print(f"    {_k}: easyocr, словарь: {plan.slowniki[_k].zrodlo}")
+    # Лицензия данных словаря (BÍN: CC BY-SA 4.0) требует указания авторства
+    # при каждом использовании — оно попадает в вывод ячейки и в отчёт.
+    for _uz in sorted({s.uznanie for s in plan.slowniki.values() if s.uznanie}):
+        print(f"    Словарь: {_uz}")
+    _OCR_PLAN, _OCR_PLAN_LANGS = plan, key
+    return plan
 
 
-def _ocr_image_array(image_or_path, langs):
-    """Запускает OCR на массиве numpy, PIL-объекте или пути к файлу.
-    Возвращает текст, склеенный по строкам/абзацам."""
-    reader = _get_ocr_reader(langs)
-    if reader is None:
-        return ""
-    try:
-        results = reader.readtext(image_or_path, detail=0, paragraph=True)
-    except Exception as _e:
-        print(f"[ВНИМАНИЕ] OCR не смог обработать изображение: {_e}")
-        return ""
-    return "\n".join(s for s in results if s and s.strip())
+def _ocr_obraz(obraz, langs):
+    """Одна страница (PIL.Image) → текст голосованием движков всех языков."""
+    import glosowanie_ocr
+    wynik = glosowanie_ocr.odczytaj(obraz, list(langs), _ocr_plan(langs))
+    return wynik.tekst, wynik
 
 
 def _pdf_ocr_pages(path, langs, pages=None):
-    """Рендерит страницы PDF через pypdfium2 и распознаёт текст.
+    """Рендерит страницы PDF через pypdfium2 и распознаёт текст голосованием.
 
     pages — индексы страниц (от 0) для OCR; None = все страницы.
-    Возвращает словарь {индекс: текст} (пустой, если OCR недоступен).
+    Возвращает словарь {индекс: текст}. Без pypdfium2 — пустой словарь
+    с предупреждением; без движка или словаря языка — RuntimeError (_ocr_plan).
     """
     try:
         import pypdfium2 as pdfium
     except ImportError:
         print("[ВНИМАНИЕ] pypdfium2 не установлен. Выполните: pip install pypdfium2")
         return {}
-    try:
-        import numpy as np
-    except ImportError:
-        print("[ВНИМАНИЕ] numpy не установлен — нужен для OCR PDF.")
-        return {}
-    # Читатель проверяем ОДИН раз: без easyocr предупреждение печаталось
-    # бы на каждой странице.
-    if _get_ocr_reader(langs) is None:
-        return {}
+    # План проверяем ОДИН раз и до рендера: ошибка конфигурации видна сразу.
+    _ocr_plan(langs)
     pdf = pdfium.PdfDocument(path)
     pages_text = {}
     total = len(pdf)
@@ -371,24 +367,27 @@ def _pdf_ocr_pages(path, langs, pages=None):
     try:
         for i in indices:
             page = pdf[i]
-            # scale=2.0 → ~144 DPI, разумный баланс качества OCR и скорости
-            bitmap = page.render(scale=2.0)
-            pil_img = bitmap.to_pil()
-            arr = np.array(pil_img)
-            text = _ocr_image_array(arr, langs)
+            # scale=2.0 → ~144 DPI; высокие страницы режутся на полосы внутри
+            # ocr_windows (предел движка Windows 10000 px).
+            text, wynik = _ocr_obraz(page.render(scale=2.0).to_pil(), langs)
             page.close()
             pages_text[i] = text
-            print(f"  OCR: страница {i+1}/{total} — {len(text)} символов.")
+            print(f"  OCR: страница {i+1}/{total} — {len(text)} символов "
+                  f"(основа: {wynik.baza}, заменено слов: {wynik.zmiany}, "
+                  f"добавлено: {wynik.dodane}).")
     finally:
         pdf.close()
     return pages_text
 
 
 def load_image(path):
-    """Распознаёт текст с изображения через easyocr и возвращает его
+    """Распознаёт текст с изображения голосованием и возвращает его
     как список из одной «псевдостраницы»."""
+    from PIL import Image
     print(f"  Изображение: запуск OCR (языки: {OCR_LANGS})...")
-    text = _ocr_image_array(path, OCR_LANGS)
+    with Image.open(path) as _img:
+        _img.load()
+        text, _wynik = _ocr_obraz(_img, OCR_LANGS)
     if not text.strip():
         print("  [ВНИМАНИЕ] OCR не вернул текста — изображение пустое или нечитаемое.")
         return []

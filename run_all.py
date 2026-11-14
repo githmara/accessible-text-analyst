@@ -228,7 +228,11 @@ def _components_source():
         "    _DIAG_BRAKI.append('icelandic_ner (0 entities)')",
         "if IS_NER_FAILURES:",
         "    _DIAG_BRAKI.append('icelandic_ner failures: ' + ', '.join(sorted(set(IS_NER_FAILURES))))",
-        "if _OCR_READER is None:",
+        # Głosowanie OCR: diagnostyka wymaga OBU rodzajów członków (silnik Windows
+        # i easyocr), inaczej ostrzeżenie z nieużytej ścieżki byłoby niewidoczne.
+        "if _OCR_PLAN is None or not _OCR_PLAN.windows:",
+        "    _DIAG_BRAKI.append('Windows OCR (pywinrt)')",
+        "if _OCR_PLAN is None or not _OCR_PLAN.easyocr:",
         "    _DIAG_BRAKI.append('easyocr')",
         "if not (PROJECT_DIR / 'sentiment.csv').is_file():",
         "    _DIAG_BRAKI.append('sentiment')",

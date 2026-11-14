@@ -65,7 +65,7 @@ class WynikOcr:
 def _winrt():
     """Leniwy import projekcji WinRT; tłumaczy każdą przyczynę braku na `OcrNiedostepny`."""
     if sys.platform != "win32":
-        raise OcrNiedostepny("Windows.Media.Ocr działa tylko na Windows 10/11")
+        raise OcrNiedostepny("Windows.Media.Ocr works only on Windows 10/11")
     try:
         from winrt.windows.globalization import Language
         from winrt.windows.graphics.imaging import BitmapAlphaMode, BitmapPixelFormat, SoftwareBitmap
@@ -73,9 +73,8 @@ def _winrt():
         from winrt.windows.storage.streams import DataWriter
     except ImportError as e:
         raise OcrNiedostepny(
-            "brak pakietów pywinrt (winrt-runtime, winrt-Windows.Media.Ocr, "
-            "winrt-Windows.Graphics.Imaging, winrt-Windows.Storage.Streams, "
-            f"winrt-Windows.Globalization): {e}"
+            "pywinrt packages missing (uncomment the winrt-* lines in requirements.txt "
+            f"and run pip install -r requirements.txt): {e}"
         ) from e
     return Language, BitmapAlphaMode, BitmapPixelFormat, SoftwareBitmap, OcrEngine, DataWriter
 
