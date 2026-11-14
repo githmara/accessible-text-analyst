@@ -73,6 +73,8 @@ jobs:
           python .github/scripts/test_python_ci.py
           python .github/scripts/test_audyt_zaleznosci.py
           python .github/scripts/test_run_all.py
+          # Geometria pasów idzie zawsze; testy WinRT na ubuntu są pomijane z powodem.
+          python .github/scripts/test_ocr_windows.py
           # Wspólny moduł z Reżyserem (bajt w bajt) — runner i wektory też wspólne, sam stdlib.
           python czyszczenie_tekstu_wektory.py
           # Drugi wspólny moduł (bajt w bajt): pismo tekstu i język cyrylicy z alfabetów.

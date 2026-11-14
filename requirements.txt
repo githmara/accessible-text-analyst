@@ -108,6 +108,15 @@ python-dotenv<1.3  # hold: 1.8.0
 # więc dla korpusów tekstowych nie ma sensu instalować tej pary.
 # pypdfium2<5.16  # hold: 1.13.0
 # easyocr<1.8  # hold: 1.8.0
+# OCR wbudowany w Windows 10/11 (ocr_windows.py, migracja 2026-11-13): projekcje
+# WinRT przez pywinrt, razem poniżej 1 MB — silniki języków instaluje sam Windows
+# (Ustawienia > Język). Tylko Windows; odkomentuj wszystkie sześć linii naraz.
+# winrt-runtime<4.2  # hold: 1.14.0
+# winrt-Windows.Media.Ocr<4!10.0.28001  # hold: 1.14.0
+# winrt-Windows.Graphics.Imaging<4!10.0.28001  # hold: 1.14.0
+# winrt-Windows.Storage.Streams<4!10.0.28001  # hold: 1.14.0
+# winrt-Windows.Globalization<4!10.0.28001  # hold: 1.14.0
+# winrt-Windows.Foundation<4!10.0.28001  # hold: 1.14.0
 
 # Pełna diagnostyka ostrzeżeń (`python run_all.py --warnings-as-errors`). Tryb
 # pomija config i przepuszcza syntetyczny korpus przez KAŻDY komponent, bo
