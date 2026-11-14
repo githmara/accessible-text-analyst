@@ -10,7 +10,7 @@ przepuszczają przez notatnik KAŻDĄ ścieżkę:
   nagłówkiem i numerem strony (warstwa tekstu, nagłówki, numery stron), strona
   islandzka (przebieg wielojęzyczny -> IceBERT + NER), strona z fontem Type0
   bez pełnej mapy ToUnicode (naprawa przez fontTools) i strona-skan (pypdfium2
-  + głosowanie OCR: silnik Windows fi i easyocr is);
+  + głosowanie OCR: silnik Windows fi, Tesseract is, RapidOCR obu);
 - `probka.txt|.md|.html|.docx|.png` — pozostałe loadery; `.html` serwuje też
   lokalny serwer dla `load_url`.
 
@@ -28,7 +28,7 @@ from pathlib import Path
 PAKIETY = (
     ("spacy", "spacy"), ("transformers", "transformers"), ("torch", "torch"),
     ("sentencepiece", "sentencepiece"), ("protobuf", "google.protobuf"),
-    ("tiktoken", "tiktoken"), ("omorfi", "omorfi"), ("easyocr", "easyocr"),
+    ("tiktoken", "tiktoken"), ("omorfi", "omorfi"), ("rapidocr", "rapidocr"), ("tesserocr", "tesserocr"),
     ("pywinrt", "winrt.windows.media.ocr"), ("islenska", "islenska"),
     ("pypdfium2", "pypdfium2"), ("pillow", "PIL"), ("fonttools", "fontTools"),
     ("python-docx", "docx"), ("pdfplumber", "pdfplumber"), ("requests", "requests"),
@@ -52,8 +52,8 @@ def znane(kategoria: str, tresc: str) -> bool:
 
 
 JEZYK_SPACY = "fi"
-# Głosowanie OCR: fi czyta silnik Windows (słownik omorfi), is — easyocr (słownik BÍN),
-# więc skan przechodzi przez obu członków głosowania i oba słowniki.
+# Głosowanie OCR: fi czyta silnik Windows (słownik omorfi), is — Tesseract (słownik BÍN),
+# a oba także RapidOCR, więc skan przechodzi przez wszystkie trzy rodzaje członków.
 OCR_JEZYKI = ["fi", "is"]
 NAGLOWEK = "ATA diagnostiikka - synteettinen korpus"
 # Słowa, po których komórka kontrolna poznaje, że dana ścieżka zadziałała.

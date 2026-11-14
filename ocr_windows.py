@@ -36,6 +36,10 @@ from ciecie_stron import pasy, wlasciciel
 # Zakładka pasa jako ułamek limitu (10000 px => 300 px). Wiersz tekstu po renderze
 # ×2 ma około 40–100 px, więc mieści się w połowie zakładki z zapasem.
 ZAKLADKA = 0.03
+# Krótszy dłuższy bok niż ten => obraz jest powiększany do niego (ramki wracają do skali
+# oryginału). Zdjęcie 739x1024 (pomiar 2026-11-14): silnik ru widział 14 słów, po
+# powiększeniu x2 — 36; easyocr skaluje sam, Windows nie.
+MIN_DLUZSZY_BOK = 2000
 
 
 class OcrNiedostepny(RuntimeError):
@@ -164,7 +168,11 @@ def rozpoznaj(obraz, tagi: list[str]) -> WynikOcr:
     skala = 1.0
     if obraz.width > limit:
         skala = limit / obraz.width
-        obraz = obraz.resize((limit, max(1, round(obraz.height * skala))), Image.LANCZOS)
+    elif max(obraz.size) < MIN_DLUZSZY_BOK:
+        skala = min(MIN_DLUZSZY_BOK / max(obraz.size), limit / obraz.width)
+    if skala != 1.0:
+        obraz = obraz.resize((max(1, round(obraz.width * skala)), max(1, round(obraz.height * skala))),
+                             Image.LANCZOS)
     podzial = pasy(obraz.height, limit, limit * ZAKLADKA)
 
     zebrane: dict[str, list[Slowo]] = {tag: [] for tag in silniki}

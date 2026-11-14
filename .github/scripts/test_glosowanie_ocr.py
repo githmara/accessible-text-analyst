@@ -116,6 +116,36 @@ class TestGlosuj(unittest.TestCase):
         self.assertEqual(w.tekst, "Pytaj z")
         self.assertEqual(w.dodane, 0)
 
+    def test_to_samo_slowo_z_przesunieta_ramka_nie_dubluje(self):
+        # RapidOCR dzieli segment na słowa proporcjonalnie do znaków: ramka „THE” przesunięta,
+        # IoU 0,31 < PROG_IOU. Przed 2026-11-14 słowo wchodziło drugi raz jako dodatek („THE THE”).
+        slowniki = {**SLOWNIKI, "en@rapid": sl("en", {"the", "pytaj"})}
+        k = {"pl": wiersz(0, ["Pytaj", "THE"]), "en@rapid": [Slowo(0, "THE", 150, 0, 80, 40)]}
+        w = g.glosuj(k, slowniki)
+        self.assertEqual((w.tekst, w.dodane), ("Pytaj THE", 0))
+
+    def test_inne_slowo_w_nachodzacej_ramce_nie_jest_para(self):
+        # Ramki nachodzą (IoU 0,2, poziomo 30 px), ale tekst inny: to sąsiad, nie wariant —
+        # „z” nie może zostać zastąpione.
+        k = {"pl": wiersz(0, ["Pytaj", "z", "intencją"]), "fi": [Slowo(0, "Minä", 160, 0, 90, 40)]}
+        self.assertEqual(g.glosuj(k, SLOWNIKI).tekst.split()[:2], ["Pytaj", "z"])
+
+    def test_wiekszosc_silnikow_przed_kontekstem(self):
+        # „Mitä” odczytały dwa silniki (fi i RapidOCR), „Miła” jeden (pl); sąsiedzi są polscy, więc
+        # sama reguła kontekstu wybrałaby „Miła” (pomiar 2026-11-14, Notatnik s12).
+        slowniki = {**SLOWNIKI, "pl": sl("pl", {"to", "pytanie", "wagę", "Miła"}), "fi@rapid": SLOWNIKI["fi"]}
+        k = {"pl": wiersz(0, ["to", "pytanie", "Miła", "wagę"]),
+             "fi": wiersz(0, ["to", "pytanie", "Mitä", "wagę"]),
+             "fi@rapid": wiersz(0, ["to", "pytanie", "Mitä", "wagę"])}
+        self.assertEqual(g.glosuj(k, slowniki).tekst, "to pytanie Mitä wagę")
+
+    def test_kolejnosc_wiersze_czyta_tabele_wierszami(self):
+        # Silnik czyta dwa bloki-kolumny po kolei; tryb "wiersze" składa wiersze wizualne strony.
+        k = {"pl": [Slowo(0, "Pytaj", 0, 0, 90, 40), Slowo(1, "to", 0, 100, 90, 40),
+                    Slowo(2, "intencją", 600, 0, 90, 40), Slowo(3, "pytanie", 600, 100, 90, 40)]}
+        self.assertEqual(g.glosuj(k, SLOWNIKI).tekst, "Pytaj\nto\nintencją\npytanie")
+        self.assertEqual(g.glosuj(k, SLOWNIKI, "wiersze").tekst, "Pytaj intencją\nto pytanie")
+
     def test_brak_slownikow(self):
         self.assertEqual(g.glosuj({"xx": wiersz(0, ["a"])}, SLOWNIKI).slowa, [])
 
@@ -124,62 +154,81 @@ Wynik = namedtuple("Wynik", "slowa bez_silnika")
 
 
 class TestPlan(unittest.TestCase):
-    def test_wszystkie_problemy_w_jednym_bledzie(self):
-        def silnik(tag):
-            return tag.startswith("pl")
+    def plan(self, kody, *, okna=("pl", "fi"), tesseract=lambda k: None, rapid=lambda k: "v6",
+             slownik=lambda k: SLOWNIKI.get(k)):
+        """zaplanuj() z podmienionymi silnikami: `okna` = języki z silnikiem Windows."""
+        with mock.patch.object(g.ow, "dostepne_jezyki", return_value=list(okna)), \
+                mock.patch.object(g.ow, "silnik_dostepny", side_effect=lambda t: t.split("-")[0] in okna), \
+                mock.patch.object(g, "_problem_tesseracta", side_effect=tesseract), \
+                mock.patch.object(g, "_model_rapid", side_effect=rapid), \
+                mock.patch.object(g, "slownik", side_effect=slownik):
+            return g.zaplanuj(kody)
 
+    def test_wszystkie_problemy_w_jednym_bledzie(self):
         def slownik(kod):
             if kod == "pl":
-                raise LookupError("brak modelu spaCy pl_core_news_lg")
+                raise LookupError("spaCy model pl_core_news_lg missing")
             return SLOWNIKI.get(kod)
 
-        with mock.patch.object(g.ow, "dostepne_jezyki", return_value=["pl"]), \
-                mock.patch.object(g.ow, "silnik_dostepny", side_effect=silnik), \
-                mock.patch.object(g, "_easyocr_zna", side_effect=lambda k: k == "is"), \
-                mock.patch.object(g, "slownik", side_effect=slownik):
-            with self.assertRaises(g.BladGlosowania) as e:
-                g.zaplanuj(["pl", "fi", "is"])
+        with self.assertRaises(g.BladGlosowania) as e:
+            self.plan(["pl", "fi", "is"], okna=("pl",), slownik=slownik,
+                      tesseract=lambda k: None if k == "is" else "tesserocr not installed")
         problemy = {(p.kod, p.przyczyna) for p in e.exception.problemy}
-        # pl: silnik jest, słownika nie; fi: ani Windows, ani easyocr; is: easyocr i słownik są.
+        # pl: silnik jest, słownika nie; fi: ani Windows, ani Tesseract; is: Tesseract i słownik są.
         self.assertEqual(problemy, {("pl", "brak_slownika"), ("fi", "brak_silnika")})
 
-    def test_bez_pywinrt_jezyk_idzie_do_easyocr_albo_jest_bledem(self):
+    def test_bez_pywinrt_jezyk_idzie_do_tesseracta_albo_jest_bledem(self):
         with mock.patch.object(g.ow, "dostepne_jezyki", side_effect=g.ow.OcrNiedostepny("brak pywinrt")), \
-                mock.patch.object(g, "_easyocr_zna", return_value=None), \
+                mock.patch.object(g, "_problem_tesseracta", return_value="tesserocr not installed"), \
+                mock.patch.object(g, "_model_rapid", return_value="v6"), \
                 mock.patch.object(g, "slownik", side_effect=lambda k: SLOWNIKI.get(k)):
             with self.assertRaises(g.BladGlosowania) as e:
                 g.zaplanuj(["pl"])
         self.assertIn("brak pywinrt", e.exception.problemy[0].szczegol)
-        self.assertIn("easyocr not installed", e.exception.problemy[0].szczegol)
+        self.assertIn("tesserocr not installed", e.exception.problemy[0].szczegol)
+
+    def test_bez_rapidocr_blad(self):
+        # RapidOCR jest wymaganym członkiem (zapas fi i zdjęć) — brak pakietu to błąd, nie cisza.
+        def brak(_kod):
+            raise ImportError("rapidocr")
+
+        with self.assertRaises(g.BladGlosowania) as e:
+            self.plan(["pl"], rapid=brak)
+        self.assertEqual([(p.kod, p.przyczyna) for p in e.exception.problemy], [("pl", "brak_silnika")])
+        self.assertIn("rapidocr", e.exception.problemy[0].szczegol)
 
     def test_nieznany_kod_jest_problemem_nie_wyjatkiem(self):
         # Stare configi miały kody easyocr spoza podstaw (np. "de"): komunikat, nie KeyError.
-        with mock.patch.object(g.ow, "dostepne_jezyki", return_value=["pl"]), \
-                mock.patch.object(g.ow, "silnik_dostepny", return_value=True), \
-                mock.patch.object(g, "slownik", side_effect=lambda k: SLOWNIKI[k]):
-            with self.assertRaises(g.BladGlosowania) as e:
-                g.zaplanuj(["pl", "xx"])
+        with self.assertRaises(g.BladGlosowania) as e:
+            self.plan(["pl", "xx"])
         self.assertEqual([(p.kod, p.przyczyna) for p in e.exception.problemy], [("xx", "nieznany_jezyk")])
 
     def test_plan_kompletny(self):
-        with mock.patch.object(g.ow, "dostepne_jezyki", return_value=["pl", "fi"]), \
-                mock.patch.object(g.ow, "silnik_dostepny", return_value=True), \
-                mock.patch.object(g, "slownik", side_effect=lambda k: SLOWNIKI[k]):
-            p = g.zaplanuj(["pl", "fi"])
+        p = self.plan(["pl", "fi", "is", "ru"], rapid=lambda k: "eslav" if k == "ru" else "v6",
+                      slownik=lambda k: SLOWNIKI.get(k) or SLOWNIKI["pl"])
         self.assertEqual(p.windows, {"pl": "pl-PL", "fi": "fi-FI"})
-        self.assertEqual(p.easyocr, [])
+        self.assertEqual(p.tesseract, ["is", "ru"])
+        self.assertEqual(p.rapid, {"v6": ["pl", "fi", "is"], "eslav": ["ru"]})
+
+    def test_model_rapid_dla_cyrylicy_z_alfabetu(self):
+        # Cyrylica rozpoznana z `alfabet` podstaw, bez listy kodów i bez importu rapidocr.
+        self.assertEqual(g._model_rapid("ru"), g.MODEL_RAPID_CYRYLICA)
+
+    def test_kod_tesseracta_z_pola_lingua(self):
+        self.assertEqual(g._kod_tesseract("is"), "isl")
+        self.assertEqual(g._kod_tesseract("fi"), "fin")
 
 
-class TestEasyocrSegmenty(unittest.TestCase):
+class TestSegmenty(unittest.TestCase):
     def test_segment_dzielony_na_slowa_i_wiersze(self):
         segmenty = [
             ([[200, 100], [380, 100], [380, 140], [200, 140]], "þú ert", 0.9),  # drugi segment wiersza 0
             ([[0, 102], [180, 102], [180, 138], [0, 138]], "Halló heimur", 0.9),
             ([[0, 200], [100, 200], [100, 240], [0, 240]], "Takk", 0.9),
         ]
-        # Bez obrazu i bez numpy: runner CI nie ma ani easyocr, ani numpy.
-        with mock.patch.object(g, "_segmenty_easyocr", return_value=segmenty):
-            slowa = g.slowa_easyocr(None, "is")
+        # Bez obrazu i bez numpy: runner CI nie ma ani rapidocr, ani numpy.
+        with mock.patch.object(g, "_segmenty_rapid", return_value=segmenty):
+            slowa = g.slowa_rapid(None, g.MODEL_RAPID_LACINKA)
         self.assertEqual([(s.linia, s.tekst) for s in slowa],
                          [(0, "Halló"), (0, "heimur"), (0, "þú"), (0, "ert"), (1, "Takk")])
         heimur = slowa[1]

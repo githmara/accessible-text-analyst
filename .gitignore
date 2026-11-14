@@ -10,3 +10,5 @@ config.ini
 *.env
 # automaty omorfi pobierane przez omorfi-download (opcjonalne wsparcie fińskiego)
 *.hfst
+# modele Tesseracta (tessdata_best) dla głosowania OCR — pobierane ręcznie, patrz README
+tessdata/

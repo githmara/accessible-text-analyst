@@ -95,7 +95,7 @@ GRUPY_RYZYKA: dict[str, str] = {
         "lingua-language-detector", "spacy", "numpy", "pandas", "scikit-learn",
         "pdfplumber", "fonttools", "python-docx", "beautifulsoup4", "lxml",
         "markdown", "markdownify", "omorfi", "transformers", "torch",
-        "sentencepiece", "protobuf", "tiktoken", "pypdfium2", "easyocr", "pyyaml",
+        "sentencepiece", "protobuf", "tiktoken", "pypdfium2", "rapidocr", "onnxruntime", "tesserocr", "pyyaml",
         "pillow", "winrt-runtime", "winrt-windows.media.ocr", "winrt-windows.graphics.imaging",
         "winrt-windows.storage.streams", "winrt-windows.globalization", "winrt-windows.foundation",
         "islenska", "islenska-data",

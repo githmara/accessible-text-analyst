@@ -123,6 +123,17 @@ class TestOcrWindows(unittest.TestCase):
         lewe = [s.x for s in w.slowa["en-US"] if s.tekst == "Wiersz"]
         self.assertTrue(lewe and all(abs(x - 600) < 30 for x in lewe), lewe)
 
+    def test_maly_obraz_powiekszany_ramki_w_skali_oryginalu(self):
+        # 500x400 jest powiększany do 2000 (x4). Czcionka 9 px: bez powiększenia silnik en nie
+        # czyta ani jednego wiersza (zmierzone 2026-11-14), z powiększeniem — wszystkie.
+        # Czcionka 12 px: tekst od x = 40; ramka bez przeskalowania z powrotem miałaby x ≈ 160.
+        obraz, wiersze = _strona(500, 400, odstep=27, rozmiar=9, lewy=40)
+        self.assertEqual(len(_numery(ow.rozpoznaj(obraz, ["en-US"]).slowa["en-US"])), len(wiersze))
+        obraz, wiersze = _strona(500, 400, odstep=36, rozmiar=12, lewy=40)
+        w = ow.rozpoznaj(obraz, ["en-US"])
+        lewe = [s.x for s in w.slowa["en-US"] if s.tekst == "Wiersz"]
+        self.assertTrue(lewe and all(abs(x - 40) < 10 for x in lewe), lewe)
+
     def test_jezyk_bez_silnika_nie_znika(self):
         obraz, _ = _strona(1200, 600)
         w = ow.rozpoznaj(obraz, ["en-US", "xx-XX"])
