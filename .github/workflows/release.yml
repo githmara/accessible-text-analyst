@@ -75,6 +75,8 @@ jobs:
           python .github/scripts/test_run_all.py
           # Geometria pasów idzie zawsze; testy WinRT na ubuntu są pomijane z powodem.
           python .github/scripts/test_ocr_windows.py
+          # Głosowanie OCR na sztucznych słownikach — bez silników i modeli.
+          python .github/scripts/test_glosowanie_ocr.py
           # Wspólny moduł z Reżyserem (bajt w bajt) — runner i wektory też wspólne, sam stdlib.
           python czyszczenie_tekstu_wektory.py
           # Drugi wspólny moduł (bajt w bajt): pismo tekstu i język cyrylicy z alfabetów.
