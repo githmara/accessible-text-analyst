@@ -272,7 +272,7 @@ _NLP_DOMAIN_WORDS = (
     # Angielskie nazwy języków — w tabelach markdown ("| Italian | it |")
     # (nazwy języków z podstaw, potem inne częste w tabelach)
     nazwy_regex() + r"|"
-    r"Dutch|German|French|Spanish|Portuguese|Chinese|Japanese|"
+    r"Dutch|Portuguese|Chinese|Japanese|"
     # NLP/ML słowa rozwiązane (w opisach algorytmów)
     r"Term|Frequency|Inverse|"
     r"machine|learning|natural|language|languages|named|entity|entities|"

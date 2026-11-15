@@ -2,7 +2,7 @@
 
 Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NVDA, JAWS, VoiceOver, Narrator). Allur kóði, úttak í skel og skýrslur eru sett upp þannig að hjálpartæknin geti lesið þau hreint: engir ANSI-litir, engin tjáningartákn (emoji), engar framvinduslíkur, engin gervigrafík.
 
-> **Önnur tungumál:** [English](README.md) · [polski](README_pl.md) · [русский](README_ru.md) · [suomi](README_fi.md) · [italiano](README_it.md)
+> **Önnur tungumál:** [English](README.md) · [polski](README_pl.md) · [русский](README_ru.md) · [suomi](README_fi.md) · [italiano](README_it.md) · [Deutsch](README_de.md) · [español](README_es.md) · [français](README_fr.md)
 
 > **i18n staða (v1.0).** Aðeins README hefur verið þýtt. Frásögn í minnisbókinni, allt skel-úttak, `CLAUDE.md` og athugasemdir í kóða halda sínum upprunalegu tungumálum (aðallega rússnesku; í patchum og shamanísku lagi pólsku). Þýðing á öðru er meðvitað frestað til v1.1 — sjá `release_notes.md`.
 
@@ -13,10 +13,10 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 - `run_all.py` — ræsir fyrir alla ókeypis staðbundnu keðjuna: skráir Jupyter-kjarnann `analyst_env` ef hann vantar, keyrir minnisbókina án viðmóts (án gagnvirka spurningahólfsins) og vistar úttak hennar í `.ipynb`, keyrir svo `generate_report.py`, `shamanic_pipeline.py` og, fyrir finnskt textasafn, `scan` fyrir Bók hins ósagða. Hann ræsir aldrei greitt skref (LLM-helgisiði, ElevenLabs-raddir, `draft`/`fill` bókarinnar).
 - `generate_diagnostic.py` — sjálfstæður smiður á heildstæðri **greiningarskýrslu** (`diagnostic_report.html`) sem byggð er beint á CSV/JSON-útflutningi minnisbókarinnar (ekki á úttaki `generate_report.py`). Aðgengileg uppbygging fyrir skjálesara: efnisyfirlit `<nav>` ásamt köflum — hver með eigin fyrirsögn og listum — fyrir yfirlit, þemu með málsgreinum, tesur, nafngreinda nafnliði eftir tegund og helstu lykilorð. Byggingartextar fylgja `ui_lang`; brot úr safninu fá `<span lang="…">`, NER-merki `<span lang="en">`.
 - `generate_md.py` — breytir `analysis_report.html` í `gemini_notebook_report.md` fyrir Gemini Notebook (áður NotebookLM). Aðgengis-spans eru afpökkuð því Gemini Notebook notar þau ekki.
-- `shamanic_pipeline.py` *(valfrjálst)* — eftirvinnsluforrit án LLM sem breytir CSV/JSON-útflutningi minnisbókarinnar í helgisiðatextagripi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` og — þegar valfrjáls tilfinningagreining er virk — `emotional_undertow.txt`), öll að fullu staðfærð fyrir sex studdu tungumálin.
+- `shamanic_pipeline.py` *(valfrjálst)* — eftirvinnsluforrit án LLM sem breytir CSV/JSON-útflutningi minnisbókarinnar í helgisiðatextagripi (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt` og — þegar valfrjáls tilfinningagreining er virk — `emotional_undertow.txt`), öll að fullu staðfærð fyrir níu studdu tungumálin.
 - `shamanic_ai.py` *(valfrjálst, byggt á LLM)* — kallar í LLM (sjálfgefið OpenAI; OpenRouter eða hvaða OpenAI-samhæfða slóð sem er gegnum `llm_provider`) til að búa til fjórar frásagnarraddir (`Katla`, `Vieno`, `Lumi`, `Sami`) ofan á sömu útflutninga. Þegar valfrjálsa `sentiment.csv` er til staðar byggir Vieno söng sinn á tilfinningabogadrætti textans í stað hráu setninganna. Krefst lykils valinnar þjónustu í `golden_key.env`.
 - `shamanic_voice.py` *(valfrjálst, krefst ElevenLabs)* — sjálfstæður afgreiðari sem keyrir einu sinni og myndgerir frásagnargripina fjóra sem `shamanic_ai.py` bjó til í `.mp3`-hljóð gegnum ElevenLabs API-ið, skráir hvern árangur/villu í skelina og hættir svo (enginn botni, enginn þjónn). Þarf `ELEVENLABS_API_KEY` í `golden_key.env` og `voices`-vörpun í stillingunum.
-- `shamanic_locale.py` — staðfærsluböggull fyrir bæði shamanísku forritin (sniðmát, hausa og fallback-strengi Lumi á öllum sex tungumálum).
+- `shamanic_locale.py` — staðfærsluböggull fyrir bæði shamanísku forritin (sniðmát, hausa og fallback-strengi Lumi á öllum níu tungumálum).
 - `ksiega_niedomowien.py` *(valfrjálst, aðeins finnska, með aðstoð gervigreindarþjóns)* — Bók hins ósagða (*Sanomattomien kirja*): breytir `raw_roots_chant.txt` í dulkóðaða dagbók sem vex smám saman, með eyðum sem blint líkan gat ekki giskað á. Þetta er ákveðinn (deterministic) hjálpari fyrir hæfnina í `skills/ksiega-niedomowien/SKILL.md`; skelúttakið fylgir `ui_lang`.
 
 ## Hvað gerir leiðslan
@@ -39,6 +39,9 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 | ru   | rússneska  | `ru_core_news_lg`      | spaCy          |
 | en   | enska      | `en_core_web_lg`       | spaCy          |
 | it   | ítalska    | `it_core_news_lg`      | spaCy          |
+| de   | þýska      | `de_core_news_lg`      | spaCy          |
+| es   | spænska    | `es_core_news_lg`      | spaCy          |
+| fr   | franska    | `fr_core_news_lg`      | spaCy          |
 | fi   | finnska    | `fi_core_news_lg`      | spaCy          |
 | is   | íslenska   | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT` (vektorar), `grammatek/icelandic-ner-bert` (NER) |
 
@@ -56,7 +59,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 
 Útflutningurinn ber niðurstöðuna: `<span lang="…">` í `accessible_text.html` og sérstakt `Run` með `<w:lang>` í `accessible_text.docx` fyrir hverja erlenda setningu og hvert innskot, svo að skjálesari skiptir um rödd nákvæmlega á tilvitnuninni eða nafninu, ekki á allri setningunni. Allir bútar eru líka taldir upp í `language_spans.csv`, og `sentences.csv` hefur dálkinn `lang`.
 
-Orðasöfn: spaCy-vigrar (endanlegur listi orðmynda) fyrir pólsku, ensku, rússnesku og ítölsku; `omorfi` fyrir finnsku; BÍN (`islenska`) fyrir íslensku — sömu orðasöfn og OCR-kosningin notar. Með eitt tungumál í `corpus_languages` er ekkert orðasafn hlaðið og aðeins orð með öðru letri eru merkt. Vanti orðasafn stöðvast keyrslan með skilaboðum sem segja hvernig á að laga það.
+Orðasöfn: spaCy-vigrar (endanlegur listi orðmynda) fyrir pólsku, ensku, rússnesku, ítölsku, þýsku, spænsku og frönsku; `omorfi` fyrir finnsku; BÍN (`islenska`) fyrir íslensku — sömu orðasöfn og OCR-kosningin notar. Með eitt tungumál í `corpus_languages` er ekkert orðasafn hlaðið og aðeins orð með öðru letri eru merkt. Vanti orðasafn stöðvast keyrslan með skilaboðum sem segja hvernig á að laga það.
 
 **Hvaða tungumál á að telja upp.** Mælt á 20 finnskum uppskriftum (55.000 orð) þar sem mörg pólsk nöfn koma fyrir: með `["fi", "en"]` finnur minnisbókin 34 enska búta (hugtök og tilvitnanir); með `["fi", "pl", "en"]` finnur hún að auki 57 pólska búta — pólsk nöfn og nokkur pólsk orðasambönd, sem nú les pólsk rödd í stað finnskrar — og ekkert enskt orð fer til pólsku. Þess vegna:
 
@@ -115,6 +118,9 @@ Opnaðu nýja Colab-minnisbók og límdu eftirfarandi í fyrsta hólfið:
 # !python -m spacy download ru_core_news_lg
 # !python -m spacy download it_core_news_lg
 # !python -m spacy download fi_core_news_lg
+# !python -m spacy download de_core_news_lg
+# !python -m spacy download es_core_news_lg
+# !python -m spacy download fr_core_news_lg
 ```
 
 Síðan halaðu upp `config.json` (eða `config.ini`) í gegnum Files-spjaldið, stilltu `source_file` og keyrðu minnisbókina. Athugið: Colab-lotur eru skammlífar — niðurhaluð líkön og `export_results/`-gripi hverfa þegar runtime er endurræst. Fyrir lengri greiningu skaltu tengja Google Drive og skrifa úttakið þangað.
@@ -132,6 +138,9 @@ python -m spacy download ru_core_news_lg
 python -m spacy download en_core_web_lg
 python -m spacy download it_core_news_lg
 python -m spacy download fi_core_news_lg
+python -m spacy download de_core_news_lg
+python -m spacy download es_core_news_lg
+python -m spacy download fr_core_news_lg
 
 # 3. (Valfrjálst) Íslenskustuðningur — afkommenta `transformers` og
 # `torch` í requirements.txt og keyrðu aftur `pip install -r requirements.txt`.
@@ -198,9 +207,9 @@ Innihald:
 | `source_file`      | string          | Slóð á skrá (`.pdf`, `.txt`, `.docx`, `.md`, `.html` eða mynd) **eða** URL (`http://`, `https://`). Tómur strengur eða týnd skrá → innbyggður sýnishornssafn. |
 | `custom_patterns`  | string[]        | Valfrjáls listi af reglulegum tjáningum sem eru fjarlægðar úr hráum texta (hlaupandi hausar, fætur, endurtekið kjarnamál). Dæmi: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Skiptir `generate_report.py` á milli lesendaham (`true`, felur Hugging Face/torch hleðslulínur og uppsláttar/POS-töflur) og fullum greiningarham (`false`). |
-| `corpus_languages` | string[]        | Tungumál TEXTANS (kóðar tungumálapakka: `en`, `fi`, `is`, `it`, `pl`, `ru`); gamla heitið `ocr_languages` er enn lesið. Orðasöfn þeirra velja grunntungumálið og tungumál hvers orðs (sjá **Tungumál hvers orðs**), og í skönnuðum PDF-skrám og myndum les hvert þeirra síðuna með eigin OCR-vél. Teldu aðeins upp tungumál sem raunverulega koma fyrir í textanum: aukatungumál hægir á OCR og bætir við fölskum kandídötum. Blanda má latnesku og kýrillísku letri (`["fi", "ru"]`). |
+| `corpus_languages` | string[]        | Tungumál TEXTANS (kóðar tungumálapakka: `de`, `en`, `es`, `fi`, `fr`, `is`, `it`, `pl`, `ru`); gamla heitið `ocr_languages` er enn lesið. Orðasöfn þeirra velja grunntungumálið og tungumál hvers orðs (sjá **Tungumál hvers orðs**), og í skönnuðum PDF-skrám og myndum les hvert þeirra síðuna með eigin OCR-vél. Teldu aðeins upp tungumál sem raunverulega koma fyrir í textanum: aukatungumál hægir á OCR og bætir við fölskum kandídötum. Blanda má latnesku og kýrillísku letri (`["fi", "ru"]`). |
 | `enable_sentiment` | boolean         | Kveikir á valfrjálsri tilfinningagreiningu per málsgrein (`false` sjálfgefið). Krefst hinna afkommentuðu tilfinningapakka (sjá Uppsetning, skref 4). Skrifar `sentiment.csv`; niðurstaðan er aldrei sýnd notandanum, hún fóðrar aðeins shamaníska lagið (helgisiðinn `emotional_undertow.txt` og söng Vieno). Við hverja hleðsluvillu er einfaldlega sleppt — engin fallback. |
-| `ui_lang`          | string          | Tungumál notendaviðmóts fyrir úttak í skel og `<html lang>` eigind í myndaðri skýrslu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tómur strengur eða óþekktur kóði → fallback `en`. Óháð tungumáli greinda safnsins, sem orðasöfn `corpus_languages` ákveða. |
+| `ui_lang`          | string          | Tungumál notendaviðmóts fyrir úttak í skel og `<html lang>` eigind í myndaðri skýrslu (`pl` / `en` / `ru` / `fi` / `is` / `it` / `de` / `es` / `fr`). Tómur strengur eða óþekktur kóði → fallback `en`. Óháð tungumáli greinda safnsins, sem orðasöfn `corpus_languages` ákveða. |
 | `lumi_katla_lines` | heiltala eða null | Valfrjáls skrautmark fyrir lokaskýrslu Lumi úr `shamanic_ai.py`: hve margar ekki-tómar línur einræðu Kötlu Lumi sér. `null` eða vantandi lykill = allt innihald; heiltala N > 0 = fyrstu N línurnar. |
 | `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
 | `voices`           | hlutur          | Varpar hverri shamanískri rödd (`katla` / `vieno` / `lumi` / `sami`) yfir á ElevenLabs radd-auðkenni, notað af `shamanic_voice.py`. Rödd með tómu eða vantandi auðkenni er sleppt. Aðeins nauðsynlegt ef þú keyrir hljóðafgreiðarann. |
@@ -215,7 +224,7 @@ Innihald:
 
 > **Tilfinningagreining — álag á örgjörva.** Þegar `enable_sentiment: true` er virkt er greiningin per málsgrein reikniþung á CPU — nokkurn veginn sambærileg við að keyra staðbundna Whisper tal-í-texta á CPU. Á eldri eða hitatakmörkuðum vélum getur þetta viðvarandi álag verið raunverulegt erfiði fyrir örgjörvann; virkjaðu það meðvitað, helst á vél með GPU eða með svigrúm fyrir langvarandi vinnu á fullu álagi.
 
-> **`ui_lang` — umfang staðfærslu.** Skel-úttak sjálfstæðu skriptanna (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) er staðfært gegnum `ui_lang`. **Staðalúttak minnisbókarinnar er ekki** staðfært — það er harðkóðað á rússnesku (aðeins skráarnafn tesanna fylgir greinda tungumáli safnsins). Lesendaham-skýrslan `analysis_report.html` heldur rússnesku frásögn minnisbókarinnar (rót hennar er `<html lang="ru">`); að fullu `ui_lang`-staðfærði notendaskjár-artefaktinn er **`diagnostic_report.html`** sem `generate_diagnostic.py` býr til. Þýðingar í `fi` / `is` / `it` eru drög og óyfirfarnar — vinsamlegast tilkynntu ónákvæmni á GitHub.
+> **`ui_lang` — umfang staðfærslu.** Skel-úttak sjálfstæðu skriptanna (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) er staðfært gegnum `ui_lang`. **Staðalúttak minnisbókarinnar er ekki** staðfært — það er harðkóðað á rússnesku (aðeins skráarnafn tesanna fylgir greinda tungumáli safnsins). Lesendaham-skýrslan `analysis_report.html` heldur rússnesku frásögn minnisbókarinnar (rót hennar er `<html lang="ru">`); að fullu `ui_lang`-staðfærði notendaskjár-artefaktinn er **`diagnostic_report.html`** sem `generate_diagnostic.py` býr til. Þýðingar í `fi` / `is` / `it` / `de` / `es` / `fr` eru drög og óyfirfarnar — vinsamlegast tilkynntu ónákvæmni á GitHub.
 
 > **Windows-slóðir og regex — mikilvægt.** Innihald stillinganna er JSON og JSON hefur enga raw-strengja-málskipan. Ein bakskáslína sleppir næsta staf (`\U`, `\d`, `\n` eru sérstakir), þannig að Windows-slóð skrifuð sem `"C:\Users\marek\doc.pdf"` veldur villu við JSON-túlkun. Tvær réttar leiðir til að skrifa hana:
 >
@@ -292,7 +301,7 @@ python shamanic_pipeline.py
 #                                          /emotional_undertow.txt   # aðeins ef sentiment.csv er til
 ```
 
-Býr til helgisiðatextagripi beint úr CSV/JSON-útflutningi minnisbókarinnar — engin LLM-köll, ekkert net. Allir strengir koma úr `shamanic_locale.py` og eru að fullu staðfærðir á öll sex studdu tungumálin. Þegar valfrjálsa `sentiment.csv` er til staðar býr það einnig til `emotional_undertow.txt` — „tilfinningaflóð" per málsgrein ásamt jafnvægissamantekt; án hennar er þeim eina helgisiða einfaldlega sleppt.
+Býr til helgisiðatextagripi beint úr CSV/JSON-útflutningi minnisbókarinnar — engin LLM-köll, ekkert net. Allir strengir koma úr `shamanic_locale.py` og eru að fullu staðfærðir á öll níu studdu tungumálin. Þegar valfrjálsa `sentiment.csv` er til staðar býr það einnig til `emotional_undertow.txt` — „tilfinningaflóð" per málsgrein ásamt jafnvægissamantekt; án hennar er þeim eina helgisiða einfaldlega sleppt.
 
 ### 5. Shamanískt LLM eftirvinnsluforrit (valfrjálst, krefst LLM API-lykils)
 
@@ -391,7 +400,7 @@ Hver undirmappa inniheldur:
 | `language_spans.csv`            | minnisbók         | erlendir tungumálabútar: skjal, stafahliðranir, tungumál, `block` eða `inline`, texti |
 | `sentiment.csv`                 | minnisbók *(valfrjálst)* | tilfinning per málsgrein (`para_id`, `label`, `score`, `lang`) — aðeins þegar `enable_sentiment` er `true`; fóður fyrir shamaníska lagið, aldrei sýnt notandanum |
 | `accessible_text.html`          | minnisbók         | `lang` á hverri málsgrein auk `<span lang>` á hverri erlendri setningu og hverju innskoti (tilvitnun, nafn) — skjálesarar skipta um rödd sjálfkrafa per brot |
-| `accessible_text.docx`          | minnisbók         | sama innihald með `<w:lang>` stilltu per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word og SAPI nota það án nets, án nettengs greinis |
+| `accessible_text.docx`          | minnisbók         | sama innihald með `<w:lang>` stilltu per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`, `de-DE`, `es-ES`, `fr-FR`) — Word og SAPI nota það án nets, án nettengs greinis |
 | `analysis_report.html`           | `generate_report.py` | heildar aðgengileg HTML-skýrsla                |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | uppbyggð greiningarskýrsla (þemu, tesur, nafnliðir eftir tegund, lykilorð) úr CSV/JSON-útflutningi |
 | `gemini_notebook_report.md` | `generate_md.py`     | Gemini Notebook-tilbúið Markdown (áður NotebookLM) |

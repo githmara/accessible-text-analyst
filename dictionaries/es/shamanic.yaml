@@ -1,0 +1,109 @@
+oracle:
+  header: |+
+    --- ORÁCULO DEL FLUJO DE CONCIENCIA ---
+    Instrucción TTS: leer despacio, con un eco creciente.
+
+  pause: '[PAUSA 1.5s]'
+
+roots:
+  header: |+
+    --- RITO DE LAS RAÍCES CRUDAS ---
+    Instrucción TTS: lectura mecánica, inhumana, desprovista de emoción.
+
+lore:
+  header: |+
+    // FIRMA DEL HALLAZGO: TOPIC-{topic_id} / FRAGMENT-{para_id} //
+    // ESTADO: REGISTRO DE RADIO DAÑADO //
+
+prophecy:
+  header: |+
+    --- LIBRO DE LAS PROFECÍAS DEL POLVO ---
+    Instrucción TTS: leer con solemnidad, con pausas antes de los dos puntos.
+
+  section: '[PROFECÍA {n}]'
+  templates:
+    - 'Del polvo de {loc} se alzará {per}, para {sentence}'
+    - 'Cuando la luna de sangre cuelgue sobre {loc}, {per} pronunciará: {sentence}'
+    - 'Desde las entrañas de {org} susurrará {per} hacia {loc}: {sentence}'
+    - 'La antigua voz de {loc} hablará a través de {per}: {sentence}'
+  fallback:
+    loc: 'una tierra sin nombre'
+    per: 'el Sin Nombre'
+    org: 'una orden olvidada'
+
+katla:
+  header: |+
+    --- MONÓLOGO DE LOS SERES CONGELADOS (VOZ: KATLA) ---
+
+vieno:
+  header: |+
+    --- INVOCACIÓN CHAMÁNICA DE LOS ECOS (VOZ: VIENO) ---
+
+lumi:
+  header: |+
+    --- DESPACHO FINAL DESDE EL NORTE HELADO (VOZ: LUMI) ---
+
+  fallback:
+    katla: '(silencio — Katla aún no ha hablado)'
+    vieno: '(calma — el canto de Vieno no ha llegado)'
+
+sami:
+  header: |+
+    --- LA CHISPA DE SAMI: SÍNTESIS ENERGÉTICA ---
+    Instrucción TTS: leer con enorme entusiasmo, una amplia sonrisa y mucha dinámica.
+
+undertow:
+  header: |+
+    --- LA RESACA: MAREA EMOCIONAL DEL TEXTO ---
+    Instrucción TTS: leer como un flujo y reflujo, con pausas entre las olas.
+
+  mood_negative: 'oscuridad'
+  mood_neutral: 'quietud'
+  mood_positive: 'luz'
+  summary_header: 'Balance de la marea:'
+
+pipeline:
+  starting: 'Inicializando el pipeline de procesamiento chamánico...'
+  info_detected_lang: '[INFO] Idioma del corpus detectado: {language}'
+  warn_no_export_dir: '[ADVERTENCIA] El directorio {path} no existe.'
+  ok_oracle: '[OK] Oráculo generado: {filename}'
+  ok_lore: '[OK] Fragmentos de lore generados: {dirname}/'
+  ok_roots: '[OK] Raíces crudas generadas: {filename}'
+  ok_prophecies: '[OK] Profecías generadas: {filename}'
+  ok_undertow: '[OK] Resaca generada: {filename}'
+  done: '[HECHO] Todos los artefactos de audio están listos en la carpeta audio_scripts.'
+  warn_ritual_failed: '[ERROR] El ritual "{ritual}" falló: {error}'
+  done_with_errors: '[INCOMPLETO] No todos los rituales tuvieron éxito ({failed} de {total}). Algo salió mal — revisa los mensajes anteriores.'
+  warn_nothing_produced: '[INCOMPLETO] No se produjo ningún artefacto de audio. Lo más probable es que el notebook (o su celda de exportación) no se ejecutara en {path}.'
+  err_no_notebook_output: 'Falta el archivo necesario {path} — lo más probable es que el notebook (o su celda de exportación) no se ejecutara.'
+  err_faulty_input: 'El archivo {filename} está vacío o dañado — algo salió mal en el ritual "{ritual}".'
+  fatal_error: '[FATAL] {error}'
+
+ai:
+  starting: 'Inicializando los hechizos LLM avanzados con la llave del más allá...'
+  info_detected_lang: '[INFO] Idioma del corpus detectado: {language}'
+  llm_katla: '[LLM] Invocando a los espíritus para el Ritual de la Transformación...'
+  ok_katla: '[OK] Monólogo de Katla guardado en: {filename}'
+  llm_vieno: '[LLM] Tejiendo dimensiones para el Ritual de los Ecos...'
+  ok_vieno: '[OK] Canto de Vieno guardado en: {filename}'
+  llm_lumi: '[LLM] Invocando a Lumi para el despacho final...'
+  ok_lumi: '[OK] Despacho de Lumi guardado en: {filename}'
+  llm_sami: '[LLM] Llamando a la chispa de Sami para iluminar la penumbra del Norte...'
+  ok_sami: '[OK] Síntesis chispeante de Sami guardada en: {filename}'
+  done: '[HECHO] La magia se realizó con éxito.'
+  warn_ritual_failed: '[ERROR] El ritual "{ritual}" falló: {error}'
+  done_with_errors: '[INCOMPLETO] No todos los rituales LLM tuvieron éxito ({failed} de {total}). Algo salió mal — revisa los mensajes anteriores.'
+  warn_nothing_produced: '[INCOMPLETO] Ninguna voz del Norte habló. Lo más probable es que el notebook no se ejecutara o que el pipeline local (prophecies.txt) no se lanzara antes.'
+  err_no_export_dir: 'El directorio {path} no existe — lo más probable es que el notebook (o su celda de exportación) no se ejecutara.'
+  err_no_notebook_output: 'Falta el archivo {path} aunque existen temas — algo salió mal en la exportación del notebook.'
+  warn_vieno_too_few_sentences: 'La visión de Vieno se apoya en menos de 5 frases crudas ({count} encontradas) — el canto sería demasiado pobre, así que el ritual se canceló. Comprueba que el notebook generó un archivo sentences.csv completo.'
+  fatal_error: '[FATAL] {error}'
+
+# Księga Niedomówień — treść artefaktu (korpus zawsze fi, pozostałe dla spójności)
+book:
+  title: 'El Libro de lo No Dicho'
+  intro: 'Un diario cifrado del lejano Norte. Cada entrada es un flujo de conciencia aislado. Los huecos {gap} quedan para que los rellene quien escucha; los huecos obvios se han eliminado.'
+  entry_heading: 'Entrada {no} — {title}'
+  katla_label: '**KATLA** *(sistema de alerta)*'
+  vieno_label: '**VIENO:**'
+  gap_marker: '— … —'

@@ -1,0 +1,35 @@
+# PODSTAWY JĘZYKA — opis pól w dictionaries/pl/podstawy.yaml.
+# Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
+
+jezyk: de
+nazwa_en: German
+iso639_3: deu
+nazwa_ru: немецкий
+locale: de-DE
+spacy: de_core_news_lg
+
+# Łacinka + umlauty. Wielkie ẞ (U+1E9E) stoi w alfabecie, bo kod bierze
+# alfabet + alfabet.lower(): tak „ß” trafia do zbioru liter języka
+# („ß”.upper() daje dwuznakowe „SS”, więc nie da się go zapisać inaczej).
+alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜẞ"
+diakrytyki: "äöüß"
+
+# Konwencja projektu jak w ru („т. е.” → „т.е.”): wieloczłonowe scalane bez
+# spacji. „z. B.” i „d. h.” to zapis Dudena, scalenie jest tylko normalizacją.
+skrotowce: [z.B., d.h., u.a., u.U., o.Ä., usw., bzw., ggf., vgl., ca., Nr., Dr., Prof., S., Abs., Kap., Jh.]
+skrotowce_kodu: [usw., bzw., ggf., vgl.]
+
+naglowki_struktury: [AKT, SZENE, EPILOG, PROLOG, FINALE, ENDE, KAPITEL, TEIL, BUCH, ABSCHNITT]
+
+stopfrazy_powiazane:
+  - ähnliche artikel
+  - verwandte artikel
+  - weitere artikel
+  - empfohlene artikel
+  - das könnte sie auch interessieren
+  - das könnte dich auch interessieren
+  - lesen sie auch
+  - mehr zum thema
+
+nav_slowa: [kommentare, werbung]
+nav_rdzenie: []

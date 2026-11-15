@@ -1,0 +1,34 @@
+# PODSTAWY JĘZYKA — opis pól w dictionaries/pl/podstawy.yaml.
+# Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
+
+jezyk: fr
+nazwa_en: French
+iso639_3: fra
+nazwa_ru: французский
+locale: fr-FR
+spacy: fr_core_news_lg
+
+# Łacinka + litery z akcentami, cedylla i ligatury Æ/Œ.
+alfabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸ"
+diakrytyki: "àâæçéèêëîïôœùûüÿ"
+
+# „c.-à-d.”, „av. J.-C.” i „n°” odpadają: audyt dopuszcza w skrótowcu tylko
+# litery i kropki. „Mme”/„Mlle” piszą się bez kropki, więc nie są skrótowcami.
+# Konwencja projektu jak w ru: wieloczłonowe scalane bez spacji („p. ex.” → „p.ex.”).
+skrotowce: [p.ex., etc., cf., chap., vol., éd., env., art., M.]
+skrotowce_kodu: []
+
+naglowki_struktury: [ACTE, SCÈNE, ÉPILOGUE, PROLOGUE, FINAL, FIN, CHAPITRE, PARTIE, LIVRE, SECTION]
+
+stopfrazy_powiazane:
+  - articles similaires
+  - articles liés
+  - articles recommandés
+  - à lire aussi
+  - lire aussi
+  - à voir aussi
+  - vous aimerez aussi
+  - sur le même sujet
+
+nav_slowa: [commentaires, publicite]
+nav_rdzenie: []

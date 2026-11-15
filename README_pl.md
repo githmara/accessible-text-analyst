@@ -2,7 +2,7 @@
 
 Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytników ekranu** (NVDA, JAWS, VoiceOver, Narrator). Cały kod, wyjścia konsolowe i raporty są przygotowane tak, aby technologia asystująca odczytywała je czysto: bez kolorów ANSI, bez emoji, bez pasków postępu i bez pseudografiki.
 
-> **Inne języki:** [English](README.md) · [русский](README_ru.md) · [suomi](README_fi.md) · [íslenska](README_is.md) · [italiano](README_it.md)
+> **Inne języki:** [English](README.md) · [русский](README_ru.md) · [suomi](README_fi.md) · [íslenska](README_is.md) · [italiano](README_it.md) · [Deutsch](README_de.md) · [español](README_es.md) · [français](README_fr.md)
 
 > **Status i18n (v1.0).** Przetłumaczone jest tylko README. Narracja w notebooku, całe wyjście konsolowe, `CLAUDE.md` i komentarze w kodzie pozostają w językach oryginalnych (głównie rosyjski, w patchach i warstwie szamańskiej — polski). Tłumaczenie reszty jest świadomie odłożone na v1.1 — szczegóły w `release_notes.md`.
 
@@ -13,10 +13,10 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 - `run_all.py` — launcher całego darmowego łańcucha lokalnego: rejestruje jądro Jupytera `analyst_env`, jeśli go brakuje, uruchamia notatnik bez interfejsu (bez interaktywnej komórki pytań) i zapisuje jego wyjścia w `.ipynb`, a potem uruchamia `generate_report.py`, `shamanic_pipeline.py` i — dla korpusu fińskiego — `scan` Księgi Niedomówień. Nigdy nie uruchamia kroku płatnego (rytuały LLM, głosy ElevenLabs, `draft`/`fill` Księgi).
 - `generate_diagnostic.py` — niezależny generator pełnego raportu **diagnostycznego** (`diagnostic_report.html`) budowanego wprost z eksportów CSV/JSON notatnika (nie z wyjścia `generate_report.py`). Nawigowalna, dostępna dla czytników ekranu struktura: spis treści `<nav>` plus sekcje — każda z własnym nagłówkiem i listami — dla przeglądu, tematów z akapitami, tez, nazwanych encji wg typu i najważniejszych słów kluczowych. Etykiety strukturalne podążają za `ui_lang`; fragmenty korpusu dostają `<span lang="…">`, etykiety NER — `<span lang="en">`.
 - `generate_md.py` — konwertuje `analysis_report.html` na `gemini_notebook_report.md` do Gemini Notebook (dawniej NotebookLM). Spany dostępnościowe są rozpakowywane, bo Gemini Notebook ich nie konsumuje.
-- `shamanic_pipeline.py` *(opcjonalny)* — post-procesor bez LLM, który zamienia eksportowane przez notatnik pliki CSV/JSON w rytualne artefakty tekstowe (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, a — gdy włączona jest opcjonalna analiza sentymentu — także `emotional_undertow.txt`), w pełni zlokalizowane we wszystkich sześciu wspieranych językach.
+- `shamanic_pipeline.py` *(opcjonalny)* — post-procesor bez LLM, który zamienia eksportowane przez notatnik pliki CSV/JSON w rytualne artefakty tekstowe (`oracle_script.txt`, `lore_fragments/`, `raw_roots_chant.txt`, `prophecies.txt`, a — gdy włączona jest opcjonalna analiza sentymentu — także `emotional_undertow.txt`), w pełni zlokalizowane we wszystkich dziewięciu wspieranych językach.
 - `shamanic_ai.py` *(opcjonalny, oparty na LLM)* — wywołuje LLM (domyślnie OpenAI; OpenRouter albo dowolny endpoint zgodny z OpenAI przez `llm_provider`), by wygenerować cztery głosy narracyjne (`Katla`, `Vieno`, `Lumi`, `Sami`) na tych samych eksportach. Gdy obecny jest opcjonalny `sentiment.csv`, Vieno buduje swoją pieśń na łuku emocjonalnym tekstu zamiast na surowych zdaniach. Wymaga klucza wybranego providera w pliku `golden_key.env`.
 - `shamanic_voice.py` *(opcjonalny, wymaga ElevenLabs)* — samodzielny skrypt jednorazowy, który syntetyzuje cztery artefakty narracyjne wytworzone przez `shamanic_ai.py` do plików audio `.mp3` przez API ElevenLabs, loguje każdy sukces/błąd do konsoli i kończy działanie (bez bota, bez serwera). Wymaga `ELEVENLABS_API_KEY` w `golden_key.env` oraz mapowania `voices` w konfiguracji.
-- `shamanic_locale.py` — pakiet lokalizacyjny dla obu skryptów szamańskich (szablony, nagłówki i fallbacki Lumi we wszystkich sześciu językach).
+- `shamanic_locale.py` — pakiet lokalizacyjny dla obu skryptów szamańskich (szablony, nagłówki i fallbacki Lumi we wszystkich dziewięciu językach).
 - `ksiega_niedomowien.py` *(opcjonalny, tylko fiński, z udziałem agenta)* — Księga Niedomówień (*Sanomattomien kirja*): zamienia `raw_roots_chant.txt` w przyrostowo rosnący kryptograficzny dziennik z lukami, których ślepy model nie zdołał odgadnąć. To deterministyczny pomocnik skilla z `skills/ksiega-niedomowien/SKILL.md`; komunikaty konsoli podążają za `ui_lang`.
 
 ## Co robi potok
@@ -39,6 +39,9 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 | ru   | rosyjski   | `ru_core_news_lg`      | spaCy          |
 | en   | angielski  | `en_core_web_lg`       | spaCy          |
 | it   | włoski     | `it_core_news_lg`      | spaCy          |
+| de   | niemiecki  | `de_core_news_lg`      | spaCy          |
+| es   | hiszpański | `es_core_news_lg`      | spaCy          |
+| fr   | francuski  | `fr_core_news_lg`      | spaCy          |
 | fi   | fiński     | `fi_core_news_lg`      | spaCy          |
 | is   | islandzki  | `spacy.blank("is")` + Hugging Face | `mideind/IceBERT` (wektory), `grammatek/icelandic-ner-bert` (NER) |
 
@@ -56,7 +59,7 @@ Języki tekstu wymieniasz w `corpus_languages` (`config.json`; dawna nazwa `ocr_
 
 Wynik niesie eksport: `<span lang="…">` w `accessible_text.html` i osobny `Run` z `<w:lang>` w `accessible_text.docx` dla każdego obcego zdania i każdego wtrącenia, więc czytnik ekranu przełącza głos dokładnie na cytacie albo nazwisku, a nie na całym zdaniu. Wszystkie odcinki są też wypisane w `language_spans.csv`, a `sentences.csv` ma kolumnę `lang`.
 
-Słowniki: wektory spaCy (skończona lista form) dla polskiego, angielskiego, rosyjskiego i włoskiego; `omorfi` dla fińskiego; BÍN (`islenska`) dla islandzkiego — te same słowniki, których używa głosowanie OCR. Przy jednym języku w `corpus_languages` żaden słownik się nie ładuje i oznaczane są tylko słowa innego pisma. Brak słownika zatrzymuje przebieg komunikatem, który mówi, co zrobić.
+Słowniki: wektory spaCy (skończona lista form) dla polskiego, angielskiego, rosyjskiego, włoskiego, niemieckiego, hiszpańskiego i francuskiego; `omorfi` dla fińskiego; BÍN (`islenska`) dla islandzkiego — te same słowniki, których używa głosowanie OCR. Przy jednym języku w `corpus_languages` żaden słownik się nie ładuje i oznaczane są tylko słowa innego pisma. Brak słownika zatrzymuje przebieg komunikatem, który mówi, co zrobić.
 
 **Które języki wymienić.** Zmierzone na 20 fińskich transkryptach (55 000 słów), w których pada wiele polskich nazwisk: przy `["fi", "en"]` notatnik znajduje 34 odcinki angielskie (terminy i cytaty); przy `["fi", "pl", "en"]` znajduje dodatkowo 57 odcinków polskich — polskie nazwiska i kilka polskich zwrotów, czytane teraz głosem polskim zamiast fińskiego — i żadne angielskie słowo nie trafia do polskiego. Dlatego:
 
@@ -115,6 +118,9 @@ Otwórz nowy notatnik w Colab i wklej do pierwszej komórki:
 # !python -m spacy download ru_core_news_lg
 # !python -m spacy download it_core_news_lg
 # !python -m spacy download fi_core_news_lg
+# !python -m spacy download de_core_news_lg
+# !python -m spacy download es_core_news_lg
+# !python -m spacy download fr_core_news_lg
 ```
 
 Następnie wgraj `config.json` (lub `config.ini`) przez panel Files, ustaw `source_file` i uruchom notatnik. Uwaga: sesje Colab są ulotne — pobrane modele i artefakty `export_results/` znikają, gdy runtime się skończy. Do dłuższej pracy zamontuj Google Drive i zapisuj wyjście tam.
@@ -132,6 +138,9 @@ python -m spacy download ru_core_news_lg
 python -m spacy download en_core_web_lg
 python -m spacy download it_core_news_lg
 python -m spacy download fi_core_news_lg
+python -m spacy download de_core_news_lg
+python -m spacy download es_core_news_lg
+python -m spacy download fr_core_news_lg
 
 # 3. (Opcjonalnie) Wsparcie dla islandzkiego — odkomentuj `transformers` i
 # `torch` w requirements.txt i ponownie uruchom `pip install -r requirements.txt`.
@@ -198,9 +207,9 @@ Zawartość:
 | `source_file`      | string           | Ścieżka do pliku (`.pdf`, `.txt`, `.docx`, `.md`, `.html` lub obraz) **albo** URL (`http://`, `https://`). Pusty string lub brak pliku → wbudowany przykładowy korpus. |
 | `custom_patterns`  | string[]         | Opcjonalna lista wyrażeń regularnych usuwanych z surowego tekstu (żywe nagłówki, stopki, powtarzające się szablony). Przykład: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean          | Przełącza `generate_report.py` między trybem czytelnika (`true`, ukrywa paski ładowania Hugging Face/torch i tabele lematyzacji/POS) a pełnym trybem diagnostycznym (`false`). |
-| `corpus_languages` | string[]         | Języki TEKSTU (kody paczek językowych: `en`, `fi`, `is`, `it`, `pl`, `ru`); dawna nazwa `ocr_languages` nadal jest czytana. Ich słowniki wybierają język bazowy i język każdego słowa (zob. **Język każdego słowa**), a przy skanowanych PDF-ach i obrazach każdy z nich czyta stronę własnym silnikiem OCR. Wymieniaj tylko języki, które naprawdę występują w tekście: nadmiarowy język spowalnia OCR i dodaje fałszywych kandydatów. Łacinkę i cyrylicę można mieszać (`["fi", "ru"]`). |
+| `corpus_languages` | string[]         | Języki TEKSTU (kody paczek językowych: `de`, `en`, `es`, `fi`, `fr`, `is`, `it`, `pl`, `ru`); dawna nazwa `ocr_languages` nadal jest czytana. Ich słowniki wybierają język bazowy i język każdego słowa (zob. **Język każdego słowa**), a przy skanowanych PDF-ach i obrazach każdy z nich czyta stronę własnym silnikiem OCR. Wymieniaj tylko języki, które naprawdę występują w tekście: nadmiarowy język spowalnia OCR i dodaje fałszywych kandydatów. Łacinkę i cyrylicę można mieszać (`["fi", "ru"]`). |
 | `enable_sentiment` | boolean          | Włącza opcjonalną per-akapitową analizę sentymentu (domyślnie `false`). Wymaga zakomentowanych zależności sentymentu (zobacz Instalacja krok 4). Zapisuje `sentiment.csv`; wynik nigdy nie jest pokazywany użytkownikowi, służy wyłącznie jako pożywka dla warstwy szamańskiej (rytuał `emotional_undertow.txt` i pieśń Vieno). Przy jakimkolwiek błędzie ładowania jest po cichu pomijana — bez fallbacku. |
-| `ui_lang`          | string           | Język UI dla wyjścia konsoli i atrybutu `<html lang>` generowanego raportu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Pusty string lub nieznany kod → fallback `en`. Niezależny od języka analizowanego korpusu — ten ustalają słowniki `corpus_languages`. |
+| `ui_lang`          | string           | Język UI dla wyjścia konsoli i atrybutu `<html lang>` generowanego raportu (`pl` / `en` / `ru` / `fi` / `is` / `it` / `de` / `es` / `fr`). Pusty string lub nieznany kod → fallback `en`. Niezależny od języka analizowanego korpusu — ten ustalają słowniki `corpus_languages`. |
 | `lumi_katla_lines` | integer lub null | Opcjonalny limit ornamentu dla raportu Lumi z `shamanic_ai.py`: ile niepustych linii monologu Katli widzi Lumi. `null` lub brak klucza = cała treść; integer N > 0 = pierwsze N linii. |
 | `lumi_vieno_lines` | integer lub null | To samo co `lumi_katla_lines`, dla pieśni ech Vieno. |
 | `voices`           | obiekt          | Mapuje każdy głos szamański (`katla` / `vieno` / `lumi` / `sami`) na identyfikator głosu ElevenLabs, używany przez `shamanic_voice.py`. Głos z pustym lub brakującym ID jest pomijany. Potrzebne tylko, jeśli uruchamiasz dyspozytor audio. |
@@ -215,7 +224,7 @@ Zawartość:
 
 > **Analiza sentymentu — koszt CPU.** Przy `enable_sentiment: true` przebieg per akapit jest obliczeniowo kosztowny na CPU — z grubsza porównywalny z uruchomieniem lokalnego Whisper (mowa na tekst) na CPU. Na starszych lub ograniczonych termicznie maszynach to utrzymujące się obciążenie może być realnym obciążeniem dla procesora; włączaj je świadomie, najlepiej na maszynie z GPU lub z zapasem mocy na długotrwałą pracę pod pełnym obciążeniem.
 
-> **`ui_lang` — zakres lokalizacji.** Wyjście konsolowe samodzielnych skryptów (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) jest lokalizowane przez `ui_lang`. Wyjście stdout **notatnika nie jest** lokalizowane — jest zahardkodowane po rosyjsku (tylko nazwa pliku z tezami podąża za wykrytym językiem korpusu). Raport w trybie czytnika `analysis_report.html` zachowuje rosyjską narrację notatnika (jego korzeniem jest `<html lang="ru">`); w pełni zlokalizowanym przez `ui_lang`, skierowanym do użytkownika artefaktem jest **`diagnostic_report.html`** produkowany przez `generate_diagnostic.py`. Tłumaczenia w `fi` / `is` / `it` są w wersji draft i nie zweryfikowane — zgłaszaj nieścisłości na GitHubie.
+> **`ui_lang` — zakres lokalizacji.** Wyjście konsolowe samodzielnych skryptów (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) jest lokalizowane przez `ui_lang`. Wyjście stdout **notatnika nie jest** lokalizowane — jest zahardkodowane po rosyjsku (tylko nazwa pliku z tezami podąża za wykrytym językiem korpusu). Raport w trybie czytnika `analysis_report.html` zachowuje rosyjską narrację notatnika (jego korzeniem jest `<html lang="ru">`); w pełni zlokalizowanym przez `ui_lang`, skierowanym do użytkownika artefaktem jest **`diagnostic_report.html`** produkowany przez `generate_diagnostic.py`. Tłumaczenia w `fi` / `is` / `it` / `de` / `es` / `fr` są w wersji draft i nie zweryfikowane — zgłaszaj nieścisłości na GitHubie.
 
 > **Ścieżki Windows i regexy — ważne.** Treść configu jest JSON-em, a JSON nie ma składni raw-string. Pojedynczy backslash escapeuje kolejny znak (`\U`, `\d`, `\n` są specjalne), więc ścieżka windowsowa zapisana jako `"C:\Users\marek\doc.pdf"` da błąd parsowania JSON. Są dwa poprawne sposoby:
 >
@@ -292,7 +301,7 @@ python shamanic_pipeline.py
 #                                          /emotional_undertow.txt   # tylko jeśli istnieje sentiment.csv
 ```
 
-Generuje rytualne artefakty tekstowe wprost z eksportów CSV/JSON notatnika — bez wywołania LLM, bez sieci. Wszystkie stringi pochodzą z `shamanic_locale.py` i są w pełni zlokalizowane we wszystkich sześciu wspieranych językach. Gdy obecny jest opcjonalny `sentiment.csv`, generuje dodatkowo `emotional_undertow.txt` — per-akapitowy „przypływ nastroju" plus podsumowanie bilansu; bez niego ten jeden rytuał jest po prostu pomijany.
+Generuje rytualne artefakty tekstowe wprost z eksportów CSV/JSON notatnika — bez wywołania LLM, bez sieci. Wszystkie stringi pochodzą z `shamanic_locale.py` i są w pełni zlokalizowane we wszystkich dziewięciu wspieranych językach. Gdy obecny jest opcjonalny `sentiment.csv`, generuje dodatkowo `emotional_undertow.txt` — per-akapitowy „przypływ nastroju" plus podsumowanie bilansu; bez niego ten jeden rytuał jest po prostu pomijany.
 
 ### 5. Szamański post-procesor LLM (opcjonalnie, wymaga klucza API LLM)
 
@@ -391,7 +400,7 @@ Każdy podkatalog zawiera:
 | `language_spans.csv`            | notatnik          | obce odcinki językowe: dokument, przesunięcia znaków, język, `block` albo `inline`, tekst |
 | `sentiment.csv`                 | notatnik *(opcjonalnie)* | per-akapitowy sentyment (`para_id`, `label`, `score`, `lang`) — tylko gdy `enable_sentiment` jest `true`; pożywka dla warstwy szamańskiej, nigdy nie pokazywana użytkownikowi |
 | `accessible_text.html`          | notatnik          | `lang` na każdym akapicie plus `<span lang>` na każdym obcym zdaniu i wtrąceniu (cytat, nazwisko) — czytniki ekranu automatycznie przełączają głos per fragment |
-| `accessible_text.docx`          | notatnik          | ta sama treść z `<w:lang>` ustawionym per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word i SAPI używają tego offline, bez detektora online |
+| `accessible_text.docx`          | notatnik          | ta sama treść z `<w:lang>` ustawionym per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`, `de-DE`, `es-ES`, `fr-FR`) — Word i SAPI używają tego offline, bez detektora online |
 | `analysis_report.html`           | `generate_report.py` | globalny dostępny raport HTML                  |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | ustrukturyzowany raport diagnostyczny (tematy, tezy, encje wg typu, słowa kluczowe) z eksportów CSV/JSON |
 | `gemini_notebook_report.md` | `generate_md.py`     | Markdown gotowy dla Gemini Notebook (dawniej NotebookLM) |

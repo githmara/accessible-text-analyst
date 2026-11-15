@@ -1,0 +1,109 @@
+oracle:
+  header: |+
+    --- ORACLE DU FLUX DE CONSCIENCE ---
+    Consigne TTS : lire lentement, avec un écho croissant.
+
+  pause: '[PAUSE 1.5s]'
+
+roots:
+  header: |+
+    --- RITE DES RACINES BRUTES ---
+    Consigne TTS : lecture mécanique, inhumaine, dénuée d’émotion.
+
+lore:
+  header: |+
+    // SIGNATURE DE LA TROUVAILLE : TOPIC-{topic_id} / FRAGMENT-{para_id} //
+    // ÉTAT : JOURNAL RADIO ENDOMMAGÉ //
+
+prophecy:
+  header: |+
+    --- LIVRE DES PROPHÉTIES DE LA POUSSIÈRE ---
+    Consigne TTS : lire solennellement, avec des pauses avant les deux-points.
+
+  section: '[PROPHÉTIE {n}]'
+  templates:
+    - 'De la poussière de {loc} se lèvera {per}, pour {sentence}'
+    - 'Quand la lune de sang pendra au-dessus de {loc}, {per} proclamera : {sentence}'
+    - 'Des entrailles de {org}, {per} chuchotera vers {loc} : {sentence}'
+    - 'L’antique voix de {loc} parlera par la bouche de {per} : {sentence}'
+  fallback:
+    loc: 'une terre sans nom'
+    per: 'le Sans-Nom'
+    org: 'un ordre oublié'
+
+katla:
+  header: |+
+    --- MONOLOGUE DES ÊTRES GELÉS (VOIX : KATLA) ---
+
+vieno:
+  header: |+
+    --- INVOCATION CHAMANIQUE DES ÉCHOS (VOIX : VIENO) ---
+
+lumi:
+  header: |+
+    --- DÉPÊCHE FINALE DU NORD GELÉ (VOIX : LUMI) ---
+
+  fallback:
+    katla: '(silence — Katla n’a pas encore parlé)'
+    vieno: '(calme — le chant de Vieno n’est pas arrivé)'
+
+sami:
+  header: |+
+    --- L’ÉTINCELLE DE SAMI : SYNTHÈSE ÉNERGÉTIQUE ---
+    Consigne TTS : lire avec un immense enthousiasme, un large sourire et une grande dynamique.
+
+undertow:
+  header: |+
+    --- LE RESSAC : MARÉE ÉMOTIONNELLE DU TEXTE ---
+    Consigne TTS : lire comme un flux et un reflux, avec des pauses entre les vagues.
+
+  mood_negative: 'ténèbres'
+  mood_neutral: 'calme'
+  mood_positive: 'lumière'
+  summary_header: 'Bilan de la marée :'
+
+pipeline:
+  starting: 'Initialisation du pipeline de traitement chamanique...'
+  info_detected_lang: '[INFO] Langue du corpus détectée : {language}'
+  warn_no_export_dir: '[AVERTISSEMENT] Le répertoire {path} n’existe pas.'
+  ok_oracle: '[OK] Oracle généré : {filename}'
+  ok_lore: '[OK] Fragments de lore générés : {dirname}/'
+  ok_roots: '[OK] Racines brutes générées : {filename}'
+  ok_prophecies: '[OK] Prophéties générées : {filename}'
+  ok_undertow: '[OK] Ressac généré : {filename}'
+  done: '[TERMINÉ] Tous les artefacts audio sont prêts dans le dossier audio_scripts.'
+  warn_ritual_failed: '[ERREUR] Le rituel "{ritual}" a échoué : {error}'
+  done_with_errors: '[INCOMPLET] Tous les rituels n’ont pas réussi ({failed} sur {total}). Quelque chose s’est mal passé — vérifiez les messages ci-dessus.'
+  warn_nothing_produced: '[INCOMPLET] Aucun artefact audio n’a été produit. Le notebook (ou sa cellule d’export) n’a très probablement pas été exécuté dans {path}.'
+  err_no_notebook_output: 'Le fichier requis {path} est manquant — le notebook (ou sa cellule d’export) n’a très probablement pas été exécuté.'
+  err_faulty_input: 'Le fichier {filename} est vide ou corrompu — quelque chose s’est mal passé dans le rituel "{ritual}".'
+  fatal_error: '[FATAL] {error}'
+
+ai:
+  starting: 'Initialisation des sortilèges LLM avancés avec la clé de l’au-delà...'
+  info_detected_lang: '[INFO] Langue du corpus détectée : {language}'
+  llm_katla: '[LLM] Invocation des esprits pour le Rituel de la Transformation...'
+  ok_katla: '[OK] Monologue de Katla enregistré dans : {filename}'
+  llm_vieno: '[LLM] Tissage des dimensions pour le Rituel des Échos...'
+  ok_vieno: '[OK] Chant de Vieno enregistré dans : {filename}'
+  llm_lumi: '[LLM] Invocation de Lumi pour la dépêche finale...'
+  ok_lumi: '[OK] Dépêche de Lumi enregistrée dans : {filename}'
+  llm_sami: '[LLM] Appel de l’étincelle de Sami pour éclairer la pénombre du Nord...'
+  ok_sami: '[OK] Synthèse pétillante de Sami enregistrée dans : {filename}'
+  done: '[TERMINÉ] La magie a opéré avec succès.'
+  warn_ritual_failed: '[ERREUR] Le rituel "{ritual}" a échoué : {error}'
+  done_with_errors: '[INCOMPLET] Tous les rituels LLM n’ont pas réussi ({failed} sur {total}). Quelque chose s’est mal passé — vérifiez les messages ci-dessus.'
+  warn_nothing_produced: '[INCOMPLET] Aucune voix du Nord n’a parlé. Très probablement, le notebook n’a pas été exécuté ou le pipeline local (prophecies.txt) n’a pas été lancé d’abord.'
+  err_no_export_dir: 'Le répertoire {path} n’existe pas — le notebook (ou sa cellule d’export) n’a très probablement pas été exécuté.'
+  err_no_notebook_output: 'Le fichier {path} est manquant alors que des thèmes existent — quelque chose s’est mal passé lors de l’export du notebook.'
+  warn_vieno_too_few_sentences: 'La vision de Vieno repose sur moins de 5 phrases brutes ({count} trouvées) — le chant serait trop maigre, le rituel a donc été interrompu. Vérifiez que le notebook a produit un fichier sentences.csv complet.'
+  fatal_error: '[FATAL] {error}'
+
+# Księga Niedomówień — treść artefaktu (korpus zawsze fi, pozostałe dla spójności)
+book:
+  title: 'Le Livre du Non-Dit'
+  intro: 'Un journal chiffré du Grand Nord. Chaque entrée est un flux de conscience isolé. Les trous {gap} sont laissés à l’auditeur ; les trous évidents ont été supprimés.'
+  entry_heading: 'Entrée {no} — {title}'
+  katla_label: '**KATLA** *(système d’alerte)*'
+  vieno_label: '**VIENO :**'
+  gap_marker: '— … —'

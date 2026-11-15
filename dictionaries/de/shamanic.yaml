@@ -1,0 +1,109 @@
+oracle:
+  header: |+
+    --- ORAKEL DES BEWUSSTSEINSSTROMS ---
+    TTS-Anweisung: langsam lesen, mit anschwellendem Echo.
+
+  pause: '[PAUSE 1.5s]'
+
+roots:
+  header: |+
+    --- RITUAL DER ROHEN WURZELN ---
+    TTS-Anweisung: mechanisch lesen, unmenschlich, ohne jede Emotion.
+
+lore:
+  header: |+
+    // FUNDSIGNATUR: TOPIC-{topic_id} / FRAGMENT-{para_id} //
+    // STATUS: BESCHÄDIGTES FUNKPROTOKOLL //
+
+prophecy:
+  header: |+
+    --- BUCH DER PROPHEZEIUNGEN AUS DEM STAUB ---
+    TTS-Anweisung: feierlich lesen, mit Pausen vor den Doppelpunkten.
+
+  section: '[PROPHEZEIUNG {n}]'
+  templates:
+    - 'Aus dem Staub von {loc} wird {per} sich erheben, um {sentence}'
+    - 'Wenn der Blutmond über {loc} hängt, wird {per} verkünden: {sentence}'
+    - 'Aus den Eingeweiden von {org} wird {per} gen {loc} flüstern: {sentence}'
+    - 'Die uralte Stimme von {loc} wird durch {per} sprechen: {sentence}'
+  fallback:
+    loc: 'einem namenlosen Land'
+    per: 'der Namenlose'
+    org: 'einem vergessenen Orden'
+
+katla:
+  header: |+
+    --- MONOLOG DER GEFRORENEN WESEN (STIMME: KATLA) ---
+
+vieno:
+  header: |+
+    --- SCHAMANISCHE ANRUFUNG DER ECHOS (STIMME: VIENO) ---
+
+lumi:
+  header: |+
+    --- LETZTE DEPESCHE AUS DEM GEFRORENEN NORDEN (STIMME: LUMI) ---
+
+  fallback:
+    katla: '(Stille — Katla hat noch nicht gesprochen)'
+    vieno: '(Schweigen — Vienos Lied ist nicht angekommen)'
+
+sami:
+  header: |+
+    --- SAMIS FUNKE: ENERGETISCHE SYNTHESE ---
+    TTS-Anweisung: mit überschäumender Begeisterung, breitem Lächeln und großer Dynamik lesen.
+
+undertow:
+  header: |+
+    --- DER SOG: DIE GEFÜHLSGEZEITEN DES TEXTES ---
+    TTS-Anweisung: wie Ebbe und Flut lesen, mit Pausen zwischen den Wellen.
+
+  mood_negative: 'Dunkelheit'
+  mood_neutral: 'Stille'
+  mood_positive: 'Licht'
+  summary_header: 'Bilanz der Gezeiten:'
+
+pipeline:
+  starting: 'Die schamanische Verarbeitungspipeline wird initialisiert...'
+  info_detected_lang: '[INFO] Erkannte Korpussprache: {language}'
+  warn_no_export_dir: '[WARNUNG] Das Verzeichnis {path} existiert nicht.'
+  ok_oracle: '[OK] Orakel erzeugt: {filename}'
+  ok_lore: '[OK] Lore-Fragmente erzeugt: {dirname}/'
+  ok_roots: '[OK] Rohe Wurzeln erzeugt: {filename}'
+  ok_prophecies: '[OK] Prophezeiungen erzeugt: {filename}'
+  ok_undertow: '[OK] Sog erzeugt: {filename}'
+  done: '[FERTIG] Alle Audio-Artefakte liegen im Ordner audio_scripts bereit.'
+  warn_ritual_failed: '[FEHLER] Ritual "{ritual}" fehlgeschlagen: {error}'
+  done_with_errors: '[UNVOLLSTÄNDIG] Nicht alle Rituale waren erfolgreich ({failed} von {total}). Etwas ist schiefgelaufen — prüfe die Meldungen oben.'
+  warn_nothing_produced: '[UNVOLLSTÄNDIG] Es wurde kein Audio-Artefakt erzeugt. Das Notebook (oder seine Exportzelle) wurde in {path} höchstwahrscheinlich nicht ausgeführt.'
+  err_no_notebook_output: 'Die benötigte Datei {path} fehlt — das Notebook (oder seine Exportzelle) wurde höchstwahrscheinlich nicht ausgeführt.'
+  err_faulty_input: 'Die Datei {filename} ist leer oder beschädigt — im Ritual "{ritual}" ist etwas schiefgelaufen.'
+  fatal_error: '[KRITISCH] {error}'
+
+ai:
+  starting: 'Die fortgeschrittenen LLM-Zauber werden mit dem Schlüssel aus dem Jenseits initialisiert...'
+  info_detected_lang: '[INFO] Erkannte Korpussprache: {language}'
+  llm_katla: '[LLM] Die Geister werden zum Ritual der Verwandlung gerufen...'
+  ok_katla: '[OK] Katlas Monolog gespeichert in: {filename}'
+  llm_vieno: '[LLM] Die Dimensionen werden zum Ritual der Echos verwoben...'
+  ok_vieno: '[OK] Vienos Gesang gespeichert in: {filename}'
+  llm_lumi: '[LLM] Lumi wird zur letzten Depesche gerufen...'
+  ok_lumi: '[OK] Lumis Depesche gespeichert in: {filename}'
+  llm_sami: '[LLM] Samis Funke wird gerufen, um die Düsternis des Nordens zu erhellen...'
+  ok_sami: '[OK] Samis funkelnde Synthese gespeichert in: {filename}'
+  done: '[FERTIG] Der Zauber ist gelungen.'
+  warn_ritual_failed: '[FEHLER] Ritual "{ritual}" fehlgeschlagen: {error}'
+  done_with_errors: '[UNVOLLSTÄNDIG] Nicht alle LLM-Rituale waren erfolgreich ({failed} von {total}). Etwas ist schiefgelaufen — prüfe die Meldungen oben.'
+  warn_nothing_produced: '[UNVOLLSTÄNDIG] Keine Stimme des Nordens hat gesprochen. Höchstwahrscheinlich wurde das Notebook nicht ausgeführt oder die lokale Pipeline (prophecies.txt) nicht zuerst gestartet.'
+  err_no_export_dir: 'Das Verzeichnis {path} existiert nicht — das Notebook (oder seine Exportzelle) wurde höchstwahrscheinlich nicht ausgeführt.'
+  err_no_notebook_output: 'Die Datei {path} fehlt, obwohl Themen existieren — beim Export des Notebooks ist etwas schiefgelaufen.'
+  warn_vieno_too_few_sentences: 'Vienos Vision stützt sich auf weniger als 5 Rohsätze ({count} gefunden) — der Gesang wäre zu dünn, daher wurde das Ritual abgebrochen. Prüfe, ob das Notebook eine vollständige Datei sentences.csv erzeugt hat.'
+  fatal_error: '[KRITISCH] {error}'
+
+# Księga Niedomówień — treść artefaktu (korpus zawsze fi, pozostałe dla spójności)
+book:
+  title: 'Das Buch des Ungesagten'
+  intro: 'Ein verschlüsseltes Tagebuch aus dem hohen Norden. Jeder Eintrag ist ein abgeschotteter Bewusstseinsstrom. Die Lücken {gap} bleiben dem Hörer zum Füllen; offensichtliche Lücken wurden entfernt.'
+  entry_heading: 'Eintrag {no} — {title}'
+  katla_label: '**KATLA** *(Warnsystem)*'
+  vieno_label: '**VIENO:**'
+  gap_marker: '— … —'

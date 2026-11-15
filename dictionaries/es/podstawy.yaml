@@ -1,0 +1,31 @@
+# PODSTAWY JĘZYKA — opis pól w dictionaries/pl/podstawy.yaml.
+# Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
+
+jezyk: es
+nazwa_en: Spanish
+iso639_3: spa
+nazwa_ru: испанский
+locale: es-ES
+spacy: es_core_news_lg
+
+# Łacinka + Ñ + samogłoski z akcentem ostrym + Ü (pingüino).
+alfabet: "ABCDEFGHIJKLMNÑOPQRSTUVWXYZÁÉÍÓÚÜ"
+diakrytyki: "áéíóúüñ"
+
+# Konwencja projektu jak w ru: wieloczłonowe scalane bez spacji („EE. UU.” → „EE.UU.”).
+skrotowce: [EE.UU., p.ej., a.C., d.C., etc., pág., págs., Sr., Sra., Srta., Dr., Dra., núm., cap., vol., art.]
+skrotowce_kodu: []
+
+naglowki_struktury: [ACTO, ESCENA, EPÍLOGO, PRÓLOGO, FINAL, FIN, CAPÍTULO, PARTE, LIBRO, SECCIÓN]
+
+stopfrazy_powiazane:
+  - artículos relacionados
+  - noticias relacionadas
+  - te puede interesar
+  - también te puede interesar
+  - quizás te interese
+  - lee también
+  - otros artículos
+
+nav_slowa: [relacionados, comentarios, publicidad]
+nav_rdzenie: []

@@ -20,7 +20,8 @@ import audyt_podstaw as a  # noqa: E402
 
 sl = a.sl
 INDEKS = {"en_core_web_lg": {"3.8"}, "pl_core_news_lg": {"3.8"}, "ru_core_news_lg": {"3.8"},
-          "it_core_news_lg": {"3.8"}, "fi_core_news_lg": {"3.8"}}
+          "it_core_news_lg": {"3.8"}, "fi_core_news_lg": {"3.8"}, "de_core_news_lg": {"3.8"},
+          "es_core_news_lg": {"3.8"}, "fr_core_news_lg": {"3.8"}}
 TESSDATA = {"eng", "pol", "rus", "ita", "fin", "isl", "deu", "spa", "fra"}  # audyt-podstaw: ok — sztuczny listing sondy
 
 
