@@ -22,6 +22,38 @@
    "liczba": 2
   }
  ],
+ "znak_fontu_symbol": [
+  {
+   "nazwa": "strzałka w górę, SymbolMT z prefiksem podzbioru",
+   "znak": "",
+   "font": "BCDKEE+SymbolMT",
+   "oczekiwany": "⇑"
+  },
+  {
+   "nazwa": "strzałka w dół, Symbol bez prefiksu",
+   "znak": "",
+   "font": "Symbol",
+   "oczekiwany": "⇓"
+  },
+  {
+   "nazwa": "ten sam kod w Wingdings — bez zmian",
+   "znak": "",
+   "font": "ABCDEF+Wingdings-Regular",
+   "oczekiwany": null
+  },
+  {
+   "nazwa": "kod spoza mapy w Symbol — bez zmian",
+   "znak": "",
+   "font": "SymbolMT",
+   "oczekiwany": null
+  },
+  {
+   "nazwa": "zwykła litera — bez zmian",
+   "znak": "a",
+   "font": "SymbolMT",
+   "oczekiwany": null
+  }
+ ],
  "przeniesienia": [
   {
    "nazwa": "spec-1: R nie jest słowem",

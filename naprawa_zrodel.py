@@ -210,6 +210,18 @@ def napraw_strone(strona, pamiec: dict | None = None) -> OcenaStrony:
     do_naprawy = []
     for poz, z in enumerate(znaki):
         tekst = z.get("text") or ""
+        # Strzałki fontu Symbol z PUA (U+F0DD/U+F0DF) → ⇑ ⇓ — decyzja we
+        # wspólnym module (2.0, sonda biuletynów: 59–62 na plik, czytnik
+        # ekranu nie czytał ich wcale). Tylko font Symbol: w Wingdings te
+        # same kody to inne strzałki, a pdfplumber podaje nazwę przy znaku.
+        if len(tekst) == 1 and ord(tekst) in _ct.ZNAKI_SYMBOL_PUA:
+            nowy = _ct.znak_fontu_symbol(tekst, z.get("fontname") or "")
+            if nowy:
+                z["text"] = tekst = nowy
+        # ZapfDingbats bez ToUnicode: pdfplumber oddaje KOD glifu jako literę
+        # ASCII („n” zamiast ■), która udaje polskie słowo („Uknad”).
+        elif tekst in ZNAKI_ZAPF and "ZapfDingbats" in (z.get("fontname") or ""):
+            z["text"] = tekst = ZNAKI_ZAPF[tekst]
         m = _CALY_ZNACZNIK.match(tekst)
         if m:
             litery += 1
@@ -261,6 +273,148 @@ def napraw_strone(strona, pamiec: dict | None = None) -> OcenaStrony:
         poprzedni["text"] = ptekst + z["text"]
         del znaki[poz]
     return OcenaStrony(litery, len(do_naprawy), nierozwiazane)
+
+
+#: Znak zastępczy: czarny kwadrat, którym generator PDF (ReportLab, sonda
+#: 2026-11-13) zastąpił każdą literę spoza WinAnsi — 18 różnych polskich liter
+#: dało jeden kod. Informacji o literze w pliku nie ma; zostaje rekonstrukcja
+#: językowa (`rekonstruuj_zastepcze`).
+ZASTEPCZY = chr(0x25A0)
+#: Glify ZapfDingbats bez ToUnicode (kod → znak wg kodowania fontu). Wąsko:
+#: tylko zmierzone.
+ZNAKI_ZAPF = {"n": ZASTEPCZY}
+#: Więcej znaków zastępczych w jednym słowie nie rozwiązujemy (kombinacje).
+MAX_ZASTEPCZYCH_W_SLOWIE = 3
+#: Kilka form znanych leksykonowi: wybieramy najczęstszą tylko wtedy, gdy
+#: następna jest co najmniej tyle razy rzadsza (rangi wektorów spaCy pl,
+#: 2026-11-15: się 7 / sił 1860, wstęp 8914 / wstąp 92 769 → rozstrzygnięte;
+#: został 111 / zostać 717, kawę / kawą ×3,3, drgań / drgać ×9,3 → ■ zostaje).
+PRZEWAGA_RANGI = 10
+_RE_SLOWO_ZASTEPCZE = re.compile("(?:[^" + chr(92) + "W" + chr(92) + "d_]|" + ZASTEPCZY + ")+")
+
+
+def litery_spoza_winansi(alfabety) -> str:
+    """Małe litery alfabetów, których nie ma w WinAnsi (cp1252) — kandydaci na ■."""
+    wynik = set()
+    for alfabet in alfabety:
+        for z in alfabet:
+            z = z.lower()
+            if not z.isalpha():
+                continue
+            try:
+                z.encode("cp1252")
+            except UnicodeEncodeError:
+                wynik.add(z)
+    return "".join(sorted(wynik))
+
+
+def rekonstruuj_zastepcze(strony: list[str], slowniki, kandydaci: str
+                          ) -> tuple[list[str], dict[str, int]]:
+    """Słowa z ■ → litera, gdy słowniki znają jedną formę albo jedna dominuje.
+
+    Kilka znanych form: najczęstsza tylko przy `PRZEWAGA_RANGI` (rangi wektorów
+    spaCy; leksykon bez rang nie rozstrzyga). Wielkość litery: słowo pisane
+    wersalikami dostaje wielką; ■ na początku słowa — wielką po końcu zdania
+    albo gdy leksykon zna formę wielką jako częstszą. Formy porównywalne
+    („zosta■” → został/zostać), żadna albo więcej niż `MAX_ZASTEPCZYCH_W_SLOWIE`
+    znaków zastępczych: ■ zostaje (zgłaszane liczbą) — zgadywanie dałoby
+    fałszywe słowo w NLP i w odczycie, gorsze niż ■.
+    """
+    import itertools
+    info = {"odtworzone": 0, "niejednoznaczne": 0, "nieznane": 0, "poza_slowem": 0}
+
+    def znane(forma: str) -> bool:
+        return any(s.ocen(forma) for s in slowniki)
+
+    def ranga(forma: str, dokladna: bool = False) -> int | None:
+        rangi = [r for s in slowniki if (r := s.ranga_formy(forma, dokladna)) is not None]
+        return min(rangi) if rangi else None
+
+    def wybierz(formy: set[str]) -> str | None:
+        """Jedna forma; przy kilku — najczęstsza, gdy wyprzedza resztę `PRZEWAGA_RANGI` razy."""
+        if len(formy) <= 1:
+            return next(iter(formy), None)
+        rangi = sorted((ranga(f), f) for f in formy if ranga(f) is not None)
+        if len(rangi) != len(formy):
+            return None                    # leksykon bez rang (omorfi, BÍN): nie rozstrzygamy
+        (r1, f1), (r2, _f2) = rangi[0], rangi[1]
+        return f1 if r2 >= PRZEWAGA_RANGI * max(r1, 1) else None
+
+    def zamien(m: re.Match) -> str:
+        slowo = m.group(0)
+        if ZASTEPCZY not in slowo:
+            return slowo
+        if not slowo.strip(ZASTEPCZY):
+            info["poza_slowem"] += slowo.count(ZASTEPCZY)
+            return slowo
+        miejsca = [i for i, z in enumerate(slowo) if z == ZASTEPCZY]
+        if len(miejsca) > MAX_ZASTEPCZYCH_W_SLOWIE:
+            info["nieznane"] += 1
+            return slowo
+        reszta = [z for z in slowo if z != ZASTEPCZY]
+        wersaliki = len(reszta) > 1 and all(z.isupper() for z in reszta)
+        litery = kandydaci.upper() if wersaliki else kandydaci
+        formy = set()
+        for wybor in itertools.product(litery, repeat=len(miejsca)):
+            lista = list(slowo)
+            for i, z in zip(miejsca, wybor):
+                lista[i] = z
+            forma = "".join(lista)
+            if znane(forma):
+                formy.add(forma)
+        wynik = wybierz(formy)
+        if wynik is None:
+            info["niejednoznaczne" if formy else "nieznane"] += 1
+            return slowo
+        if miejsca[0] == 0 and not wersaliki:
+            # Wielka litera na początku słowa: po końcu zdania (albo na początku
+            # strony) zawsze; w środku zdania — gdy leksykon zna ją jako częstszą
+            # (nazwa własna: „■ódź” → „Łódź”).
+            przed = m.string[:m.start()].rstrip()
+            wielka = wynik[0].upper() + wynik[1:]
+            r_mala = ranga(wynik, dokladna=True)
+            r_wielka = ranga(wielka, dokladna=True) if wielka != wynik else None
+            if (not przed or przed[-1] in ".!?…:" or
+                    (r_wielka is not None and r_mala is not None and r_wielka < r_mala)):
+                wynik = wielka
+        info["odtworzone"] += 1
+        return wynik
+
+    if not kandydaci or not any(ZASTEPCZY in s for s in strony):
+        return strony, info
+    return [_RE_SLOWO_ZASTEPCZE.sub(zamien, s) for s in strony], info
+
+
+#: Obrót znaku (stopnie), poniżej którego znak jest poziomy mimo `upright=False`.
+KAT_POZIOMY = 0.5
+
+
+def wyprostuj_znaki(strona) -> int:
+    """Znaki obrócone o ~0° z `upright=False` → `upright=True`; zwraca ich liczbę.
+
+    pdfminer uznaje znak za poziomy, gdy b·c ≤ 0 w macierzy (a, b, c, d).
+    Biuletyny inwestycyjne (sonda 2026-11-13) mają w wykresach i tabelach
+    macierz z b = −7,6e-8, c = −7,9e-9 — iloczyn dodatni, znak „pionowy”,
+    a pdfplumber składa takie znaki pionowo i rozrywa słowa („B lo o m b e rg”,
+    ~700 ułamków na plik). Kąt liczymy z danych, nie z progu na b i c:
+    819–3908 znaków na biuletyn, wszystkie o kącie 0,000°; prawdziwy tekst
+    obrócony (oś pionowa wykresu, 90°) zostaje nietknięty.
+
+    Wywołaj PRZED pierwszym `extract_text*` (pdfplumber buforuje mapę tekstu).
+    """
+    import math
+    ile = 0
+    for z in strona.chars:
+        if z.get("upright", True):
+            continue
+        a, b, c, d = (z.get("matrix") or (0, 0, 0, 0))[:4]
+        if a * d <= 0:
+            continue
+        if (abs(math.degrees(math.atan2(b, a))) < KAT_POZIOMY
+                and abs(math.degrees(math.atan2(-c, d))) < KAT_POZIOMY):
+            z["upright"] = True
+            ile += 1
+    return ile
 
 
 def usun_znaczniki(tekst: str) -> str:

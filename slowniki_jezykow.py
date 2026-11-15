@@ -8,7 +8,8 @@ importowały silników OCR (pywinrt).
 Słownik języka (forma jest „słownikowa”, gdy jej litery należą do alfabetu z
 `podstawy.yaml` I leksykon ją zna — sam leksykon nie wystarcza, bo zna formy obce):
 - wektory spaCy w trybie `default` = skończona lista form (pl, en, ru, it: 500–685 tys.,
-  ~1,7 s i ~55 MB RAM na język, zmierzone);
+  ~1,7 s i ~55 MB RAM na język, zmierzone; de, es, fr: po 500 tys., 1,3–4,5 s,
+  zmierzone 2026-11-15);
 - wektory `floret` (fi) znają KAŻDY napis — „intencjQ” przechodził jako fiński —
   więc słownikiem fińskim jest omorfi;
 - brak modelu spaCy (is) — słownikiem jest BÍN z pakietu `islenska` (99,2% słów
@@ -49,6 +50,21 @@ class Slownik:
     zna_forme: Callable[[str], bool]
     zrodlo: str
     uznanie: str = ""  # uznanie autorstwa wymagane licencją danych; notatnik drukuje je przy użyciu
+    # Ranga częstości formy (0 = najczęstsza) albo None. Tylko wektory spaCy: ich
+    # wiersze są posortowane po częstości (zmierzone 2026-11-15, pl: „się” 7,
+    # „sią” 103 213). Rekonstrukcja znaku zastępczego ■ (naprawa_zrodel) rozstrzyga
+    # nią formy, które leksykon zna obie, bo zna też śmieci („bezpieczećstwa”).
+    ranga: Optional[Callable[[str], Optional[int]]] = None
+
+    def ranga_formy(self, slowo: str, dokladna: bool = False) -> Optional[int]:
+        """Ranga formy: lepsza z dokładnej i pisanej małymi literami (wersalikowe
+        „WSTĘP” jest rzadkie, „wstęp” — nie); `dokladna` = tylko ta pisownia.
+        None = brak rangi lub formy."""
+        if self.ranga is None:
+            return None
+        rangi = [r for f in ({slowo} if dokladna else {slowo, slowo.lower()})
+                 if (r := self.ranga(f)) is not None]
+        return min(rangi) if rangi else None
 
     def ocen(self, slowo: str) -> Optional[bool]:
         """True = forma słownikowa; False = nie; None = brak głosu (mniej niż 2 litery, liczba, znak)."""
@@ -76,10 +92,12 @@ def _slownik_spacy(kod: str, model: str) -> Slownik:
     if wek.mode != "default":
         raise LookupError(f"{model} vectors are in mode {wek.mode}, not a finite word list")
     s = nlp.vocab.strings
-    formy = frozenset(s[k] for k in wek.keys() if k in s)
+    # Forma → wiersz wektora (= ranga częstości, patrz `Slownik.ranga`).
+    formy = {s[k]: r for k, r in wek.key2row.items() if k in s}
     del nlp, wek, s
     gc.collect()
-    return Slownik(kod, _alfabet(kod), formy.__contains__, f"spaCy {model} ({len(formy)} forms)")
+    return Slownik(kod, _alfabet(kod), formy.__contains__, f"spaCy {model} ({len(formy)} forms)",
+                   ranga=formy.get)
 
 
 def _slownik_omorfi(kod: str) -> Slownik:

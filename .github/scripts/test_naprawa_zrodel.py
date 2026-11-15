@@ -144,6 +144,76 @@ class TestPdf(unittest.TestCase):
         self.assertEqual(n.zakresy_stron([]), "")
 
 
+class TestStrzalkiSymbol(unittest.TestCase):
+    """2.0 (sonda biuletynów 2026-11-13): strzałki trendu fontu Symbol w PUA."""
+
+    def test_tylko_font_symbol(self):
+        class Strona:
+            chars = [{"text": chr(0xF0DD), "fontname": "BCDKEE+SymbolMT"},
+                     {"text": chr(0xF0DF), "fontname": "Symbol"},
+                     {"text": chr(0xF0DF), "fontname": "ABCDEF+Wingdings-Regular"},
+                     {"text": "a", "fontname": "BCDKEE+SymbolMT"}]
+        s = Strona()
+        o = n.napraw_strone(s)
+        self.assertEqual([z["text"] for z in s.chars],
+                         [chr(0x21D1), chr(0x21D3), chr(0xF0DF), "a"])
+        self.assertEqual(o.znaczniki, 0)
+
+
+class TestZnakZastepczy(unittest.TestCase):
+    """2.0 (sonda 2026-11-13): ReportLab zastąpił litery spoza WinAnsi glifem ■ ZapfDingbats."""
+
+    Z = chr(0x25A0)
+
+    def _slownik(self, rangi):
+        from slowniki_jezykow import Slownik
+        alfabet = frozenset("abcdefghijklmnoprstuwyzóąćęłńśźż") | frozenset("ABCDEFGHIJKLMNOPRSTUWYZÓĄĆĘŁŃŚŹŻ")
+        return Slownik("pl", alfabet, rangi.__contains__, "test", ranga=rangi.get)
+
+    def test_zapf_n_staje_sie_kwadratem(self):
+        class Strona:
+            chars = [{"text": "n", "fontname": "ZapfDingbats"}, {"text": "n", "fontname": "Helvetica"}]
+        s = Strona()
+        n.napraw_strone(s)
+        self.assertEqual([z["text"] for z in s.chars], [self.Z, "n"])
+
+    def test_kandydaci_z_alfabetu_spoza_winansi(self):
+        self.assertEqual(n.litery_spoza_winansi(["AĄBÓŁ", "żx"]), "ąłż")   # ó jest w WinAnsi
+
+    def test_rekonstrukcja(self):
+        Z = self.Z
+        sl = [self._slownik({"się": 7, "sił": 1860, "został": 111, "zostać": 717, "wstęp": 8914,
+                             "wstąp": 92769, "łódź": 900, "Łódź": 300, "środowiska": 1027})]
+        tekst = (f"Ma si{Z} dobrze. {Z}rodowiska i zosta{Z} oraz WST{Z}P, "
+                 f"dalej {Z}ód{Z} i ({Z}{Z}{Z}) oraz xyz{Z}q.")
+        (wynik,), info = n.rekonstruuj_zastepcze([tekst], sl, "ąćęłńśźż")
+        self.assertEqual(wynik, f"Ma się dobrze. Środowiska i zosta{Z} oraz WSTĘP, "
+                                f"dalej Łódź i ({Z}{Z}{Z}) oraz xyz{Z}q.")
+        self.assertEqual(info, {"odtworzone": 4, "niejednoznaczne": 1, "nieznane": 1, "poza_slowem": 3})
+
+    def test_bez_rang_nie_rozstrzyga(self):
+        from slowniki_jezykow import Slownik
+        Z = self.Z
+        sl = [Slownik("fi", frozenset("abcdefghijklmnoprstuvyzäöšž"), {"sää", "söö"}.__contains__, "t")]
+        (wynik,), info = n.rekonstruuj_zastepcze([f"s{Z}{Z}"], sl, "šž")
+        self.assertEqual(info["nieznane"] + info["niejednoznaczne"], 1)
+        self.assertEqual(wynik, f"s{Z}{Z}")
+
+
+class TestWyprostowanie(unittest.TestCase):
+    """2.0: obrót ~1e-8 rad (wykresy biuletynów) robił z liter tekst pionowy."""
+
+    def test_tylko_kat_bliski_zera(self):
+        class Strona:
+            chars = [{"upright": False, "matrix": (1.114, -7.6e-08, -7.9e-09, 1.114, 0, 0)},
+                     {"upright": False, "matrix": (0.0, 1.0, -1.0, 0.0, 0, 0)},      # 90°: oś wykresu
+                     {"upright": False, "matrix": (1.0, 0.05, 0.05, 1.0, 0, 0)},     # ~2,9°
+                     {"upright": True, "matrix": (1.0, 0.0, 0.0, 1.0, 0, 0)}]
+        s = Strona()
+        self.assertEqual(n.wyprostuj_znaki(s), 1)
+        self.assertEqual([z["upright"] for z in s.chars], [True, False, False, True])
+
+
 class TestRozstrzeleniaGeometria(unittest.TestCase):
     """Granice słów w rozstrzeleniu PDF z odstępów (nie z tekstu)."""
 

@@ -16,7 +16,7 @@
 # %% [markdown] id="md_intro" tags=["md_intro"]
 # # Доступный анализ текста (spaCy · TF-IDF · KMeans)
 #
-# Полный конвейер текстовой аналитики для языков из `dictionaries/<код>/` (сегодня: польский, русский, английский, итальянский, финский, исландский).  
+# Полный конвейер текстовой аналитики для языков из `dictionaries/<код>/` (сегодня: польский, русский, английский, итальянский, немецкий, испанский, французский, финский, исландский).  
 # Все результаты выводятся через `print()` — без цветовой кодировки и псевдографики.  
 # Совместим с экранными читалками **NVDA** и **JAWS**.
 #
@@ -28,7 +28,7 @@
 #
 # 1. **Загрузка корпуса** — PDF постранично (pdfplumber), TXT, DOCX (python-docx), Markdown (.md), HTML-файл или **URL** (прямой адрес страницы); BeautifulSoup удаляет навигацию, боковые панели и блоки «Похожие статьи» при загрузке из URL или HTML; встроенный пример как запасной вариант.
 # 2. **Языки текста** — пользователь перечисляет языки текста (`corpus_languages`); их словари определяют основной язык корпуса, а затем язык каждого слова: иноязычные цитаты и фамилии становятся отрезками со своим языком (`odcinki_jezykowe.py`, без статистического детектора).
-# 3. **Языковая модель spaCy** — автоматически выбирается модель версии **Large (lg)**: `pl_core_news_lg`, `ru_core_news_lg`, `en_core_web_lg`, `it_core_news_lg`, `fi_core_news_lg`; для исландского (`is`) — `spacy.blank("is")` + Hugging Face (`mideind/IceBERT` — векторы, `grammatek/icelandic-ner-bert` — NER, обучен на MIM-GOLD-NER). Модели подгружаются по требованию через `get_nlp(lang)`, защищённый `functools.lru_cache(maxsize=2)`: одновременно в RAM держатся не более двух моделей, остальные вытесняются по принципу LRU.
+# 3. **Языковая модель spaCy** — автоматически выбирается модель версии **Large (lg)**: `pl_core_news_lg`, `ru_core_news_lg`, `en_core_web_lg`, `it_core_news_lg`, `de_core_news_lg`, `es_core_news_lg`, `fr_core_news_lg`, `fi_core_news_lg`; для исландского (`is`) — `spacy.blank("is")` + Hugging Face (`mideind/IceBERT` — векторы, `grammatek/icelandic-ner-bert` — NER, обучен на MIM-GOLD-NER). Модели подгружаются по требованию через `get_nlp(lang)`, защищённый `functools.lru_cache(maxsize=2)`: одновременно в RAM держатся не более двух моделей, остальные вытесняются по принципу LRU.
 # 4. **Коррекция текста** — нормализация аббревиатур с пробелами для польского (`m. in.`→`m.in.`), русского (`т. е.`→`т.е.`) и английского (`e. g.`→`e.g.`).
 # 5. **Базовый NLP** — токенизация на слова и предложения, фильтрация стоп-слов, лемматизация, POS-теггинг (NOUN/VERB/ADJ/…).
 # 6. **Именованные сущности (NER)** — люди, организации, места, даты и другие объекты (с частотной сводкой по всему корпусу).
@@ -532,7 +532,8 @@ def load_pdf(path):
         return []
     from naprawa_zrodel import (napraw_strone, usun_znaczniki, zakresy_stron, ZNACZNIK_CID,
                                 serie_rozstrzelone, oznacz_granice, oczysc_strone_pdf,
-                                ZNACZNIK_GRANICY)
+                                ZNACZNIK_GRANICY, wyprostuj_znaki, ZASTEPCZY,
+                                litery_spoza_winansi, rekonstruuj_zastepcze)
     from czyszczenie_tekstu import scal_rozstrzelone
     from shamanic_locale import alfabety_paczek
     _fonts = {}
@@ -540,6 +541,9 @@ def load_pdf(path):
         total = len(pdf.pages)
         # Naprawa PRZED pierwszym extract_text: pdfplumber buforuje mapę tekstu.
         checks = [napraw_strone(page, _fonts) for page in pdf.pages]
+        # Znaki „pionowe” przez obrót ~1e-8 rad (wykresy biuletynów) — inaczej
+        # pdfplumber rwie słowa na litery („B lo o m b e rg”).
+        _upright = sum(wyprostuj_znaki(page) for page in pdf.pages)
         info = [_page_text_and_number_candidates(page) for page in pdf.pages]
         # Granice słów w tekście rozstrzelonym — z GEOMETRII znaków, nie z tekstu.
         spaced = [serie_rozstrzelone(page) for page in pdf.pages]
@@ -548,6 +552,9 @@ def load_pdf(path):
     margins = [m if t.strip() else None for (t, _f, m) in info]
     if removed_numbers:
         print(f"  PDF: удалено номеров страниц: {removed_numbers}.")
+    if _upright:
+        print(f"  PDF: символов с почти нулевым поворотом, ошибочно считавшихся вертикальными "
+              f"(слова рвались на буквы), выпрямлено: {_upright}.")
     repaired = [i for i, c in enumerate(checks) if c.naprawiona]
     broken = [i for i, c in enumerate(checks) if c.do_zgloszenia]
     if repaired:
@@ -628,6 +635,22 @@ def load_pdf(path):
     pages = [p for p in (clean_pdf_text(r) for r in cleaned_raw) if p]
     pages, _roz = scal_rozstrzelone(pages, granica=ZNACZNIK_GRANICY)
     pages = [re.sub(r"\s+", " ", p).strip() for p in pages]
+    # Znak zastępczy generatora PDF (■ w miejscu liter spoza WinAnsi, ATA 2.0):
+    # rekonstrukcja słownikami języków korpusu — inaczej śmieciowe lematy.
+    if any(ZASTEPCZY in p for p in pages):
+        from slowniki_jezykow import slownik
+        _slow = []
+        for _kod in CORPUS_LANGS:
+            try:
+                _slow.append(slownik(_kod))
+            except LookupError as _e:
+                print(f"  [ВНИМАНИЕ] PDF: словарь языка {_kod} недоступен ({_e}) — "
+                      f"символы-заменители ■ восстанавливаются без него.")
+        _kand = litery_spoza_winansi(s.alfabet for s in _slow)
+        pages, _zi = rekonstruuj_zastepcze(pages, _slow, _kand)
+        print(f"  PDF: генератор PDF заменил буквы вне WinAnsi символом ■ — слов восстановлено "
+              f"по словарю: {_zi['odtworzone']}, неоднозначных (■ оставлен): {_zi['niejednoznaczne']}, "
+              f"не найдено в словаре: {_zi['nieznane']}, ■ вне слов: {_zi['poza_slowem']}.")
     if _sym:
         print(f"  PDF: символов-пробелов шрифта Symbol (U+F020) заменено обычным пробелом: {_sym}.")
     if _moji:
@@ -1121,6 +1144,9 @@ print(f"\n[РЕЗУЛЬТАТ] Основной язык: {LANG_NAMES.get(LANG, 
 # | Polish | `pl` | `pl_core_news_lg` |
 # | Russian | `ru` | `ru_core_news_lg` |
 # | Italian | `it` | `it_core_news_lg` |
+# | German | `de` | `de_core_news_lg` |
+# | Spanish | `es` | `es_core_news_lg` |
+# | French | `fr` | `fr_core_news_lg` |
 # | Finnish | `fi` | `fi_core_news_lg` |
 # | Icelandic | `is` | `spacy.blank("is")` + IceBERT (векторы) + icelandic-ner-bert (NER, MIM-GOLD-NER) |
 #
@@ -2415,7 +2441,7 @@ else:
 # **Доступный текст с языковыми метками** — два формата для офлайн-чтения экранными читалками и TTS:
 #
 # - `accessible_text.html` — строится через `BeautifulSoup`. Корневой `<html>` имеет атрибут `lang` основного языка; каждый `<p>` получает свой `lang` (по `para_langs`), а иноязычное предложение или вставка внутри абзаца — собственный `<span lang="...">` (по `sent_langs` и `sent_wstawki`). NVDA и JAWS читают эти теги нативно и переключают голос на лету.
-# - `accessible_text.docx` — собирается через `python-docx`. Для каждого `Run` свойство `<w:lang>` прописывается жёстко (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`). Word, встроенный синтезатор Windows (SAPI) и сторонние читалки опираются на этот атрибут офлайн, без обращения к онлайн-детекторам.
+# - `accessible_text.docx` — собирается через `python-docx`. Для каждого `Run` свойство `<w:lang>` прописывается жёстко (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `de-DE`, `es-ES`, `fr-FR`, `fi-FI`, `is-IS`). Word, встроенный синтезатор Windows (SAPI) и сторонние читалки опираются на этот атрибут офлайн, без обращения к онлайн-детекторам.
 #
 # Эти файлы заменяют прежний плоский `чистый_текст_для_аудио.txt`: вместо одного языкового профиля на весь поток текста читалка теперь получает корректный язык на каждом фрагменте.
 

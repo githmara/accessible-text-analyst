@@ -12,7 +12,8 @@ Wektory testowe: `czyszczenie_tekstu_wektory.json` (UTF-8, LF) i runner
 `czyszczenie_tekstu_wektory.py` (unittest) — oba też bajt w bajt.
 
 Zawartość, w kolejności stosowania w `oczysc_akapity_docx`:
-  1. spacja z fontu Symbol U+F020 → zwykła spacja;
+  1. spacja z fontu Symbol U+F020 → zwykła spacja (strzałki Symbol z PUA mapuje
+     `znak_fontu_symbol`, wołany przez loadery PDF, bo wymaga nazwy fontu);
   2. mojibake: litery z jednobajtowej strony kodowej odczytane jako
      Latin-1/cp1252 („Áèáëèîòåêà” → „Библиотека”);
   3. tekst rozstrzelony („С о ц и а л ь н о е”) → słowo, gdy dokument je zna;
@@ -42,6 +43,28 @@ def zamien_spacje_symbol(akapity: list[str]) -> tuple[list[str], int]:
     """U+F020 → spacja; (akapity, liczba zamienionych znaków)."""
     ile = sum(a.count(SPACJA_SYMBOL) for a in akapity)
     return [a.replace(SPACJA_SYMBOL, " ") for a in akapity], ile
+
+
+#: Znaki fontu Symbol, które PDF oddaje w prywatnym obszarze Unicode
+#: (kod Symbol + 0xF000). Biuletyny inwestycyjne (sonda 2026-11-13): strzałki
+#: trendu w tabelach notowań, 59–62 na plik; czytnik ekranu czytał je jako nic,
+#: a niosą informację (wzrost/spadek). Mapa celowo wąska — tylko zmierzone.
+ZNAKI_SYMBOL_PUA = {0xF0DD: chr(0x21D1), 0xF0DF: chr(0x21D3)}   # ⇑ ⇓
+
+
+def znak_fontu_symbol(znak: str, nazwa_fontu: str) -> str | None:
+    """Znak Unicode dla PUA fontu Symbol albo None.
+
+    Tylko gdy font to Symbol (nazwa po prefiksie podzbioru „ABCDEF+” zaczyna
+    się od „Symbol”): Wingdings używa tych samych kodów PUA dla INNYCH strzałek
+    (0xDF to tam strzałka w lewo), więc mapa bez nazwy fontu wprowadzałaby
+    w błąd. Wołający zna font (loader PDF-a); tekst `.docx` go nie niesie.
+    """
+    if len(znak) != 1 or ord(znak) not in ZNAKI_SYMBOL_PUA:
+        return None
+    if not nazwa_fontu.split("+", 1)[-1].startswith("Symbol"):
+        return None
+    return ZNAKI_SYMBOL_PUA[ord(znak)]
 
 
 # ---------------------------------------------------------------------------

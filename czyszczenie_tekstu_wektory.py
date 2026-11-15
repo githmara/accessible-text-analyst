@@ -38,6 +38,11 @@ class Wektory(unittest.TestCase):
                 self.assertEqual(wynik, w["oczekiwane"])
                 self.assertEqual(ile, w["liczba"])
 
+    def test_znak_fontu_symbol(self):
+        for w in DANE["znak_fontu_symbol"]:
+            with self.subTest(w["nazwa"]):
+                self.assertEqual(ct.znak_fontu_symbol(w["znak"], w["font"]), w["oczekiwany"])
+
     def test_przeniesienia(self):
         for w in DANE["przeniesienia"]:
             with self.subTest(w["nazwa"]):
