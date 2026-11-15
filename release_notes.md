@@ -4,6 +4,33 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v2.0.0 — the language of every word from lexicons, OCR voting without easyocr, German, Spanish and French
+
+**Theme.** Up to 1.x a statistical detector (Lingua) guessed the language of whole sentences, and on Finnish transcripts it was wrong far more often than right. ATA 2.0 removes it. You list the languages of the text, and their lexicons decide the language of every word, so a screen reader switches voice exactly on the quote or the name. OCR is rebuilt on the same lexicons, three new languages arrive, and PDF repair learns several new kinds of damage. Major bump: `ocr_languages` is now `corpus_languages` with a wider meaning, Lingua and easyocr are gone, and the export format gains language spans.
+
+### What changed
+- **Language of every word (`odcinki_jezykowe.py`, `slowniki_jezykow.py`).** The lexicons of the languages in `corpus_languages` pick the base language and tag every foreign word, quote and name. A block of whole foreign sentences goes through its own spaCy model; an inline span keeps the base sentence and gets its own lemmas and POS tags. Measured on 20 Finnish transcripts: Lingua marked 127 sentences as foreign, nearly all wrongly; the lexicons find 34 English and 57 Polish spans, and no English word goes to Polish. The old key `ocr_languages` is still read.
+- **Export.** `<span lang="…">` in `accessible_text.html` and a separate run with `<w:lang>` in `accessible_text.docx` on every foreign sentence and inline span; all spans in `language_spans.csv`; a `lang` column in `sentences.csv`.
+- **OCR voting.** Every listed language reads a scanned page with its own engine: the OCR built into Windows 10/11, or Tesseract for a language Windows lacks (today Icelandic). RapidOCR reads it once more as a backup, and each language's lexicon picks the dictionary forms from all readings. Very tall pages are cut into overlapping strips. easyocr and torch are no longer needed for OCR.
+- **German, Spanish and French** language packs, with README translations.
+- **PDF repair.**
+  - The generator's replacement glyph (■ in place of letters outside WinAnsi) is rebuilt from the corpus lexicons when one candidate clearly wins; otherwise ■ stays.
+  - Arrows from the Symbol font's private code points become real arrows.
+  - Slightly rotated text is straightened, so chart words are no longer torn into letters.
+  - Chart labels are taken out of the analysed text and kept as a separate paragraph in the HTML and DOCX export. A numeric table and a heading below a chart stay in the text.
+- **Report.** The report reads the corpus language from the notebook again. During this cycle it had fallen back to Russian for every corpus, so Finnish fragments lost their `lang="fi"`. Foreign spans in the Russian narration are tagged with the same lexicons. The source gate accepts ■ as one unknown letter.
+- **Export completeness.** Short sentences (one or two words) are kept in the export.
+- **Speed.** Language spans on a long book: 29.4 s → 0.39 s.
+- **Environment.** transformers 5.23, openai 3.51.0, pillow 13.0. A full Finnish run gives exports byte-identical to the old versions. Live calls pass on both providers.
+- **Release cycle.** A `VERSION` file declares the cycle from its first commit (`X.Y.0-WIP`). `cykl_wersji.py`, a twin of Reżyser's, reports a cycle that was not opened, untracked files included.
+- **README: a new known limitation.** A name written without its diacritics (*Kaczynski*, *Swiatek*) stays in the base language. The README shows how often newsrooms in nine countries strip them, measured in RSS headlines, and explains why the text alone cannot settle it.
+
+### Verified
+- Every release self-test passes locally. Translation parity, the console hard-code gate, the language basics audit (9 languages) and the dependency audit (39 packages up to date, no expired holds) are clean.
+- `run_all.py` on a Finnish transcript with `["fi", "pl", "en"]` exits 0. A Book of the Unsaid entry was written from it end to end, with a blind gap-filler.
+
+---
+
 ## v1.13.0 — Icelandic gets real vectors and NER, a diagnostic mode reports every warning, and dependency holds expire
 
 **Theme.** Since the initial commit, Icelandic ran without word vectors and without named-entity recognition. The two Hugging Face model ids in the notebook (`mideind/IceBERT-base`, `mideind/icelandic-ner-MIM-GOLD-22`) never existed. The loader caught the error, printed a warning nobody read, and went on. This release replaces them with real models and adds a diagnostic mode, so such a silent failure is caught the next time. It also updates the environment under a new rule: every dependency bound is dated and expires. Minor bump: new models, a new run mode and new dependency versions.
