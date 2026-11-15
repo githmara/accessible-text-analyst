@@ -214,6 +214,118 @@ class TestWyprostowanie(unittest.TestCase):
         self.assertEqual([z["upright"] for z in s.chars], [True, False, False, True])
 
 
+def _pdf_helvetica(tresc: bytes) -> bytes:
+    """Jednostronicowy PDF 600×800 z fontem standardowym Helvetica (metryki w pdfminerze)."""
+    obiekty = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] "
+        b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        b"<< /Length %d >>\nstream\n" % len(tresc) + tresc + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    ]
+    wyj = bytearray(b"%PDF-1.4\n")
+    pozycje = []
+    for nr, obiekt in enumerate(obiekty, 1):
+        pozycje.append(len(wyj))
+        wyj += b"%d 0 obj\n" % nr + obiekt + b"\nendobj\n"
+    xref = len(wyj)
+    wyj += b"xref\n0 %d\n0000000000 65535 f \n" % (len(obiekty) + 1)
+    for p in pozycje:
+        wyj += b"%010d 00000 n \n" % p
+    wyj += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(obiekty) + 1, xref)
+    return bytes(wyj)
+
+
+def _napis(x: float, y: float, tekst: str, rozmiar: int = 9) -> bytes:
+    return b"BT /F1 %d Tf %.1f %.1f Td (%s) Tj ET\n" % (rozmiar, x, y, tekst.encode("latin-1"))
+
+
+PROZA_KOLUMNY = ["Markets continued the rally that started a month",
+                 "earlier, while investors kept expecting a deal",
+                 "between the parties to reopen shipping routes."]
+
+
+def _pdf_z_wykresem(tabela_tekstowa: bool = False) -> bytes:
+    """Kolumna prozy (x 40–300) obok wykresu (x 350–550, y 500–650): 31 linii siatki,
+    oś, 4 słupki, etykieta w środku, kategoria tuż na lewo od osi, liczby osi,
+    legenda pod spodem i dłuższa linia źródła dalej. `tabela_tekstowa` dokłada
+    tabelę 35 komórek z tekstem — dużo obiektów, ale za dużo liter na wykres."""
+    t = bytearray()
+    for i, linia in enumerate(PROZA_KOLUMNY):
+        t += _napis(40, 640 - 12 * i, linia)
+    t += b"0.5 w\n"
+    for i in range(31):                                   # siatka pozioma
+        t += b"350 %d m 550 %d l S\n" % (500 + 5 * i, 500 + 5 * i)
+    t += b"350 500 m 350 650 l S\n"                       # oś pionowa łączy siatkę w skupisko
+    for i, h in enumerate((40, 90, 60, 120)):             # słupki
+        t += b"%d 500 20 %d re f\n" % (380 + 40 * i, h)
+    t += _napis(470, 630, "Alpha")                        # etykieta w obrysie
+    t += _napis(330, 560, "Beta", 8)                      # kategoria tuż przy osi (szer. 16,5 pt → dx 3,5 pt)
+    t += _napis(352, 490, "10", 7) + _napis(392, 490, "20", 7) + _napis(432, 490, "30", 7)
+    t += _napis(380, 478, "May 26", 7)                    # legenda (dy ~ 15 pt)
+    t += _napis(350, 455, "Source: Bloomberg data for June 2026", 7)   # proza obok: zostaje
+    if tabela_tekstowa:
+        for k in range(35):
+            x, y = 40 + 80 * (k % 7), 100 + 20 * (k // 7)
+            t += b"%d %d 80 20 re S\n" % (x, y) + _napis(x + 4, y + 6, "Lorem ipsum")
+    return _pdf_helvetica(bytes(t))
+
+
+class TestEtykietyWykresow(unittest.TestCase):
+    """2.0: etykiety wykresów poza NLP, ale w tekście do odczytu (decyzja 2026-11-15)."""
+
+    def _strona(self, tabela_tekstowa=False):
+        import pdfplumber
+        with tempfile.TemporaryDirectory() as tmp:
+            sciezka = Path(tmp) / "w.pdf"
+            sciezka.write_bytes(_pdf_z_wykresem(tabela_tekstowa))
+            with pdfplumber.open(sciezka) as pdf:
+                s = pdf.pages[0]
+                obszary = n.obszary_wykresow(s)
+                ile = n.oznacz_wykresy(s)
+                return obszary, ile, n.zwin_znaczniki_wykresow(s.extract_text())
+
+    def test_etykiety_oznaczone_proza_nie(self):
+        obszary, ile, tekst = self._strona()
+        self.assertEqual(len(obszary), 1)
+        self.assertNotIn(n.ZNAK_WYKRESU, tekst)           # znaki zwinięte w zakresy
+        proza, etykiety = n.rozdziel_wykresy(tekst)
+        wyciete = " ".join(e for _p, e in etykiety)
+        for slowo in ("Alpha", "Beta", "10", "20", "30", "May"):
+            self.assertIn(slowo, wyciete.split())
+            self.assertNotIn(slowo, proza.split())
+        for linia in PROZA_KOLUMNY + ["Source: Bloomberg data for June 2026"]:
+            self.assertIn(linia, proza)
+        self.assertEqual(ile, len("Alpha" "Beta" "102030" "May26"))
+        # Do odczytu nic nie ginie: każde słowo strony jest albo w prozie, albo w etykietach.
+        self.assertEqual(sorted(n.bez_znacznikow_wykresow(tekst).split()),
+                         sorted((proza + " " + wyciete).split()))
+
+    def test_tabela_z_tekstem_to_nie_wykres(self):
+        obszary, _ile, tekst = self._strona(tabela_tekstowa=True)
+        self.assertEqual(len(obszary), 1)                 # tylko wykres, nie tabela
+        self.assertIn("Lorem ipsum", n.rozdziel_wykresy(tekst)[0])
+
+    def test_zwijanie_w_obrebie_wiersza(self):
+        Z, P, K = n.ZNAK_WYKRESU, n.POCZATEK_WYKRESU, n.KONIEC_WYKRESU
+        oznacz = lambda s: "".join(Z + c if not c.isspace() else c for c in s)  # noqa: E731
+        tekst = "proza " + oznacz("Ala ma") + " dalej\n" + oznacz("10 20")
+        self.assertEqual(n.zwin_znaczniki_wykresow(tekst),
+                         "proza " + P + "Ala ma" + K + " dalej\n" + P + "10 20" + K)
+        self.assertEqual(n.zwin_znaczniki_wykresow("bez etykiet"), "bez etykiet")
+
+    def test_rozdziel_pozycje_i_sklejanie(self):
+        P, K = n.POCZATEK_WYKRESU, n.KONIEC_WYKRESU
+        tekst = "Zdanie pierwsze.  " + P + "Oś X" + K + "\n" + P + "10 20" + K + "  zdanie drugie " + P + "maj 26" + K
+        proza, et = n.rozdziel_wykresy(tekst)
+        self.assertEqual(proza, "Zdanie pierwsze. zdanie drugie")
+        # Dwa zakresy rozdzielone samym odstępem = jedno miejsce wycięcia.
+        self.assertEqual(et, [(17, "Oś X 10 20"), (len(proza), "maj 26")])
+        self.assertEqual(proza[17:], "zdanie drugie")
+        self.assertEqual(n.rozdziel_wykresy("bez " + P + "niezamkniety"), ("bez", [(3, "niezamkniety")]))
+
+
 class TestRozstrzeleniaGeometria(unittest.TestCase):
     """Granice słów w rozstrzeleniu PDF z odstępów (nie z tekstu)."""
 

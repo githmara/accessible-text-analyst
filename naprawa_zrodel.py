@@ -417,6 +417,223 @@ def wyprostuj_znaki(strona) -> int:
     return ile
 
 
+# --- Etykiety wykresów: do odczytu tak, do NLP nie (decyzja maintainera 2026-11-15) ---
+#
+# Tekst wykresu (osie, legendy, nazwy serii, opisy pasków) wchodzi do warstwy
+# tekstu jak każdy inny i rozbija analizę: „30 32 34 36…”, „maj 26 kwiecień
+# 26”, nazwy krajów z wykresu słupkowego sklejone z prozą sąsiedniej kolumny.
+# Rozpoznanie z GEOMETRII strony: skupisko obiektów wektorowych (linie,
+# prostokąty, krzywe) to wykres, gdy obiektów jest co najmniej
+# `MIN_OBIEKTOW_WYKRESU`, a liter w jego obrysie nie więcej niż
+# `MAX_LITER_NA_OBIEKT` na obiekt. Zmierzone 2026-11-15 na biuletynach:
+# wykresy mają 37–253 obiekty i ≤ 1,4 litery na obiekt; tabele i ramki z
+# tekstem 7–20 obiektów i 4–260 liter na obiekt.
+#
+# Znaczniki są niewidoczne (nieznaki Unicode, jak `ZNACZNIK_GRANICY`):
+# `oznacz_wykresy` poprzedza każdy znak etykiety `ZNAK_WYKRESU` (przed
+# `extract_text`), `zwin_znaczniki_wykresow` zamienia to w wierszu na zakresy
+# `POCZATEK_WYKRESU … KONIEC_WYKRESU`, a notatnik przed NLP wycina zakresy
+# (`rozdziel_wykresy`), zostawiając ich tekst eksportowi HTML/DOCX.
+ZNAK_WYKRESU = chr(0xFDD1)
+POCZATEK_WYKRESU = chr(0xFDD2)
+KONIEC_WYKRESU = chr(0xFDD3)
+MIN_OBIEKTOW_WYKRESU = 30
+MAX_LITER_NA_OBIEKT = 3
+TOLERANCJA_SKUPISKA = 4.0     # pt: obiekty bliżej siebie należą do jednego skupiska
+# Zasięg etykiet poza obrysem, osobno w poziomie i w pionie (zmierzone 2026-11-15):
+# nazwy kategorii stoją 3,6–4,3 pt na lewo od osi, liczby osi i legenda 3–20 pt
+# pod nią; kolumna sąsiedniej tabeli jest 13–20 pt obok, a proza kolumny 9,6 pt.
+ZASIEG_POZIOMY = 8.0
+ZASIEG_PIONOWY = 25.0
+MAX_SLOW_ETYKIETY = 4         # dłuższy ciąg obok obrysu to proza (tytuł, źródło), chyba że same liczby
+_RE_ZAKRES_WYKRESU = re.compile(POCZATEK_WYKRESU + "[^" + KONIEC_WYKRESU + "]*(?:" + KONIEC_WYKRESU + "|$)")
+
+
+def obszary_wykresow(strona) -> list[tuple[float, float, float, float]]:
+    """Obrysy (x0, top, x1, bottom) skupisk wektorowych strony uznanych za wykres."""
+    pole = strona.width * strona.height
+    obj = []
+    for rodzaj in ("lines", "rects", "curves"):
+        for o in getattr(strona, rodzaj):
+            # Tło albo ramka całej strony nie łączy wszystkiego w jedno skupisko.
+            if (o["x1"] - o["x0"]) * (o["bottom"] - o["top"]) <= 0.5 * pole:
+                obj.append((o["x0"], o["top"], o["x1"], o["bottom"]))
+    if len(obj) < MIN_OBIEKTOW_WYKRESU:
+        return []
+    obj.sort()
+    ojciec = list(range(len(obj)))
+
+    def korzen(i):
+        while ojciec[i] != i:
+            ojciec[i] = ojciec[ojciec[i]]
+            i = ojciec[i]
+        return i
+
+    t = TOLERANCJA_SKUPISKA
+    for i, a in enumerate(obj):          # zamiatanie po x0: dalej w prawo nic się już nie styka
+        for j in range(i + 1, len(obj)):
+            b = obj[j]
+            if b[0] > a[2] + t:
+                break
+            if b[1] - t <= a[3] and a[1] - t <= b[3]:
+                ojciec[korzen(i)] = korzen(j)
+    grupy: dict[int, list] = {}
+    for i, o in enumerate(obj):
+        grupy.setdefault(korzen(i), []).append(o)
+    wynik = []
+    for g in grupy.values():
+        if len(g) < MIN_OBIEKTOW_WYKRESU:
+            continue
+        x0, top = min(o[0] for o in g), min(o[1] for o in g)
+        x1, bottom = max(o[2] for o in g), max(o[3] for o in g)
+        litery = sum(1 for z in strona.chars if z["text"].isalpha()
+                     and x0 <= (z["x0"] + z["x1"]) / 2 <= x1 and top <= (z["top"] + z["bottom"]) / 2 <= bottom)
+        if litery <= MAX_LITER_NA_OBIEKT * len(g):
+            wynik.append((x0, top, x1, bottom))
+    return wynik
+
+
+def _obok(ramka, obszar) -> bool:
+    """Ramka leży poza obszarem, ale w zasięgu etykiet (poziomym i pionowym)."""
+    dx = max(obszar[0] - ramka[2], 0, ramka[0] - obszar[2])
+    dy = max(obszar[1] - ramka[3], 0, ramka[1] - obszar[3])
+    return (dx or dy) and dx <= ZASIEG_POZIOMY and dy <= ZASIEG_PIONOWY
+
+
+def _w_obszarze(slowo, obszar) -> bool:
+    x = (slowo["x0"] + slowo["x1"]) / 2
+    y = (slowo["top"] + slowo["bottom"]) / 2
+    return obszar[0] <= x <= obszar[2] and obszar[1] <= y <= obszar[3]
+
+
+def _ciagi_wierszy(slowa: list) -> list[list]:
+    """Słowa pogrupowane w ciągi: ten sam wiersz i odstęp mniejszy niż wysokość słowa.
+
+    Rynna między kolumnami (i między etykietą a prozą obok) jest szersza niż
+    odstęp międzywyrazowy, więc ciąg nie przechodzi z wykresu do kolumny tekstu."""
+    ciagi: list[list] = []
+    for s in sorted(slowa, key=lambda s: (round(s["top"]), s["x0"])):
+        ost = ciagi[-1][-1] if ciagi else None
+        if (ost is not None and abs(s["top"] - ost["top"]) <= 2
+                and s["x0"] - ost["x1"] < max(s["bottom"] - s["top"], ost["bottom"] - ost["top"])):
+            ciagi[-1].append(s)
+        else:
+            ciagi.append([s])
+    return ciagi
+
+
+def oznacz_wykresy(strona) -> int:
+    """Poprzedza `ZNAK_WYKRESU` każdy znak etykiet wykresów strony; zwraca liczbę znaków.
+
+    Etykieta = słowo, którego środek leży w obrysie wykresu (pojedynczo: wiersz
+    prozy sąsiedniej kolumny bywa z nim w jednym ciągu), albo krótki ciąg
+    (≤ `MAX_SLOW_ETYKIETY` słów lub same liczby) tuż obok obrysu
+    (`ZASIEG_POZIOMY` / `ZASIEG_PIONOWY`). Wywołaj PO `napraw_strone`
+    i `wyprostuj_znaki` (słowa muszą być już poprawne), a PRZED `extract_text*`;
+    wynik `extract_text` przepuść przez `zwin_znaczniki_wykresow`.
+    """
+    obszary = obszary_wykresow(strona)
+    if not obszary:
+        return 0
+    ile = 0
+    for ciag in _ciagi_wierszy(strona.extract_words(return_chars=True)):
+        etykiety = [s for s in ciag if any(_w_obszarze(s, o) for o in obszary)]
+        if not etykiety:
+            ramka = (min(s["x0"] for s in ciag), min(s["top"] for s in ciag),
+                     max(s["x1"] for s in ciag), max(s["bottom"] for s in ciag))
+            krotki = (len(ciag) <= MAX_SLOW_ETYKIETY
+                      or not any(sum(z.isalpha() for z in s["text"]) >= 2 for s in ciag))
+            if krotki and any(_obok(ramka, o) for o in obszary):
+                etykiety = ciag
+        for s in etykiety:
+            for z in s["chars"]:
+                if not z["text"].startswith(ZNAK_WYKRESU):
+                    z["text"] = "".join(ZNAK_WYKRESU + c for c in z["text"])
+                    ile += 1
+    return ile
+
+
+def zwin_znaczniki_wykresow(tekst: str) -> str:
+    """Znaki poprzedzone `ZNAK_WYKRESU` → zakresy `POCZATEK_WYKRESU…KONIEC_WYKRESU`, w obrębie wiersza.
+
+    Odstępy między znakami etykiety należą do zakresu; zakres nie przechodzi
+    przez koniec wiersza (wiersz bywa sklejony z prozą sąsiedniej kolumny)."""
+    if ZNAK_WYKRESU not in tekst:
+        return tekst
+    wiersze = []
+    for wiersz in tekst.split("\n"):
+        out: list[str] = []
+        w_zakresie, zalegle, i = False, "", 0
+        while i < len(wiersz):
+            z = wiersz[i]
+            if z == ZNAK_WYKRESU:
+                i += 1
+                if i < len(wiersz):
+                    out.append(zalegle if w_zakresie else zalegle + POCZATEK_WYKRESU)
+                    zalegle, w_zakresie = "", True
+                    out.append(wiersz[i])
+            elif z.isspace():
+                if w_zakresie:
+                    zalegle += z
+                else:
+                    out.append(z)
+            else:
+                if w_zakresie:
+                    out.append(KONIEC_WYKRESU)
+                    w_zakresie = False
+                out.append(zalegle + z)
+                zalegle = ""
+            i += 1
+        if w_zakresie:
+            out.append(KONIEC_WYKRESU)
+        out.append(zalegle)
+        wiersze.append("".join(out))
+    return "\n".join(wiersze)
+
+
+def bez_znacznikow_wykresow(tekst: str) -> str:
+    """Tekst do wyświetlenia: etykiety zostają, znaczniki znikają."""
+    for z in (ZNAK_WYKRESU, POCZATEK_WYKRESU, KONIEC_WYKRESU):
+        tekst = tekst.replace(z, "")
+    return tekst
+
+
+def rozdziel_wykresy(tekst: str) -> tuple[str, list[tuple[int, str]]]:
+    """(tekst bez etykiet wykresów, [(pozycja w tym tekście, etykiety)]).
+
+    Tekst wynikowy ma znormalizowane odstępy (jeden odstęp, bez skrajnych),
+    a pozycja wskazuje miejsce wycięcia — eksport wstawia tam etykiety do odczytu.
+    Sąsiednie zakresy rozdzielone samymi odstępami dają jedną pozycję."""
+    proza: list[str] = []
+    etykiety: list[tuple[int, str]] = []
+    dlugosc, kursor = 0, 0
+
+    def dopisz(fragment: str) -> None:
+        nonlocal dlugosc
+        fragment = " ".join(fragment.split())
+        if fragment:
+            if proza:
+                proza.append(" ")
+                dlugosc += 1
+            proza.append(fragment)
+            dlugosc += len(fragment)
+
+    for m in _RE_ZAKRES_WYKRESU.finditer(tekst):
+        dopisz(tekst[kursor:m.start()])
+        kursor = m.end()
+        tresc = " ".join(bez_znacznikow_wykresow(m.group()).split())
+        if not tresc:
+            continue
+        poz = dlugosc + (1 if proza else 0)
+        if etykiety and etykiety[-1][0] == poz:
+            etykiety[-1] = (poz, etykiety[-1][1] + " " + tresc)
+        else:
+            etykiety.append((poz, tresc))
+    dopisz(tekst[kursor:])
+    wynik = bez_znacznikow_wykresow("".join(proza))
+    return wynik, [(min(p, len(wynik)), e) for p, e in etykiety]
+
+
 def usun_znaczniki(tekst: str) -> str:
     """Tekst bez pozostałych znaczników „(cid:N)”."""
     return ZNACZNIK_CID.sub("", tekst)

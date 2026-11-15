@@ -533,7 +533,8 @@ def load_pdf(path):
     from naprawa_zrodel import (napraw_strone, usun_znaczniki, zakresy_stron, ZNACZNIK_CID,
                                 serie_rozstrzelone, oznacz_granice, oczysc_strone_pdf,
                                 ZNACZNIK_GRANICY, wyprostuj_znaki, ZASTEPCZY,
-                                litery_spoza_winansi, rekonstruuj_zastepcze)
+                                litery_spoza_winansi, rekonstruuj_zastepcze,
+                                oznacz_wykresy, zwin_znaczniki_wykresow)
     from czyszczenie_tekstu import scal_rozstrzelone
     from shamanic_locale import alfabety_paczek
     _fonts = {}
@@ -544,7 +545,11 @@ def load_pdf(path):
         # Znaki „pionowe” przez obrót ~1e-8 rad (wykresy biuletynów) — inaczej
         # pdfplumber rwie słowa na litery („B lo o m b e rg”).
         _upright = sum(wyprostuj_znaki(page) for page in pdf.pages)
-        info = [_page_text_and_number_candidates(page) for page in pdf.pages]
+        # Etykiety wykresów (z geometrii) dostają niewidoczny znacznik: zostają
+        # do odczytu w HTML/DOCX, a cell_tok wycina je przed NLP.
+        _chart = sum(oznacz_wykresy(page) for page in pdf.pages)
+        info = [(zwin_znaczniki_wykresow(_t), _f, {zwin_znaczniki_wykresow(_m) for _m in _mg})
+                for _t, _f, _mg in (_page_text_and_number_candidates(page) for page in pdf.pages)]
         # Granice słów w tekście rozstrzelonym — z GEOMETRII znaków, nie z tekstu.
         spaced = [serie_rozstrzelone(page) for page in pdf.pages]
     texts, removed_numbers = _page_numbers_to_drop(info)
@@ -555,7 +560,10 @@ def load_pdf(path):
     if _upright:
         print(f"  PDF: символов с почти нулевым поворотом, ошибочно считавшихся вертикальными "
               f"(слова рвались на буквы), выпрямлено: {_upright}.")
-    repaired = [i for i, c in enumerate(checks) if c.naprawiona]
+    if _chart:
+        print(f"  PDF: подписи диаграмм (текст внутри и рядом с векторной графикой), символов: "
+              f"{_chart}. Они остаются для чтения в HTML/DOCX, но исключаются из NLP-анализа.")
+    repaired =[i for i, c in enumerate(checks) if c.naprawiona]
     broken = [i for i, c in enumerate(checks) if c.do_zgloszenia]
     if repaired:
         print(f"  PDF: карта символов шрифта (ToUnicode) неполная на страницах "
@@ -1024,11 +1032,14 @@ if not corpus:
     _used_fallback = True
 
 corpus = [c for c in corpus if c.strip()]
+# Etykiety wykresów PDF (load_pdf) niosą niewidoczne znaczniki: podgląd je
+# pokazuje bez znaczników, NLP dostaje tekst bez etykiet (rozdziel_wykresy).
+from naprawa_zrodel import bez_znacznikow_wykresow, rozdziel_wykresy, POCZATEK_WYKRESU
 _N = len(corpus)
 print(f"\nКорпус готов: {_N} документ(ов).")
 _show = min(5, _N)
 for i in range(_show):
-    _prev = corpus[i].strip().replace("\n", " ")[:80]
+    _prev = bez_znacznikow_wykresow(corpus[i]).strip().replace("\n", " ")[:80]
     print(f"  [{i+1}] {_prev}...")
 if _N > _show:
     print(f"  ... и ещё {_N - _show} документ(ов) (показаны первые {_show})")
@@ -1117,7 +1128,7 @@ else:
         print(f"  [{_k}] словарь: {_s.zrodlo}")
         if _s.uznanie:
             print(f"       {_s.uznanie}")
-    LANG, _udzialy = odcinki_jezykowe.wybierz_baze(corpus, SLOWNIKI)
+    LANG, _udzialy = odcinki_jezykowe.wybierz_baze([rozdziel_wykresy(_c)[0] for _c in corpus], SLOWNIKI)
     print("\nДоля слов корпуса, известных словарю языка:")
     for _k, _u in sorted(_udzialy.items(), key=lambda x: -x[1]):
         print(f"  {LANG_NAMES[_k]} ({_k}): {_u:.1%}")
@@ -1643,13 +1654,30 @@ from collections import defaultdict
 #    Поток нормализуется по пробелам; DOC_START хранит начало каждого
 #    документа в потоке — по нему токены, предложения и сущности
 #    возвращаются к своим документам для пошаговых ячеек 3–7.
-TEKSTY = [re.sub(r"\s+", " ", _c).strip() for _c in corpus]
+#    Подписи диаграмм PDF (load_pdf) вырезаются до NLP: в поток попадает
+#    только остальной текст, а сами подписи — в PODPISI_WYKRESOW
+#    (смещение места выреза в потоке, текст) для чтения в HTML/DOCX.
+TEKSTY, PODPISI_WYKRESOW = [], []
+_poz = 0
+for _c in corpus:
+    if POCZATEK_WYKRESU in _c:
+        _t, _pw = rozdziel_wykresy(_c)
+        PODPISI_WYKRESOW += [(_poz + _p, _e) for _p, _e in _pw]
+    else:
+        _t = re.sub(r"\s+", " ", _c).strip()
+    TEKSTY.append(_t)
+    _poz += len(_t) + 1
+corpus_nlp = list(TEKSTY)          # CountVectorizer / TF-IDF / QA — без подписей диаграмм
 DOC_START = []
 _poz = 0
 for _t in TEKSTY:
     DOC_START.append(_poz)
     _poz += len(_t) + 1
 TEKST = " ".join(TEKSTY)
+if PODPISI_WYKRESOW:
+    print(f"Подписи диаграмм исключены из NLP: фрагментов — {len(PODPISI_WYKRESOW)}, "
+          f"символов — {sum(len(_e) for _p, _e in PODPISI_WYKRESOW)} "
+          f"(в HTML/DOCX они останутся отдельными абзацами).")
 
 
 def _dokument(poz):
@@ -1979,7 +2007,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 sklearn_stop = list(stop_words) if stop_words else "english"
 
 vec_uni = CountVectorizer(stop_words=sklearn_stop, min_df=1)
-X_uni = vec_uni.fit_transform(corpus)
+X_uni = vec_uni.fit_transform(corpus_nlp)
 vocab_uni = vec_uni.get_feature_names_out()
 print(f"Словарь униграмм: {len(vocab_uni)} уникальных терминов")
 print(f"Матрица документ×слово: {X_uni.shape}")
@@ -1991,7 +2019,7 @@ for term, freq in df_uni.sum().nlargest(10).items():
     print(f"  {term!r:<25}: {int(freq):3d}  {_bar}")
 
 vec_bi = CountVectorizer(ngram_range=(2,2), stop_words=sklearn_stop, max_features=50, min_df=1)
-X_bi = vec_bi.fit_transform(corpus)
+X_bi = vec_bi.fit_transform(corpus_nlp)
 vocab_bi = vec_bi.get_feature_names_out()
 print(f"\nСловарь биграмм (топ-50): {len(vocab_bi)} уникальных биграмм")
 top5_bi = pd.DataFrame(X_bi.toarray(), columns=vocab_bi).sum().nlargest(5)
@@ -2003,7 +2031,7 @@ else:
     print("Биграммы не найдены (корпус слишком мал).")
 
 vec_tri = CountVectorizer(ngram_range=(3,3), stop_words=sklearn_stop, max_features=50, min_df=1)
-X_tri = vec_tri.fit_transform(corpus)
+X_tri = vec_tri.fit_transform(corpus_nlp)
 vocab_tri = vec_tri.get_feature_names_out()
 print(f"\nСловарь триграмм (топ-50): {len(vocab_tri)} уникальных триграмм")
 top5_tri = pd.DataFrame(X_tri.toarray(), columns=vocab_tri).sum().nlargest(5)
@@ -2036,7 +2064,7 @@ from sklearn.metrics.pairwise import linear_kernel
 
 random.seed(42)
 tfidf = TfidfVectorizer(stop_words=sklearn_stop, min_df=1)
-tfidf_matrix = tfidf.fit_transform(corpus)
+tfidf_matrix = tfidf.fit_transform(corpus_nlp)
 feature_names = tfidf.get_feature_names_out()
 print(f"Матрица TF-IDF: {tfidf_matrix.shape} (документов × признаков)")
 print(f"Общий словарь: {len(feature_names)} терминов")
@@ -2062,7 +2090,7 @@ print(f"  {_c1:<6} {_c2:<12} {_c3:<16} Фрагмент")
 print("  " + "-" * 72)
 for rank, idx2 in enumerate(ranked_order, 1):
     score = cosine_scores[idx2]
-    preview = corpus[idx2].strip().replace("\n", " ")[:60]
+    preview = corpus_nlp[idx2].strip().replace("\n", " ")[:60]
     print(f"  {rank:<6} Документ {idx2+1:<5} {score:<16.4f} {preview}...")
 best_idx = ranked_order[0]
 print(f"\nНаиболее релевантный: Документ {best_idx+1} (косинус = {cosine_scores[best_idx]:.4f})")
@@ -2087,6 +2115,7 @@ import numpy as np
 import pandas as pd
 
 all_sents, sent_langs, sent_wstawki, sent_lemmas = [], [], [], []
+_sent_starts = []   # смещения предложений в потоке — для места подписей диаграмм
 for _l, _off, _d in CZESCI:
     for _s in _d.sents:
         _txt = _s.text.strip()
@@ -2107,6 +2136,7 @@ for _l, _off, _d in CZESCI:
                     _w.append((max(_ws, _a) - _a, min(_wk, _b) - _a, _wl))
                 _j += 1
         all_sents.append(_txt)
+        _sent_starts.append(_a)
         sent_langs.append(_l)
         sent_wstawki.append(_w)
         sent_lemmas.append([_analiza(_l, _off, _t)[1] for _t in _s
@@ -2125,6 +2155,16 @@ for _p in range(0, len(all_sents), PARA_MAX):
     para_lemmas.append(" ".join(_lem for _k in _ids for _lem in sent_lemmas[_k]))
     para_langs.append(Counter(sent_langs[_k] for _k in _ids).most_common(1)[0][0])
 print(f"Сформировано абзацев: {len(paragraphs)} (по {PARA_MIN}–{PARA_MAX} предложений)")
+
+# Подписи диаграмм (вырезаны из NLP в cell_tok) — только для чтения: в HTML/DOCX
+# отдельный абзац после абзаца, где стоит последнее предложение перед местом
+# выреза (-1 = перед первым абзацем). Абзацы NLP от этого не меняются.
+PODPISI_PO_AKAPICIE = defaultdict(list)
+for _p, _e in PODPISI_WYKRESOW:
+    _n = bisect.bisect_left(_sent_starts, _p)
+    PODPISI_PO_AKAPICIE[(_n - 1) // PARA_MAX if _n else -1].append(_e)
+if PODPISI_PO_AKAPICIE:
+    print(f"  Абзацев с подписями диаграмм (только для HTML/DOCX): {len(PODPISI_PO_AKAPICIE)}")
 
 df_sent = pd.DataFrame({"sent_id": range(1, len(all_sents) + 1), "sentence": all_sents, "lang": sent_langs})
 df_para = pd.DataFrame({"para_id": range(1, len(paragraphs) + 1), "paragraph": paragraphs})
@@ -2443,6 +2483,8 @@ else:
 # - `accessible_text.html` — строится через `BeautifulSoup`. Корневой `<html>` имеет атрибут `lang` основного языка; каждый `<p>` получает свой `lang` (по `para_langs`), а иноязычное предложение или вставка внутри абзаца — собственный `<span lang="...">` (по `sent_langs` и `sent_wstawki`). NVDA и JAWS читают эти теги нативно и переключают голос на лету.
 # - `accessible_text.docx` — собирается через `python-docx`. Для каждого `Run` свойство `<w:lang>` прописывается жёстко (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `de-DE`, `es-ES`, `fr-FR`, `fi-FI`, `is-IS`). Word, встроенный синтезатор Windows (SAPI) и сторонние читалки опираются на этот атрибут офлайн, без обращения к онлайн-детекторам.
 #
+# Подписи диаграмм из PDF (оси, легенды, названия категорий — распознаются по векторной графике страницы) в NLP-анализ не входят, но в HTML и DOCX остаются для чтения: отдельным абзацем рядом с тем местом текста, где стояла диаграмма.
+#
 # Эти файлы заменяют прежний плоский `чистый_текст_для_аудио.txt`: вместо одного языкового профиля на весь поток текста читалка теперь получает корректный язык на каждом фрагменте.
 
 # %% id="cell_export" tags=["cell_export"]
@@ -2527,6 +2569,18 @@ def _kawalki_akapitu(ids):
     return scalone
 
 
+def _akapity_eksportu():
+    """(язык абзаца, [(текст, язык)]) в порядке чтения: абзацы текста и между
+    ними абзацы подписей диаграмм (вырезаны из NLP, но остаются для чтения)."""
+    def _podpisi(k):
+        if PODPISI_PO_AKAPICIE.get(k):
+            yield LANG, [(" ".join(PODPISI_PO_AKAPICIE[k]), LANG)]
+    yield from _podpisi(-1)
+    for _k, (_p_lang, _ids) in enumerate(zip(para_langs, para_sent_ids)):
+        yield _p_lang, _kawalki_akapitu(_ids)
+        yield from _podpisi(_k)
+
+
 # Иноязычные отрезки — отдельный CSV (документ, смещения в нормализованном
 # тексте документа, язык, вид, текст): шаманский слой и ручная проверка.
 # Блок на границе документа приписан документу своего начала.
@@ -2554,12 +2608,12 @@ try:
     h1.string = "Текст с языковыми метками для экранных читалок"
     body.append(h1)
 
-    for p_lang, ids in zip(para_langs, para_sent_ids):
+    for p_lang, kawalki in _akapity_eksportu():
         p_tag = soup.new_tag("p")
         p_tag["lang"] = p_lang
         # Кусок языка абзаца — текст прямо в <p>; иноязычное предложение
         # или вставка — собственный <span lang="...">.
-        for txt, jezyk in _kawalki_akapitu(ids):
+        for txt, jezyk in kawalki:
             if jezyk == p_lang:
                 p_tag.append(txt)
             else:
@@ -2599,9 +2653,9 @@ try:
 
     docx_doc = Document()
     docx_doc.add_heading("Текст с языковыми метками", level=1)
-    for ids in para_sent_ids:
+    for _p_lang, kawalki in _akapity_eksportu():
         p = docx_doc.add_paragraph()
-        for txt, jezyk in _kawalki_akapitu(ids):
+        for txt, jezyk in kawalki:
             _set_run_lang(p.add_run(txt), jezyk)
     docx_doc.save(out_dir / "accessible_text.docx")
     exported.append("accessible_text.docx")
@@ -2736,7 +2790,7 @@ from sklearn.metrics.pairwise import linear_kernel
 EXIT_WORDS = {"wyjście", "выход", "exit"}
 
 # Строим индекс TF-IDF по абзацам (paragraphs)
-_qa_texts = paragraphs if 'paragraphs' in dir() and paragraphs else corpus
+_qa_texts = paragraphs if 'paragraphs' in dir() and paragraphs else corpus_nlp
 _qa_stop = list(stop_words) if stop_words else "english"
 
 _qa_tfidf = TfidfVectorizer(
