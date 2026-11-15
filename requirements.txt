@@ -20,7 +20,7 @@
 # modele spaCy 3.8.0 zgodne (spacy validate); jedno żywe wywołanie llm_klient
 # (OpenRouter, tekst + json_schema). pypdfium2/fonttools: 12 PDF-ów identycznych
 # 5.14 → 5.15 we wspólnym czyszczeniu z Reżyserem (19.18, 2026-11-12).
-# Minimalny Python wynika z zależności: 3.12 (numpy 2.5, lingua 2.2).
+# Minimalny Python wynika z zależności: 3.12 (numpy 2.5).
 # Nowsze wydania sprawdza `python audyt_zaleznosci.py` (tylko ostrzega).
 # KANON ŚRODOWISKA (od 2026-11-12, bliźniak Reżysera 19.18): każda granica nosi
 # `# hold: <wersja ATA>` — wydanie, w którym ją ostatnio PRZETESTOWANO. Hold wygasa
@@ -50,7 +50,6 @@ lxml<6.2  # hold: 1.8.0
 requests<2.35  # hold: 1.8.0
 
 # Analiza tekstu i NLP
-lingua-language-detector<2.3  # hold: 1.8.0
 spacy<3.9  # hold: 1.13.0
 numpy<2.6  # hold: 1.8.0
 pandas<3.2  # hold: 1.13.0

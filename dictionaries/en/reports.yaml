@@ -174,6 +174,7 @@ deps:
   wiek_nieznany: '[WARNING] The age of {ile} dated holds is unknown ({nazwy}) — requirements.txt has no git history, so the {limit}-day clock cannot run and a stale hold would look current. The alarm-clock marker will not be written.'
   budzik: '[ALARM CLOCK] The full audit result was saved to {plik} — the maintainer''s session-start reminder reads it.'
   err_missing_lib: '[ERROR] The {lib} library is missing. Run: pip install {pkg}'
+  warn_lexicon_missing: '[WARNING] No dictionary for {lang} ({error}) — foreign words in the report are tagged without it.'
 
 run_all:
   description: 'The whole local chain: notebook (without the interactive question cell) -> report -> shamanic_pipeline.py -> Book of the Unsaid scan (Finnish corpora only). Free steps only.'

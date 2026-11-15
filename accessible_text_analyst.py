@@ -16,7 +16,7 @@
 # %% [markdown] id="md_intro" tags=["md_intro"]
 # # Доступный анализ текста (spaCy · TF-IDF · KMeans)
 #
-# Полный конвейер текстовой аналитики с поддержкой **польского, русского, английского, итальянского, финского и исландского** языков.  
+# Полный конвейер текстовой аналитики для языков из `dictionaries/<код>/` (сегодня: польский, русский, английский, итальянский, финский, исландский).  
 # Все результаты выводятся через `print()` — без цветовой кодировки и псевдографики.  
 # Совместим с экранными читалками **NVDA** и **JAWS**.
 #
@@ -27,18 +27,18 @@
 # **Этапы анализа:**
 #
 # 1. **Загрузка корпуса** — PDF постранично (pdfplumber), TXT, DOCX (python-docx), Markdown (.md), HTML-файл или **URL** (прямой адрес страницы); BeautifulSoup удаляет навигацию, боковые панели и блоки «Похожие статьи» при загрузке из URL или HTML; встроенный пример как запасной вариант.
-# 2. **Определение языка** — `lingua-language-detector` определяет преобладающий язык корпуса и одновременно служит детектором для отдельных абзацев и предложений (используется на этапе экспорта).
+# 2. **Языки текста** — пользователь перечисляет языки текста (`corpus_languages`); их словари определяют основной язык корпуса, а затем язык каждого слова: иноязычные цитаты и фамилии становятся отрезками со своим языком (`odcinki_jezykowe.py`, без статистического детектора).
 # 3. **Языковая модель spaCy** — автоматически выбирается модель версии **Large (lg)**: `pl_core_news_lg`, `ru_core_news_lg`, `en_core_web_lg`, `it_core_news_lg`, `fi_core_news_lg`; для исландского (`is`) — `spacy.blank("is")` + Hugging Face (`mideind/IceBERT` — векторы, `grammatek/icelandic-ner-bert` — NER, обучен на MIM-GOLD-NER). Модели подгружаются по требованию через `get_nlp(lang)`, защищённый `functools.lru_cache(maxsize=2)`: одновременно в RAM держатся не более двух моделей, остальные вытесняются по принципу LRU.
 # 4. **Коррекция текста** — нормализация аббревиатур с пробелами для польского (`m. in.`→`m.in.`), русского (`т. е.`→`т.е.`) и английского (`e. g.`→`e.g.`).
 # 5. **Базовый NLP** — токенизация на слова и предложения, фильтрация стоп-слов, лемматизация, POS-теггинг (NOUN/VERB/ADJ/…).
 # 6. **Именованные сущности (NER)** — люди, организации, места, даты и другие объекты (с частотной сводкой по всему корпусу).
 # 7. **Мешок слов (CountVectorizer)** — матрица частот с языко-специфичными стоп-словами; топ-10 слов и топ-5 биграмм.
 # 8. **TF-IDF и автопоиск** — запрос автоматически строится из топ-терминов корпуса; косинусное сходство гарантированно > 0.
-# 9. **Структура текста** — весь корпус объединяется в поток, делится на предложения (spaCy) и группируется в абзацы по 3–6 предложений; для каждого абзаца и предложения lingua фиксирует ISO-код языка, который позже попадает в HTML/DOCX.
+# 9. **Структура текста** — предложения из того же единственного прохода spaCy (каждый языковой сегмент — своей моделью) группируются в абзацы по 3–6 предложений; язык предложений и вставок попадает в HTML/DOCX.
 # 10. **Ключевые слова** — рейтинговая таблица терминов и фраз (1–3 слова) по средневзвешенному TF-IDF на уровне абзацев.
 # 11. **Тезисы** — лучшее по TF-IDF-сумме предложение каждого абзаца; сохраняются в `тезисы.txt` в формате `- предложение`.
 # 12. **Тематизация (KMeans)** — кластеризация абзацев по spaCy-векторам; для каждой темы — ключевые слова и пример фрагмента *(требует модели `*_md` или `*_lg` с векторами)*.
-# 13. **Экспорт результатов** — CSV (UTF-8 BOM, совместимо с Excel), JSON (ключевые слова тем), TXT (тезисы) и **доступный HTML/DOCX** с атрибутом `lang` на каждом абзаце/предложении — экранные читалки автоматически переключают голос на нужный язык.
+# 13. **Экспорт результатов** — CSV (UTF-8 BOM, совместимо с Excel), JSON (ключевые слова тем), TXT (тезисы), `language_spans.csv` (иноязычные отрезки) и **доступный HTML/DOCX** с атрибутом `lang` на каждом абзаце, иноязычном предложении и вставке — экранные читалки автоматически переключают голос на нужный язык.
 # 14. **Итоговый отчёт** — все ключевые метрики в одном текстовом блоке.
 
 # %% id="cell_corpus" tags=["cell_corpus"]
@@ -58,12 +58,17 @@ from shamanic_locale import t
 
 SOURCE_FILE = ""
 CUSTOM_PATTERNS = []
-# Языки ТЕКСТА сканов и изображений (коды из dictionaries/<код>/podstawy.yaml).
-# Каждый язык читает свой движок OCR, словарь выбирает слова (glosowanie_ocr.py),
-# поэтому указывайте только языки, которые действительно есть в документе:
-# лишний язык замедляет OCR и даёт словарю ложных кандидатов. Смешивать
+# Языки ТЕКСТА (коды из dictionaries/<код>/podstawy.yaml), ключ "corpus_languages"
+# в config.json (прежнее имя "ocr_languages" тоже читается). По ним:
+#  - OCR читает сканы и изображения: каждый язык — свой движок, слова
+#    выбирает словарь (glosowanie_ocr.py);
+#  - словари тех же языков размечают язык каждого слова (odcinki_jezykowe.py),
+#    а основной язык — тот, словарь которого знает больше всего слов.
+# Указывайте только языки, которые действительно есть в тексте: лишний язык
+# замедляет OCR и даёт словарям ложных кандидатов. Финский текст с польскими
+# фамилиями: ["fi", "pl"] — фамилии прочтёт польский голос. Смешивать
 # латиницу и кириллицу можно (например ["fi", "ru"]).
-OCR_LANGS = ["en"]
+CORPUS_LANGS = ["en"]
 # Опциональный анализ тональности (по умолчанию выключен). Включается ключом
 # "enable_sentiment": true в config.json. Это тяжёлая опция (~1,1 ГБ модель
 # cardiffnlp при первом запуске) и она НЕ выводит вердикт пользователю —
@@ -84,9 +89,9 @@ if _CONFIG_PATH is not None:
         _cfg = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
         SOURCE_FILE = (_cfg.get("source_file") or "").strip()
         CUSTOM_PATTERNS = list(_cfg.get("custom_patterns") or [])
-        _ocr_cfg = _cfg.get("ocr_languages")
-        if isinstance(_ocr_cfg, list) and _ocr_cfg:
-            OCR_LANGS = [str(x).strip() for x in _ocr_cfg if str(x).strip()]
+        _langs_cfg = _cfg.get("corpus_languages") or _cfg.get("ocr_languages")
+        if isinstance(_langs_cfg, list) and _langs_cfg:
+            CORPUS_LANGS = [str(x).strip() for x in _langs_cfg if str(x).strip()]
         ENABLE_SENTIMENT = bool(_cfg.get("enable_sentiment", False))
         print(f"[OK] Конфигурация загружена: {_CONFIG_PATH}")
     except Exception as _e:
@@ -280,11 +285,11 @@ def strip_repeated_headers(raw_pages, min_fraction=0.4, max_line_chars=150, edge
 # OCR: распознавание сканов PDF и изображений ГОЛОСОВАНИЕМ (glosowanie_ocr.py).
 # Движок OCR знает один язык за раз: польский меняет финские ä, финский теряет
 # ą/ę/ł, русский вставляет кириллицу в латинские слова. Поэтому страницу читает
-# движок КАЖДОГО языка из ocr_languages (встроенный OCR Windows; для языка без
+# движок КАЖДОГО языка из corpus_languages (встроенный OCR Windows; для языка без
 # него — Tesseract, сегодня исландский) и дополнительно RapidOCR (запас для
 # фото страниц и финского, которого easyocr не знал), а из каждого результата
 # берутся словарные формы. Нехватка движка или словаря — ОШИБКА, а не тихо
-# пропавший текст (решение 2026-11-13): исправление — изменить ocr_languages
+# пропавший текст (решение 2026-11-13): исправление — изменить corpus_languages
 # или установить недостающий компонент.
 # ============================================================
 _OCR_PLAN = None
@@ -322,10 +327,10 @@ def _ocr_plan(langs):
     try:
         plan = glosowanie_ocr.zaplanuj(list(langs))
     except glosowanie_ocr.BladGlosowania as _e:
-        print("[ОШИБКА] OCR не может работать с языками из ocr_languages:")
+        print("[ОШИБКА] OCR не может работать с языками из corpus_languages:")
         for _p in _e.problemy:
             print(f"  {_p.kod}: {_OCR_PRICHINY.get(_p.przyczyna, _p.przyczyna)} — {_p.szczegol}")
-        print("  Исправление: убрать язык из ocr_languages в config.json "
+        print("  Исправление: убрать язык из corpus_languages в config.json "
               "или установить недостающий компонент.")
         raise RuntimeError(f"OCR: {_e}") from None
     for _k, _tag in plan.windows.items():
@@ -390,10 +395,10 @@ def load_image(path):
     """Распознаёт текст с изображения голосованием и возвращает его
     как список из одной «псевдостраницы»."""
     from PIL import Image
-    print(f"  Изображение: запуск OCR (языки: {OCR_LANGS})...")
+    print(f"  Изображение: запуск OCR (языки: {CORPUS_LANGS})...")
     with Image.open(path) as _img:
         _img.load()
-        text, _wynik = _ocr_obraz(_img, OCR_LANGS)
+        text, _wynik = _ocr_obraz(_img, CORPUS_LANGS)
     if not text.strip():
         print("  [ВНИМАНИЕ] OCR не вернул текста — изображение пустое или нечитаемое.")
         return []
@@ -570,15 +575,15 @@ def load_pdf(path):
         _scans = [i for i in empty if i not in set(broken)]
         if len(_scans) == total:
             print(f"  PDF: ни одна из {total} страниц не содержит извлекаемого текста.")
-            print(f"  Предполагается, что это скан. Запуск OCR (языки: {OCR_LANGS})...")
+            print(f"  Предполагается, что это скан. Запуск OCR (языки: {CORPUS_LANGS})...")
         elif _scans:
             print(f"  PDF: страницы без текстового слоя (вероятно, сканы): "
                   f"{', '.join(str(i + 1) for i in _scans)}. "
-                  f"Запуск OCR только для них (языки: {OCR_LANGS})...")
+                  f"Запуск OCR только для них (языки: {CORPUS_LANGS})...")
         if broken:
             print(f"  PDF: страницы с нечитаемым текстовым слоем передаются в OCR "
-                  f"(языки: {OCR_LANGS}): {zakresy_stron(broken)}.")
-        for i, text in _pdf_ocr_pages(path, OCR_LANGS, pages=empty).items():
+                  f"(языки: {CORPUS_LANGS}): {zakresy_stron(broken)}.")
+        for i, text in _pdf_ocr_pages(path, CORPUS_LANGS, pages=empty).items():
             texts[i] = text
         ocr_ok = [i for i in empty if texts[i].strip()]
         if ocr_ok:
@@ -1029,99 +1034,72 @@ PROJECT_DIR.mkdir(parents=True, exist_ok=True)
 print(f"\nКаталог проекта: {PROJECT_DIR}")
 
 # %% [markdown] id="md_langdet" tags=["md_langdet"]
-# ## 1) Определение языка (lingua)
+# ## 1) Языки текста (словари вместо статистического детектора)
 #
-# Используется библиотека [`lingua-language-detector`](https://github.com/pemistahl/lingua-py) — статистический детектор на основе n-грамм и словарей. На коротких фрагментах и при частых переключениях языка она заметно точнее `langdetect`, что критично для пер-абзацного и пер-предложного тегирования.
+# Языки текста задаёт пользователь — ключ `corpus_languages` в `config.json` (прежнее имя `ocr_languages` тоже читается). По тем же языкам работает OCR сканов, а здесь их словари решают, на каком языке **каждое слово**:
 #
-# **Архитектура:**
+# - **Основной язык** `LANG` — язык, словарь которого знает больше всего слов корпуса (доля печатается ниже). Он выбирает модель spaCy для основного конвейера.
+# - Словари: векторы spaCy (конечный список форм), `omorfi` для финского, BÍN (`islenska`) для исландского — модуль `slowniki_jezykow.py`, общий с голосованием OCR.
+# - Разметку слов и иноязычных отрезков делает ячейка токенизации (`odcinki_jezykowe.py`): там же каждый отрезок получает свою модель spaCy — без повторной сегментации.
 #
-# - На этом шаге детектор определяет **преобладающий язык** всего корпуса и сохраняет его в глобальную переменную `LANG`. Этот код выбирает модель spaCy для основного NLP-конвейера.
-# - Глобальный объект `LANG_DETECTOR` и функция `detect_lang(text)` остаются доступными в последующих ячейках. На шаге «Структура текста» они применяются к каждому абзацу и каждому предложению, формируя списки `para_langs` и `sent_langs`.
-# - Эти списки потребляет ячейка экспорта: каждый `<p lang="...">` в HTML и каждый `Run` в DOCX получает корректный ISO-код, и экранная читалка (NVDA, JAWS, Narrator, VoiceOver) автоматически переключает голос/произношение на нужный язык.
+# Почему не статистический детектор (до ATA 2.0 — `lingua`): на 20 финских транскриптах (6047 предложений) он без защитных эвристик давал 127 ложных иноязычных предложений, а с эвристиками пропускал все английские цитаты. Словари объявленных языков находят цитаты и польские фамилии без ложных срабатываний.
 #
-# Поддерживаемые языки: **польский** (`pl`), **русский** (`ru`), **английский** (`en`), **итальянский** (`it`), **финский** (`fi`), **исландский** (`is`).
-#
-# > Если корпус содержит смешанные языки, преобладающий язык получает spaCy-модель, остальные — отмечаются в HTML/DOCX через атрибут `lang`.
+# > Один язык в `corpus_languages` — словари не загружаются: размечаются только слова другого письма (например, кириллица в латинском тексте).
 
 # %% id="cell_langdet" tags=["cell_langdet"]
 # ============================================================
-# Определение языка через lingua-language-detector.
-# Глобальный детектор LANG_DETECTOR доступен в последующих ячейках
-# для распознавания языка отдельных абзацев и предложений.
+# Языки текста: словари языков из corpus_languages. Основной язык
+# LANG — язык, словарь которого знает больше всего слов корпуса;
+# остальные размечаются на уровне слов в ячейке токенизации.
 # ============================================================
 import warnings
 warnings.filterwarnings("ignore")
-from lingua import Language, LanguageDetectorBuilder
 from collections import Counter
 
-# Языки — каталоги dictionaries/<kod>/ с podstawy.yaml (единственный
-# источник); названия для stdout — поле `nazwa_ru`.
-from shamanic_locale import PODSTAWY, lingua_jezyki
+import odcinki_jezykowe
+import slowniki_jezykow
+from shamanic_locale import PODSTAWY
 
 LANG_NAMES = {_k: _p["nazwa_ru"] for _k, _p in PODSTAWY.items()}
 SUPPORTED_LANGS = set(LANG_NAMES.keys())
+# Алфавиты ВСЕХ основ: письмо (кириллица) размечается и вне corpus_languages.
+ALFABETY = {_k: _p["alfabet"] for _k, _p in PODSTAWY.items()}
 
-# Lingua: статичный набор поддерживаемых языков (поле `lingua` основ).
-# Точность детектора заметно выше langdetect на коротких фрагментах
-# и при частых переключениях языка внутри документа.
-_LINGUA_LANGS = lingua_jezyki()
-LANG_DETECTOR = LanguageDetectorBuilder.from_languages(*_LINGUA_LANGS).build()
+print("--- Языки текста (словари) ---")
+_nieznane = [_k for _k in CORPUS_LANGS if _k not in SUPPORTED_LANGS]
+if _nieznane:
+    raise ValueError(
+        f"corpus_languages: неизвестные коды {_nieznane}. "
+        f"Доступные языки: {sorted(SUPPORTED_LANGS)} (каталоги dictionaries/<код>/).")
+CORPUS_LANGS = list(dict.fromkeys(CORPUS_LANGS))
 
+if len(CORPUS_LANGS) == 1:
+    LANG = CORPUS_LANGS[0]
+    SLOWNIKI = {LANG: slowniki_jezykow.slownik_pelny(LANG)}
+    print(f"Указан один язык текста — {LANG_NAMES[LANG]} ({LANG}); словари не загружаются.")
+    print("  Иноязычные вставки на латинице не размечаются: добавьте их язык в corpus_languages.")
+else:
+    SLOWNIKI, _bledy = {}, []
+    for _k in CORPUS_LANGS:
+        try:
+            SLOWNIKI[_k] = slowniki_jezykow.slownik(_k)
+        except LookupError as _e:
+            _bledy.append(f"  {_k} ({LANG_NAMES[_k]}): {_e}")
+    if _bledy:
+        raise RuntimeError(
+            "Словари языков текста недоступны — без них разметка языка невозможна:\n"
+            + "\n".join(_bledy)
+            + "\nУстановите компоненты или уберите язык из corpus_languages в config.json.")
+    for _k, _s in SLOWNIKI.items():
+        print(f"  [{_k}] словарь: {_s.zrodlo}")
+        if _s.uznanie:
+            print(f"       {_s.uznanie}")
+    LANG, _udzialy = odcinki_jezykowe.wybierz_baze(corpus, SLOWNIKI)
+    print("\nДоля слов корпуса, известных словарю языка:")
+    for _k, _u in sorted(_udzialy.items(), key=lambda x: -x[1]):
+        print(f"  {LANG_NAMES[_k]} ({_k}): {_u:.1%}")
 
-def detect_lang(text):
-    """Возвращает ISO 639-1 код в нижнем регистре или None.
-    Используется как для целого корпуса, так и для отдельных абзацев/предложений
-    при формировании HTML/DOCX-экспорта с lang-атрибутами.
-    """
-    if not text or len(text.strip()) < 3:
-        return None
-    try:
-        lang_obj = LANG_DETECTOR.detect_language_of(text)
-    except Exception:
-        return None
-    if lang_obj is None:
-        return None
-    return lang_obj.iso_code_639_1.name.lower()
-
-
-def detect_corpus_language(texts):
-    """Определяет преобладающий язык корпуса.
-    Возвращает ISO-код победителя (например, 'fi'). Документы с иным языком
-    отмечаются в логе, чтобы пользователь видел гетерогенность корпуса;
-    позднее ячейка экспорта расставит lang-атрибуты на каждом абзаце.
-    """
-    detections = [detect_lang(t[:1000]) for t in texts]
-    valid = [l for l in detections if l]
-    if not valid:
-        print("[ВНИМАНИЕ] Язык не определён. Используется английский.")
-        return "en"
-    counts = Counter(valid)
-    winner = "en"
-    for lang, _ in counts.most_common():
-        if lang in SUPPORTED_LANGS:
-            winner = lang
-            break
-    outliers = [i for i, l in enumerate(detections) if l and l != winner]
-    if outliers:
-        print(f"Преобладающий язык: {LANG_NAMES.get(winner, winner)} ({winner})")
-        print(f"Документов с иным языком: {len(outliers)} (будут отмечены "
-              f"в HTML/DOCX через атрибут lang)")
-        for idx in sorted(outliers)[:10]:
-            print(f"  Документ {idx+1}: определён как '{detections[idx]}'")
-        if len(outliers) > 10:
-            print(f"  ... и ещё {len(outliers)-10}")
-    else:
-        print(f"Язык определён единогласно: "
-              f"{LANG_NAMES.get(winner, winner)} ({winner})")
-    print(f"Всего документов: {len(texts)}, типичных: "
-          f"{len(valid)-len(outliers)}, нетипичных: {len(outliers)}")
-    print(f"Все определения: {dict(counts)}")
-    return winner
-
-
-print("--- Определение языка (lingua) ---")
-LANG = detect_corpus_language(corpus)
-print(f"\n[РЕЗУЛЬТАТ] Выбран язык: {LANG_NAMES.get(LANG, LANG)} ({LANG})")
+print(f"\n[РЕЗУЛЬТАТ] Основной язык: {LANG_NAMES.get(LANG, LANG)} ({LANG})")
 
 # %% [markdown] id="md_model" tags=["md_model"]
 # ## 2) Загрузка языковой модели spaCy (LRU-кэш)
@@ -1623,19 +1601,178 @@ else:
 # Каждый документ превращается в список токенов. Пробелы исключаются.
 #
 # ### 3.2 Токенизация на предложения
-# spaCy также сегментирует текст на предложения — полезно для анализа структуры, экстрактивного саммари (тезисы) и пер-предложного определения языка перед HTML/DOCX-экспортом.
+# spaCy также сегментирует текст на предложения — полезно для анализа структуры и экстрактивного саммари (тезисы).
+#
+# ### 3.3 Один проход: язык каждого слова
+# Перед токенизацией словари языков текста (`corpus_languages`) размечают иноязычные отрезки. Блок (целые предложения) обрабатывает модель его языка, остальное — модель основного языка; вставки внутри предложения получают леммы и POS от модели своего языка. Это ЕДИНСТВЕННЫЙ проход spaCy: предложения, леммы и сущности дальше берутся из него, без повторной сегментации.
 
 # %% id="cell_tok" tags=["cell_tok"]
-print("--- Токенизация ---")
-docs = [nlp(t) for t in corpus]
+print("--- Разметка языков и токенизация (один проход spaCy) ---")
+import bisect
+import re
+from collections import defaultdict
 
-word_tokens = [[tok.text for tok in doc if not tok.is_space] for doc in docs]
-print("Словесные токены:")
+# 1. Весь корпус — один поток (как раньше в cell_para): «документы» — это
+#    куски источника, и граница куска может пройти посреди предложения.
+#    Поток нормализуется по пробелам; DOC_START хранит начало каждого
+#    документа в потоке — по нему токены, предложения и сущности
+#    возвращаются к своим документам для пошаговых ячеек 3–7.
+TEKSTY = [re.sub(r"\s+", " ", _c).strip() for _c in corpus]
+DOC_START = []
+_poz = 0
+for _t in TEKSTY:
+    DOC_START.append(_poz)
+    _poz += len(_t) + 1
+TEKST = " ".join(TEKSTY)
+
+
+def _dokument(poz):
+    """Индекс документа, которому принадлежит символ потока poz."""
+    return max(0, bisect.bisect_right(DOC_START, poz) - 1)
+
+
+# 2. Язык каждого слова → иноязычные отрезки (odcinki_jezykowe).
+ODCINKI = odcinki_jezykowe.odcinki(TEKST, LANG, SLOWNIKI, ALFABETY)
+_st = odcinki_jezykowe.statystyka(ODCINKI)
+if _st:
+    print("Иноязычные отрезки (блок — целые предложения, вставка — внутри предложения):")
+    for _k in sorted(_st):
+        print(f"  {LANG_NAMES.get(_k, _k)} ({_k}): блоков — {_st[_k]['bloki']}, "
+              f"вставок — {_st[_k]['wtracenia']}")
+    for _o in ODCINKI[:20]:
+        _f = TEKST[_o.start:_o.koniec]
+        _f = _f[:80] + ("…" if len(_f) > 80 else "")
+        print(f"    [Документ {_dokument(_o.start) + 1}] {_o.jezyk}{' (блок)' if _o.blok else ''}: {_f}")
+    if len(ODCINKI) > 20:
+        print(f"    ... и ещё {len(ODCINKI) - 20}")
+else:
+    print(f"Иноязычных отрезков нет: весь текст на основном языке ({LANG}).")
+
+# 3. Сегменты: блок — моделью своего языка (с его сокращениями), остальной
+#    текст вместе со вставками — моделью LANG (синтаксис предложения основной).
+#    Вставки дополнительно разбирает модель их языка (леммы, POS) — это
+#    короткие фрагменты, отдельный прогон дешёвый. Длинные сегменты режутся
+#    по границам слов ниже nlp.max_length: парсеру/NER нужно ~1 ГБ временной
+#    памяти на 100 000 символов (ошибка E088 у целых книг и крупных PDF).
+_NLP_CHUNK = min(getattr(nlp, "max_length", 1_000_000), 200_000)
+
+
+def _kawalki_tekstu(tekst, start, koniec, max_len=_NLP_CHUNK):
+    """Куски [a, b) отрезка текста длиной <= max_len по границам слов."""
+    while start < koniec:
+        b = min(start + max_len, koniec)
+        if b < koniec:
+            sp = tekst.rfind(" ", start, b)
+            if sp > start:
+                b = sp
+        yield start, b
+        start = b
+
+
+_zadania = defaultdict(list)  # язык -> [(смещение, текст)]
+for _a, _b, _l in odcinki_jezykowe.segmenty(TEKST, LANG, ODCINKI):
+    for _ka, _kb in _kawalki_tekstu(TEKST, _a, _b):
+        _txt = TEKST[_ka:_kb]
+        if _l != LANG:
+            for _p, _r in ABBREV_BY_LANG.get(_l, []):
+                _txt = re.sub(_p, _r, _txt)
+        if _txt.strip():
+            _zadania[_l].append((_ka, _txt))
+_wstawki = defaultdict(set)   # язык -> {текст вставки}
+for _o in ODCINKI:
+    if not _o.blok:
+        _wstawki[_o.jezyk].add(TEKST[_o.start:_o.koniec])
+
+CZESCI = []                        # [(язык, смещение в потоке, Doc)] в порядке текста
+STOP_BY_LANG = {LANG: stop_words}
+WSTAWKI_ANALIZA = {}               # (язык, текст вставки) -> {форма: (лемма, POS, тег)}
+_unreliable = {}
+# Язык за языком: LRU-кэш get_nlp() держит две модели, поэтому сегменты
+# одного языка обрабатываются подряд, без перезагрузки моделей.
+for _l in [LANG] + sorted((set(_zadania) | set(_wstawki)) - {LANG}):
+    _m = nlp if _l == LANG else get_nlp(_l)
+    if _l != LANG:
+        STOP_BY_LANG[_l] = _m.Defaults.stop_words
+        _caps = set(_m.pipe_names)
+        _brak = [_n for _n, _ok in (("NER", "ner" in _caps or "icelandic_ner" in _caps),
+                                    ("лемматизатор", "lemmatizer" in _caps)) if not _ok]
+        if _brak:
+            _unreliable[_l] = _brak
+    _z = _zadania.get(_l, [])
+    for (_off, _txt), _d in zip(_z, _m.pipe(_z_txt for _o, _z_txt in _z)):
+        CZESCI.append((_l, _off, _d))
+    _ws = sorted(_wstawki.get(_l, ()))
+    for _txt, _d in zip(_ws, _m.pipe(_ws)):
+        WSTAWKI_ANALIZA[(_l, _txt)] = {
+            _tk.text: ((_tk.lemma_ or _tk.text).lower(), _tk.pos_, _tk.tag_) for _tk in _d if _tk.is_alpha}
+    print(f"  [{_l}] {LANG_NAMES.get(_l, _l)}: сегментов — {len(_z)}, вставок — {len(_ws)}")
+CZESCI.sort(key=lambda x: x[1])
+
+if _unreliable:
+    print("\n[ВНИМАНИЕ] Анализ НЕНАДЁЖЕН для иноязычных отрезков следующих языков:")
+    for _l, _brak in _unreliable.items():
+        print(f"  {_l}: в модели нет компонентов {_brak}")
+        if _l == "is":
+            print("     Установите: pip install transformers torch (HF-модели исландского)")
+        else:
+            print(f"     Установите: python -m spacy download {MODEL_BY_LANG.get(_l, '?')}")
+
+# Вставки — для подстановки разбора модели их языка.
+_WSTAWKI = sorted((_o.start, _o.koniec, _o.jezyk) for _o in ODCINKI if not _o.blok)
+
+
+def _wstawka(poz):
+    """(start, конец, язык) вставки, содержащей символ потока poz, или None."""
+    j = bisect.bisect_right(_WSTAWKI, (poz, float("inf"))) - 1
+    if j >= 0 and _WSTAWKI[j][0] <= poz < _WSTAWKI[j][1]:
+        return _WSTAWKI[j]
+    return None
+
+
+def _analiza(lang, off, tok):
+    """(язык, лемма, POS, тег) токена; внутри вставки — по модели языка вставки."""
+    if lang == LANG:
+        w = _wstawka(off + tok.idx)
+        if w:
+            a = WSTAWKI_ANALIZA.get((w[2], TEKST[w[0]:w[1]]), {}).get(tok.text)
+            if a:
+                return (w[2],) + a
+    return lang, (tok.lemma_ or tok.text).lower(), tok.pos_, tok.tag_
+
+
+def _jest_stop(lang, off, tok):
+    """Стоп-слово по списку языка токена (у вставки — языка вставки)."""
+    jezyk = _analiza(lang, off, tok)[0]
+    return tok.is_stop or tok.text.lower() in STOP_BY_LANG.get(jezyk, stop_words)
+
+
+# Токены, предложения и сущности по документам (по смещению начала).
+# Блок у границы документа обрабатывается своей моделью целиком; его
+# токены расходятся по документам так же, по смещению.
+TOKENY_DOC = [[] for _ in TEKSTY]
+ZDANIA_DOC = [[] for _ in TEKSTY]
+ENCJE_DOC = [[] for _ in TEKSTY]
+for _l, _off, _d in CZESCI:
+    for _tk in _d:
+        TOKENY_DOC[_dokument(_off + _tk.idx)].append((_l, _off, _tk))
+    for _s in _d.sents:
+        ZDANIA_DOC[_dokument(_off + _s.start_char)].append(_s.text.strip())
+    for _e in _d.ents:
+        ENCJE_DOC[_dokument(_off + _e.start_char)].append((_e.text, _e.label_))
+
+
+def _tokeny(i):
+    """(язык сегмента, смещение, токен) документа i в порядке текста."""
+    return TOKENY_DOC[i]
+
+
+word_tokens = [[_tk.text for _l, _o, _tk in _tokeny(_i) if not _tk.is_space] for _i in range(len(TEKSTY))]
+print("\nСловесные токены:")
 for i, tokens in enumerate(word_tokens, 1):
     print(f"  Документ {i}: всего токенов — {len(tokens)}")
     print(f"    Первые 20: {tokens[:20]}")
 
-sent_tokens = [[s.text.strip() for s in doc.sents if s.text.strip()] for doc in docs]
+sent_tokens = [[s for s in ZDANIA_DOC[_i] if s] for _i in range(len(TEKSTY))]
 print("\nПредложения:")
 MAX_SENT_PREVIEW = 3
 for i, sents in enumerate(sent_tokens, 1):
@@ -1658,10 +1795,13 @@ for i, sents in enumerate(sent_tokens, 1):
 print("--- Фильтрация стоп-слов ---")
 print(f"Язык: {LANG_NAMES.get(LANG, LANG)} | Стоп-слов в списке: {len(stop_words)}")
 print(f"Выборка (первые 20 по алфавиту): {sorted(list(stop_words))[:20]}")
+for _l, _sw in STOP_BY_LANG.items():
+    if _l != LANG:
+        print(f"Иноязычные отрезки ({_l}): свой список стоп-слов — {len(_sw)} записей")
 
 filtered_tokens = [
-    [tok.text for tok in doc if tok.is_alpha and tok.text.lower() not in stop_words]
-    for doc in docs
+    [tok.text for _l, _o, tok in _tokeny(_i) if tok.is_alpha and not _jest_stop(_l, _o, tok)]
+    for _i in range(len(TEKSTY))
 ]
 print()
 for i, tokens in enumerate(filtered_tokens, 1):
@@ -1680,13 +1820,13 @@ for i, tokens in enumerate(filtered_tokens, 1):
 
 # %% id="cell_lemma" tags=["cell_lemma"]
 print("--- Лемматизация ---")
+# Лемма иноязычного отрезка — от модели его языка (_analiza), а не от модели LANG.
 all_lemmas = [
-    [t.lemma_.lower() for t in doc if t.is_alpha and t.text.lower() not in stop_words]
-    for doc in docs
+    [_analiza(_l, _o, t)[1] for _l, _o, t in _tokeny(_i) if t.is_alpha and not _jest_stop(_l, _o, t)]
+    for _i in range(len(TEKSTY))
 ]
-doc0 = docs[0]
-content_toks = [t for t in doc0 if t.is_alpha and t.text.lower() not in stop_words]
-pairs = [(t.text, t.lemma_.lower()) for t in content_toks[:30]]
+pairs = [(t.text, _analiza(_l, _o, t)[1]) for _l, _o, t in _tokeny(0)
+         if t.is_alpha and not _jest_stop(_l, _o, t)][:30]
 print("Пары исходное слово → лемма (Документ 1, первые 30):")
 _h1, _h2, _sep = "Исходное", "Лемма", "-" * 22
 print(f"  {_h1:<22} {_h2}")
@@ -1712,15 +1852,15 @@ for i, lemmas in enumerate(all_lemmas, 1):
 # %% id="cell_pos" tags=["cell_pos"]
 print("--- Разметка частей речи (POS) ---")
 print("Теги: NOUN — сущ., VERB — гл., ADJ — прил., ADV — нар., PROPN — имя собств., ...")
-for i, doc in enumerate(docs, 1):
-    pos_pairs = [(t.text, t.pos_) for t in doc if t.is_alpha]
-    pos_counts = Counter(pos for _, pos in pos_pairs)
-    print(f"\nДокумент {i} — распределение частей речи:")
+for i in range(len(TEKSTY)):
+    _anal = [(t.text, _analiza(_l, _o, t), _jest_stop(_l, _o, t))
+             for _l, _o, t in _tokeny(i) if t.is_alpha]
+    pos_counts = Counter(a[2] for _txt, a, _st in _anal)
+    print(f"\nДокумент {i + 1} — распределение частей речи:")
     for pos, cnt in sorted(pos_counts.items(), key=lambda x: -x[1]):
         bar = "#" * min(cnt, 40)
         print(f"  {pos:8s}: {cnt:4d}  {bar}")
-    notable = [(t.text, t.pos_, t.tag_) for t in doc
-               if t.is_alpha and t.text.lower() not in stop_words][:10]
+    notable = [(_txt, a[2], a[3]) for _txt, a, _st in _anal if not _st][:10]
     print("  Примеры тегированных слов (слово | POS | детальный тег):")
     for txt, pos, tag in notable:
         print(f"    {txt!r:<22} | {pos:<10} | {tag}")
@@ -1739,8 +1879,9 @@ print("--- Именованные сущности (NER) ---")
 from collections import OrderedDict
 
 all_ents = []
-for i, doc in enumerate(docs, 1):
-    ents = [(ent.text, ent.label_) for ent in doc.ents]
+# Сущности блока находит модель его языка; вставки внутри предложения
+# остаются за моделью LANG — двухсловной вставке не хватает контекста для NER.
+for i, ents in enumerate(ENCJE_DOC, 1):
     all_ents.extend(ents)
     if not ents:
         print(f"Документ {i}: именованных сущностей не обнаружено.")
@@ -1904,85 +2045,63 @@ print(f"\nНаиболее релевантный: Документ {best_idx+1}
 # %% [markdown] id="md_para" tags=["md_para"]
 # ## Структура текста: абзацы и предложения
 #
-# Объединяем весь корпус в единый поток, делим spaCy-сентензайзером на предложения и группируем их по 3–6 в «абзацы». Эту структуру потребляют последующие шаги (тезисы, ключевые слова, тематизация).
+# Предложения берутся из того же единственного прохода spaCy (ячейка токенизации): каждый языковой сегмент уже разбит на предложения моделью своего языка, поэтому иноязычный блок разрезан по правилам своего языка (сокращения `e.g.`, `esim.`) и повторная сегментация не нужна. Предложения группируются по 3–6 в «абзацы»; эту структуру потребляют тезисы, ключевые слова и тематизация.
 #
-# Дополнительно для каждого абзаца и каждого предложения `lingua` фиксирует ISO-код языка:
+# Для экспорта сохраняются:
 #
-# - `para_langs[i]` — язык `i`-го абзаца целиком,
-# - `sent_langs[i]` — язык `i`-го предложения,
-# - `para_sentences[i]` — список предложений, входящих в `i`-й абзац (нужен ячейке экспорта).
+# - `sent_langs[i]` — язык `i`-го предложения (язык его сегмента),
+# - `sent_wstawki[i]` — иноязычные вставки внутри предложения (смещения и язык),
+# - `para_langs[i]` — преобладающий язык абзаца; `para_sentences[i]` и `para_sent_ids[i]` — его предложения.
 #
-# Этот пер-фрагментный язык записывается в `accessible_text.html` (`<p lang="...">`, при необходимости `<span lang="...">`) и в `accessible_text.docx` (`<w:lang>` на уровне `Run`), благодаря чему экранные читалки и TTS-движки переключают голос автоматически.
+# В `accessible_text.html` вставка получает собственный `<span lang="...">`, в `accessible_text.docx` — свой `Run` с `<w:lang>`: экранная читалка переключает голос ровно на цитате или фамилии, а не на всём предложении.
 
 # %% id="cell_para" tags=["cell_para"]
 print("--- Структура текста: абзацы ---")
-import re, numpy as np
+import numpy as np
 import pandas as pd
 
-# Объединяем все страницы/куски корпуса в один поток
-full_text = " ".join(c.replace("\n", " ") for c in corpus)
-full_text = re.sub(r"\s+", " ", full_text).strip()
-print(f"Общий объём текста: {len(full_text)} символов")
-
-# Разбиваем на предложения (spaCy).
-# spaCy ограничивает длину одного документа nlp.max_length (по умолчанию
-# 1 000 000 символов): парсеру/NER нужно ~1 ГБ временной памяти на каждые
-# 100 000 символов, поэтому длинные корпуса (целые книги, OCR крупных PDF)
-# превышают лимит и валятся с ошибкой E088. Чтобы не поднимать лимит (это
-# грозит аллокацией многих гигабайт), режем поток на куски по границам слов
-# и прогоняем nlp по частям, собирая предложения. Куски держим заметно ниже
-# лимита, поэтому пиковая память остаётся в пределах ~2 ГБ на вызов.
-_NLP_CHUNK = min(getattr(nlp, "max_length", 1_000_000), 200_000)
-
-
-def _iter_text_chunks(text, max_len):
-    """Делит text на куски <= max_len по границам слов (без разрыва слова)."""
-    n = len(text)
-    if n <= max_len:
-        yield text
-        return
-    start = 0
-    while start < n:
-        end = min(start + max_len, n)
-        if end < n:
-            sp = text.rfind(" ", start, end)
-            if sp > start:
-                end = sp
-        yield text[start:end].strip()
-        start = end
-
-
-all_sents = []
-if len(full_text) > _NLP_CHUNK:
-    print(f"Текст длиннее {_NLP_CHUNK} символов — обрабатываем кусками "
-          f"(ограничение spaCy nlp.max_length).")
-for _chunk in _iter_text_chunks(full_text, _NLP_CHUNK):
-    if not _chunk:
-        continue
-    _doc = nlp(_chunk)
-    all_sents.extend(s.text.strip() for s in _doc.sents
-                     if len(s.text.strip()) > 10)
+all_sents, sent_langs, sent_wstawki, sent_lemmas = [], [], [], []
+for _l, _off, _d in CZESCI:
+    for _s in _d.sents:
+        _txt = _s.text.strip()
+        if len(_txt) <= 10:
+            continue
+        # Смещение предложения в потоке TEKST (для сегментов LANG текст Doc
+        # совпадает с потоком; у блоков вставок нет, смещения не нужны).
+        _a = _off + _s.start_char + (len(_s.text) - len(_s.text.lstrip()))
+        _b = _a + len(_txt)
+        _w = []
+        if _l == LANG:
+            _j = bisect.bisect_left(_WSTAWKI, (_a,))
+            if _j > 0 and _WSTAWKI[_j - 1][1] > _a:
+                _j -= 1
+            while _j < len(_WSTAWKI) and _WSTAWKI[_j][0] < _b:
+                _ws, _wk, _wl = _WSTAWKI[_j]
+                if _wk > _a:
+                    _w.append((max(_ws, _a) - _a, min(_wk, _b) - _a, _wl))
+                _j += 1
+        all_sents.append(_txt)
+        sent_langs.append(_l)
+        sent_wstawki.append(_w)
+        sent_lemmas.append([_analiza(_l, _off, _t)[1] for _t in _s
+                            if _t.is_alpha and not _jest_stop(_l, _off, _t)])
 print(f"Всего предложений: {len(all_sents)}")
 
-# Группируем в абзацы по 3-6 предложений.
-# Параллельно сохраняем para_sentences — список списков предложений каждого абзаца,
-# понадобится для пер-предложного тегирования языка в HTML/DOCX-экспорте.
+# Абзацы по 3–6 предложений; para_lemmas (для TF-IDF ключевых слов) —
+# леммы предложений абзаца, каждое от модели своего языка.
 PARA_MIN, PARA_MAX = 3, 6
-paragraphs, para_sentences = [], []
-buf = []
-for sent in all_sents:
-    buf.append(sent)
-    if len(buf) >= PARA_MAX:
-        paragraphs.append(" ".join(buf))
-        para_sentences.append(buf[:])
-        buf = []
-if buf:
-    paragraphs.append(" ".join(buf))
-    para_sentences.append(buf[:])
+paragraphs, para_sentences, para_sent_ids, para_lemmas, para_langs = [], [], [], [], []
+for _p in range(0, len(all_sents), PARA_MAX):
+    _ids = list(range(_p, min(_p + PARA_MAX, len(all_sents))))
+    para_sent_ids.append(_ids)
+    para_sentences.append([all_sents[_k] for _k in _ids])
+    paragraphs.append(" ".join(para_sentences[-1]))
+    para_lemmas.append(" ".join(_lem for _k in _ids for _lem in sent_lemmas[_k]))
+    para_langs.append(Counter(sent_langs[_k] for _k in _ids).most_common(1)[0][0])
 print(f"Сформировано абзацев: {len(paragraphs)} (по {PARA_MIN}–{PARA_MAX} предложений)")
 
-df_sent = pd.DataFrame({"sent_id": range(1, len(all_sents)+1), "sentence": all_sents})
-df_para = pd.DataFrame({"para_id": range(1, len(paragraphs)+1), "paragraph": paragraphs})
+df_sent = pd.DataFrame({"sent_id": range(1, len(all_sents) + 1), "sentence": all_sents, "lang": sent_langs})
+df_para = pd.DataFrame({"para_id": range(1, len(paragraphs) + 1), "paragraph": paragraphs})
 
 # Языково-специфичный паттерн токенов для CountVectorizer / TF-IDF
 # Один шаблон для всех языков (shamanic_locale.WZORZEC_TOKENOW): ≥2 любые
@@ -1993,605 +2112,11 @@ df_para = pd.DataFrame({"para_id": range(1, len(paragraphs)+1), "paragraph": par
 from shamanic_locale import WZORZEC_TOKENOW
 TOKEN_PAT = WZORZEC_TOKENOW
 
-# Лемматизируем абзацы (понадобится для TF-IDF)
-def to_lemma_str(text):
-    out = []
-    for t in nlp(text):
-        if not t.is_alpha or t.is_stop or t.text.lower() in stop_words:
-            continue
-        out.append((t.lemma_ or t.text).lower())
-    return " ".join(out)
-
-para_lemmas = [to_lemma_str(p) for p in paragraphs]
-print("Лемматизация абзацев завершена.")
-
-# === Детекция языка на уровне абзацев и предложений (lingua) ===
-# Эти списки потребляет ячейка экспорта — каждый <p>/<span> в HTML
-# и каждый Run в DOCX получает атрибут lang, что позволяет
-# экранным читалкам автоматически переключать голос/произношение.
-print("\nДетекция языка по абзацам и предложениям (lingua) ...")
-
-# Диакритики, типичные для каждого из поддерживаемых языков. Используются
-# как «защитник» fallback-языка: если предложение содержит знак,
-# характерный для основного языка корпуса (например, финские ä/ö),
-# почти наверняка оно тоже на этом языке — даже если lingua ошибочно
-# классифицирует его на основе вкраплённых иноязычных слов.
-# Поле `diakrytyki` основ; "" (ru — кириллица по блоку Unicode в lingua,
-# en — без диакритик) = язык без «защитника».
-from shamanic_locale import PODSTAWY, diakrytyki
-
-_LANG_DIACRITICS = {_k: diakrytyki(_k) for _k in PODSTAWY if diakrytyki(_k)}
-
-# Минимальная длина предложения, при которой можно доверять lingua.
-# На фрагментах короче ~30 символов lingua часто ошибается на проприальных
-# именах: «Igor de Lendorf» (16 знаков) → it, «Se on strategista» (18) → it,
-# «Mut se mies, Igor» (18) → en. Все эти три на самом деле финские.
-_MIN_RELIABLE_LEN = 30
-
-
-import detektor_pism
-
-# Алфавиты основ: по ним общий с Режиссёром модуль `detektor_pism` (копия
-# байт в байт) выбирает кириллический язык. Сегодня кириллическая основа одна
-# (ru), но буква, которая есть только в одном алфавите (укр. «ї»), решит
-# выбор, когда появится вторая; ничья или неизвестная буква → ru.
-_ALFABETY = {_k: _p["alfabet"] for _k, _p in PODSTAWY.items()}
-
-
-def _is_cyrillic_char(ch):
-    """Проверяет, является ли символ кириллической буквой."""
-    return detektor_pism.pismo_znaku(ch) == detektor_pism.CYRYLICA
-
-
-def _safe_detect(text, fallback=LANG):
-    """Консервативная детекция языка с предпочтением fallback.
-
-    Идея: голос экранной читалки на fallback-языке (fi/pl/it/is),
-    читающий иноязычные вкрапления с лёгким акцентом, звучит существенно
-    лучше, чем английский голос, фонетически коверкающий обрывки финского
-    или польского. Поэтому в неоднозначных случаях оставляем fallback.
-
-    Стратегия (по приоритету):
-
-    1. Кириллица в тексте → кириллический язык по алфавитам основ
-       (`detektor_pism.jezyk_cyrylicy`, сегодня ru). Однозначный сигнал;
-       работает даже на коротких фрагментах ("Тут текст." — 10 знаков).
-
-    2. Слишком короткий фрагмент (<30 символов) → fallback. Lingua на
-       коротких латинских фрагментах часто ошибается на именах
-       собственных: «Igor de Lendorf» → it, «Mut se mies, Igor» → en.
-
-    3. Содержит диакритики fallback (например, ä/ö для fi, ąęć для pl) →
-       fallback. Финское предложение с английской цитатой остаётся
-       финским ("Joo, ja tää on Strategic Lawsuit Against Public...").
-
-    4. Lingua — если возвращает fallback, оставляем.
-
-    5. Lingua → другой язык, у которого есть СВОИ диакритики В ЭТОМ
-       фрагменте (например, фр. à в "à propos") → доверяем lingua.
-
-    6. Lingua → язык без специфических диакритик (типично en) →
-       fallback. "Se tulee englannin sanoista deny, attack, reverse
-       victim and offender." — половина слов английских, но хочется,
-       чтобы финский голос прочитал предложение целиком, а не
-       английский голос ломал фонетику финского начала.
-    """
-    text = text.strip()
-    if not text or len(text) < 3:
-        return fallback
-
-    # 1. Кириллица — однозначный сигнал
-    if any(_is_cyrillic_char(ch) for ch in text):
-        if detektor_pism.jezyki_cyrylickie(_ALFABETY):
-            return detektor_pism.jezyk_cyrylicy(text, _ALFABETY)
-
-    # 2. Короткие → fallback
-    if len(text) < _MIN_RELIABLE_LEN:
-        return fallback
-
-    # 3. Диакритик-хинт fallback-языка
-    fallback_marks = _LANG_DIACRITICS.get(fallback, "")
-    if fallback_marks and any(ch in text for ch in fallback_marks):
-        return fallback
-
-    # 4. Lingua
-    iso = detect_lang(text)
-    if iso is None or iso not in SUPPORTED_LANGS:
-        return fallback
-    if iso == fallback:
-        return iso
-
-    # 5. Detected lang со своими диакритиками в тексте → доверяем lingua
-    iso_marks = _LANG_DIACRITICS.get(iso, "")
-    if iso_marks and any(ch in text for ch in iso_marks):
-        return iso
-
-    # 6. Detected lang без характерных диакритик (типично en) → fallback.
-    # См. doc-string выше: фонетически предпочтительнее.
-    return fallback
-
-para_langs = [_safe_detect(p) for p in paragraphs]
-sent_langs = [_safe_detect(s) for s in all_sents]
-
-from collections import Counter as _Counter
-_para_dist = _Counter(para_langs)
-_sent_dist = _Counter(sent_langs)
-print(f"  Языки абзацев   : {dict(_para_dist)}")
-print(f"  Языки предложений: {dict(_sent_dist)}")
-
-# Подсчитываем абзацы с внутренним смешением языков (хотя бы одно
-# предложение отличается от языка всего абзаца).
-_mixed = 0
-for p_lang, sents in zip(para_langs, para_sentences):
-    s_langs_local = [_safe_detect(s) for s in sents]
-    if any(sl != p_lang for sl in s_langs_local):
-        _mixed += 1
-print(f"  Абзацев со смешанными языками: {_mixed}/{len(paragraphs)} "
-      f"(в HTML/DOCX каждое такое предложение получит свой lang-тег)")
-
-# === Диагностика оставшихся outlier-предложений ===
-# После эвристик _safe_detect (короткие → fallback, диакритик-хинт)
-# здесь печатаем те предложения, которые всё ещё классифицированы
-# как НЕ-fallback. Это либо легитимные иноязычные вкрапления,
-# либо false positives, которые стоит проверить вручную.
-_outlier_sents = [(idx, s, sl)
-                  for idx, (s, sl) in enumerate(zip(all_sents, sent_langs), 1)
-                  if sl != LANG]
-if _outlier_sents:
-    print(f"\n  Оставшиеся outlier-предложения с языком, отличным от "
-          f"{LANG_NAMES.get(LANG, LANG)} ({LANG}): {len(_outlier_sents)}")
-    print(f"  (после короткой-фильтрации и диакритик-хинта; обычно это "
-          f"легитимные вкрапления цитат)")
-    for idx, sent, sl in _outlier_sents[:20]:
-        _prev = sent[:90] + ("…" if len(sent) > 90 else "")
-        print(f"    [предл. {idx}] обнаружен как "
-              f"{LANG_NAMES.get(sl, sl)} ({sl}): {_prev}")
-    if len(_outlier_sents) > 20:
-        print(f"    ... и ещё {len(_outlier_sents) - 20}")
-else:
-    print(f"\n  Все предложения классифицированы как "
-          f"{LANG_NAMES.get(LANG, LANG)} ({LANG}) — outlier'ов нет.")
-
-# %% [markdown] id="md_foreign_resegment" tags=["md_foreign_resegment"]
-# ## Реегментация иноязычных блоков
-#
-# В предыдущей ячейке весь корпус был разбит на предложения **доминирующей** spaCy-моделью. Если в корпусе встречаются непрерывные иноязычные блоки (например, длинная цитата на финском внутри польского текста), модель LANG не знает иноязычных сокращений (`ad es.`, `e.g.`, `esim.`) и может ошибочно принять точку после них за конец предложения — иноязычный фрагмент разрывается пополам, а внутри двух «половинок» теряется контекст.
-#
-# Эта ячейка ищет последовательности из **двух и более подряд идущих предложений на одном и том же иноязычном языке** (по `sent_langs` из cell_para) и заново обрабатывает каждый такой блок собственной моделью:
-#
-# 1. Применяется `ABBREV_BY_LANG[lang]` — языко-специфичная нормализация сокращений из cell_pl_corrector;
-# 2. `get_nlp(lang)(блок)` — корректная сегментация на предложения.
-#
-# Затем перестраиваются `all_sents`, `sent_langs`, `paragraphs`, `para_sentences`, `para_langs`, `df_sent`, `df_para` и (защитно) `para_lemmas`. Следующая ячейка двухстадийного анализа уже работает на исправленных границах.
-#
-# Если в корпусе нет иноязычных предложений — или они есть, но не образуют блоков ≥2 — ячейка завершается мгновенно с информативным сообщением, не загружая никаких дополнительных моделей.
-
-# %% id="cell_foreign_resegment" tags=["cell_foreign_resegment"]
-print("--- Реegmentация иноязычных блоков ---")
-# Доминирующая spaCy-модель в cell_para разбила корпус на предложения
-# по правилам своего языка. Иноязычные сокращения (it. "ad es.", en. "e.g.",
-# fi. "esim.") модель не знает, поэтому точка после такого сокращения
-# часто ошибочно интерпретируется как конец предложения — иноязычный
-# фрагмент рвётся пополам.
-#
-# Эта ячейка ищет последовательности из ≥2 подряд идущих предложений
-# на одном и том же не-LANG языке (по sent_langs из cell_para) и заново
-# обрабатывает их СОБСТВЕННОЙ моделью:
-#   1) языко-специфичная нормализация сокращений ABBREV_BY_LANG[lang]
-#   2) get_nlp(lang)(блок) → новые границы предложений
-#
-# Затем перестраиваются all_sents / sent_langs / paragraphs /
-# para_sentences / para_langs / df_sent / df_para и (defensively)
-# para_lemmas. Cell_multilang_pass далее работает на уже исправленных
-# границах.
-#
-# LRU-кэш get_nlp() ограничивает RAM двумя моделями.
-
-from collections import Counter as _C_seg
-
-# === Быстрый выход 1: в корпусе нет иноязычных предложений ===
-_foreign_count = sum(1 for sl in sent_langs if sl != LANG)
-if _foreign_count == 0:
-    print(f"  Все предложения на основном языке "
-          f"({LANG_NAMES.get(LANG, LANG)}, {LANG}). "
-          f"Реegmentация не требуется.")
-else:
-    # === Поиск runs: ≥2 подряд предложений одного не-LANG языка ===
-    _runs = []  # (lang, start, end)  end — exclusive
-    _i = 0
-    while _i < len(all_sents):
-        _cur_lang = sent_langs[_i]
-        _j = _i
-        while _j < len(all_sents) and sent_langs[_j] == _cur_lang:
-            _j += 1
-        if (_cur_lang != LANG
-                and _cur_lang in SUPPORTED_LANGS
-                and _j - _i >= 2):
-            _runs.append((_cur_lang, _i, _j))
-        _i = _j
-
-    # === Быстрый выход 2: иноязычные есть, но нет блоков ≥2 ===
-    if not _runs:
-        print(f"  Иноязычных предложений: {_foreign_count}, "
-              f"но ни одного непрерывного блока из ≥2. "
-              f"Реegmentация не требуется (одиночные вкрапления "
-              f"обработает следующая ячейка для NER/лемм).")
-    else:
-        print(f"  Найдено блоков ≥2 подряд иноязычных предложений: "
-              f"{len(_runs)}")
-        for _rl, _rs, _re in _runs:
-            print(f"    [{_rl}] предложения {_rs + 1}-{_re} "
-                  f"(длина блока: {_re - _rs})")
-        print()
-
-        # === Обработка runs: abbrev + spaCy → новые предложения ===
-        _new_sents = []
-        _new_langs = []
-        _cursor = 0
-        _runs_sorted = sorted(_runs, key=lambda r: r[1])
-        for _rl, _rs, _re in _runs_sorted:
-            # Копируем неперерабатываемый хвост [_cursor, _rs)
-            for _k in range(_cursor, _rs):
-                _new_sents.append(all_sents[_k])
-                _new_langs.append(sent_langs[_k])
-            # Обрабатываем блок [_rs, _re)
-            _block = " ".join(all_sents[_rs:_re])
-            # (a) Языко-специфичные сокращения
-            _patterns = ABBREV_BY_LANG.get(_rl, [])
-            for _p, _r in _patterns:
-                _block = re.sub(_p, _r, _block)
-            # (b) Сегментация правильной моделью
-            _run_nlp = get_nlp(_rl)
-            _doc = _run_nlp(_block)
-            _ns = [s.text.strip() for s in _doc.sents
-                   if len(s.text.strip()) > 10]
-            # (c) Записываем результат
-            for _s in _ns:
-                _new_sents.append(_s)
-                _new_langs.append(_rl)
-            print(f"    [{_rl}] блок {_rs + 1}-{_re}: "
-                  f"было {_re - _rs} предложений → стало {len(_ns)}")
-            _cursor = _re
-        # Хвост после последнего run
-        for _k in range(_cursor, len(all_sents)):
-            _new_sents.append(all_sents[_k])
-            _new_langs.append(sent_langs[_k])
-
-        _delta = len(_new_sents) - len(all_sents)
-        all_sents = _new_sents
-        sent_langs = _new_langs
-        print(f"\n  Итого предложений: {len(all_sents)} "
-              f"({'+' if _delta >= 0 else ''}{_delta} к исходным)")
-
-        # === Перестройка абзацев по тем же 3-6 предложений ===
-        paragraphs, para_sentences = [], []
-        _buf = []
-        for _sent in all_sents:
-            _buf.append(_sent)
-            if len(_buf) >= PARA_MAX:
-                paragraphs.append(" ".join(_buf))
-                para_sentences.append(_buf[:])
-                _buf = []
-        if _buf:
-            paragraphs.append(" ".join(_buf))
-            para_sentences.append(_buf[:])
-
-        # === para_langs — доминирующий язык внутри каждого абзаца ===
-        para_langs = []
-        _si = 0
-        for _sip in para_sentences:
-            _cnt = _C_seg()
-            for _ in _sip:
-                _cnt[sent_langs[_si]] += 1
-                _si += 1
-            para_langs.append(_cnt.most_common(1)[0][0])
-
-        # === df_sent / df_para ===
-        df_sent = pd.DataFrame({"sent_id": range(1, len(all_sents) + 1),
-                                "sentence": all_sents})
-        df_para = pd.DataFrame({"para_id": range(1, len(paragraphs) + 1),
-                                "paragraph": paragraphs})
-
-        # === Defensive: para_lemmas align по новым абзацам ===
-        # cell_multilang_pass нормально пересоберёт para_lemmas с учётом
-        # языковой модели каждого предложения. Но если он по какой-то
-        # причине early-return-ит (например, после re-segmentации все
-        # фрагменты стали короче 10 символов и filter их выбросил),
-        # длины para_lemmas и paragraphs не должны расходиться —
-        # cell_keywords ожидает совпадения.
-        para_lemmas = [to_lemma_str(p) for p in paragraphs]
-
-        print(f"\n  Абзацев пересобрано: {len(paragraphs)}")
-        print(f"  Языки абзацев   : {dict(_C_seg(para_langs))}")
-        print(f"  Языки предложений: {dict(_C_seg(sent_langs))}")
-
-# %% [markdown] id="md_multilang_pass" tags=["md_multilang_pass"]
-# ## Двухстадийный мультиязычный анализ (NER + лемматизация)
-#
-# Если корпус содержит фрагменты на нескольких языках, доминирующая модель spaCy некорректно лемматизирует слова и неверно классифицирует именованные сущности в иноязычных предложениях. Эта ячейка устраняет проблему: каждое предложение, чей язык (определённый lingua в предыдущей ячейке) отличается от основного, повторно обрабатывается через `get_nlp(sent_lang)`.
-#
-# LRU-кэш в `cell_model` ограничивает использование RAM двумя моделями одновременно — третья вытесняет наименее использованную. Это позволяет последовательно прогнать корпус через несколько моделей без накопления всех в памяти.
-#
-# После выполнения ячейки `all_ents` и `para_lemmas` пересобираются с учётом языка каждого предложения, поэтому экспорт ключевых слов, тезисов, тем и сущностей опирается на корректную морфологию.
-#
-# При отсутствии необходимой модели spaCy (или `transformers`/`torch` для исландского) ячейка во время своего исполнения выводит явное предупреждение о ненадёжности анализа для затронутых предложений и подсказывает команду установки.
-
-# %% id="cell_multilang_pass" tags=["cell_multilang_pass"]
-print("--- Двухстадийный мультиязычный анализ (NER + лемматизация) ---")
-# Первая стадия NER уже выполнена в cell_ner на доминирующей модели (LANG).
-# Здесь — вторая стадия: для каждого предложения, чей язык по lingua
-# отличается от LANG, мы заново прогоняем его через правильную модель
-# spaCy (или blank-fallback с предупреждением), а затем пересобираем
-# all_ents (для экспорта/сводки) и para_lemmas (для TF-IDF ключевых слов).
-#
-# LRU-кэш get_nlp() удерживает максимум две модели; третья вытесняет
-# наименее использованную, поэтому RAM-расход ограничен независимо от
-# числа языков в корпусе.
-
-from collections import defaultdict, Counter as _C2
-
-
-# === Быстрый выход: в корпусе нет иноязычных предложений. ===
-# all_ents (cell_ner) и para_lemmas (cell_para) уже корректны —
-# пересчитывать те же самые предложения той же самой моделью бессмысленно.
-_foreign_count = sum(1 for sl in sent_langs if sl != LANG)
-if _foreign_count == 0:
-    print(f"  В корпусе нет предложений на языках, отличных от "
-          f"{LANG_NAMES.get(LANG, LANG)} ({LANG}).")
-    print(f"  Стадия 2 не требуется — all_ents (cell_ner) и "
-          f"para_lemmas (cell_para) уже корректны.")
-else:
-    def _model_capabilities(nlp_):
-        """Возвращает множество компонентов в пайплайне модели.
-        Blank-fallback (spacy.blank) лишён 'ner', 'lemmatizer', 'tagger' —
-        мы используем этот факт для обнаружения отсутствующих моделей."""
-        return set(nlp_.pipe_names)
-
-
-    # Стадия 1 NER сохраняется для сравнения
-    _stage1_ents = list(all_ents)
-
-    # Группируем все предложения по обнаруженному языку
-    _sent_by_lang = defaultdict(list)
-    for _s, _sl in zip(all_sents, sent_langs):
-        _sent_by_lang[_sl].append(_s)
-
-    print(f"Иноязычных предложений: {_foreign_count} из {len(all_sents)}")
-    print(f"Распределение по языкам: "
-          f"{dict({k: len(v) for k, v in _sent_by_lang.items()})}")
-    print()
-
-    # Языки, для которых анализ окажется неполным
-    _unreliable = {}
-
-    # new_sent_ents[sent_text] -> [(ent_text, label), ...]
-    # new_sent_lemmas[sent_text] -> [lemma, ...]
-    # Используем dict (а не list по индексу), потому что одно и то же
-    # предложение может встретиться в корпусе несколько раз — нам достаточно
-    # обработать его один раз.
-    new_sent_ents = {}
-    new_sent_lemmas = {}
-
-    # === Per-language диагностика для иноязычного контента ===
-    # cell_stop / cell_lemma / cell_pos работали ТОЛЬКО на доминирующей
-    # модели — поэтому для чужих слов выдавали либо случайный POS из-за
-    # омонимии (например, "on" существует в pl/fi/en и доминирующая модель
-    # вернёт тег по своим вероятностям), либо X. Здесь восполняем: для
-    # каждого иноязычного языка собираем POS-распределение, счётчик
-    # отфильтрованных стоп-слов и сэмпл пар форма→лемма правильной моделью.
-    _per_lang_diag = {}  # lang -> dict со счётчиками
-
-    for foreign_lang, foreign_sents in _sent_by_lang.items():
-        # Дедуплицируем внутри языка для экономии вызовов модели
-        unique_sents = list(dict.fromkeys(foreign_sents))
-
-        if foreign_lang == LANG:
-            # Доминирующий язык: используем уже загруженную nlp.
-            target_nlp = nlp
-            target_stop = stop_words
-        elif foreign_lang in SUPPORTED_LANGS:
-            print(f"  [Стадия 2] Язык '{foreign_lang}' "
-                  f"({LANG_NAMES.get(foreign_lang, foreign_lang)}): "
-                  f"предложений — {len(foreign_sents)} "
-                  f"(уникальных: {len(unique_sents)}). Загружаем модель ...")
-            target_nlp = get_nlp(foreign_lang)
-            target_stop = target_nlp.Defaults.stop_words
-        else:
-            # Язык вне SUPPORTED_LANGS — оставляем стадию 1 как есть для этих
-            # предложений (но их у нас не должно быть, т.к. lingua-набор
-            # совпадает с SUPPORTED_LANGS).
-            continue
-
-        caps = _model_capabilities(target_nlp)
-        has_ner = ("ner" in caps) or ("icelandic_ner" in caps)
-        has_lemma = "lemmatizer" in caps
-        has_tagger = "tagger" in caps or "morphologizer" in caps
-
-        if foreign_lang != LANG and (not has_ner or not has_lemma):
-            missing = []
-            if not has_ner:
-                missing.append("NER")
-            if not has_lemma:
-                missing.append("лемматизатор")
-            if not has_tagger:
-                missing.append("POS-таггер")
-            model_name = MODEL_BY_LANG.get(foreign_lang, "(модель неизвестна)")
-            print(f"  [ВНИМАНИЕ] Полная модель для языка '{foreign_lang}' недоступна.")
-            print(f"     Отсутствуют компоненты: {missing}.")
-            print(f"     Затронуто предложений: {len(foreign_sents)}.")
-            print(f"     Анализ этих фрагментов БУДЕТ НЕНАДЁЖНЫМ.")
-            if foreign_lang == "is":
-                print(f"     Установите: pip install transformers torch")
-                print(f"     (для исландского spaCy не имеет полной модели — нужны HF-веса)")
-            else:
-                print(f"     Установите: python -m spacy download {model_name}")
-            _unreliable[foreign_lang] = {
-                "missing": missing,
-                "sentence_count": len(foreign_sents),
-                "unique_sentences": len(unique_sents),
-            }
-
-        # Инициализируем диагностический контейнер только для иноязычного.
-        # Доминирующий язык уже разобран ячейками cell_stop / cell_lemma /
-        # cell_pos, дублировать вывод незачем.
-        if foreign_lang != LANG:
-            _per_lang_diag[foreign_lang] = {
-                "pos_counts": _C2(),
-                "all_alpha": 0,
-                "content_count": 0,
-                "lemma_changed": 0,
-                "lemma_pair_sample": [],
-                "stop_filtered": 0,
-                "has_tagger": has_tagger,
-                "has_lemma": has_lemma,
-            }
-
-        for s in unique_sents:
-            d = target_nlp(s)
-            new_sent_ents[s] = [(ent.text, ent.label_) for ent in d.ents]
-            new_sent_lemmas[s] = [
-                (t.lemma_ or t.text).lower()
-                for t in d
-                if t.is_alpha and not t.is_stop and t.text.lower() not in target_stop
-            ]
-
-            # Собираем per-language диагностику только для foreign.
-            if foreign_lang != LANG:
-                _diag = _per_lang_diag[foreign_lang]
-                for tok in d:
-                    if not tok.is_alpha:
-                        continue
-                    _diag["all_alpha"] += 1
-                    if tok.pos_:
-                        _diag["pos_counts"][tok.pos_] += 1
-                    is_stop_word = tok.is_stop or tok.text.lower() in target_stop
-                    if is_stop_word:
-                        _diag["stop_filtered"] += 1
-                    else:
-                        _diag["content_count"] += 1
-                        _lem = (tok.lemma_ or tok.text).lower()
-                        if _lem != tok.text.lower():
-                            _diag["lemma_changed"] += 1
-                            if len(_diag["lemma_pair_sample"]) < 15:
-                                _diag["lemma_pair_sample"].append((tok.text, _lem))
-
-    # === Per-language диагностика: восполнение cell_stop/lemma/pos ===
-    # Печатается ДО пересборки all_ents, чтобы блок "Полный анализ
-    # иноязычных фрагментов" шёл сразу за сообщениями загрузки моделей.
-    if _per_lang_diag:
-        print()
-        print("=== Полный анализ иноязычных фрагментов "
-              "(POS, стоп-слова, леммы) ===")
-        print("Восполняет cell_stop / cell_lemma / cell_pos, которые работали")
-        print("только на доминирующей модели и поэтому для чужих слов давали")
-        print("либо тег X, либо случайный POS из-за межъязыковой омонимии")
-        print("(например, 'on' существует в pl/fi/en — доминирующая модель")
-        print("вернёт случайный тег по своим вероятностям).")
-        for _fl in sorted(_per_lang_diag.keys()):
-            _diag = _per_lang_diag[_fl]
-            print()
-            print(f"  [{_fl}] {LANG_NAMES.get(_fl, _fl)}:")
-            print(f"    Всего alpha-токенов:              "
-                  f"{_diag['all_alpha']}")
-            _pct_c = (100 * _diag["content_count"]
-                      / max(1, _diag["all_alpha"]))
-            print(f"    Содержательных (не стоп-слова):   "
-                  f"{_diag['content_count']} ({_pct_c:.1f}%)")
-            print(f"    Отфильтровано стоп-слов:          "
-                  f"{_diag['stop_filtered']}")
-            if _diag["has_lemma"]:
-                _pct_l = (100 * _diag["lemma_changed"]
-                          / max(1, _diag["content_count"]))
-                print(f"    Лемматизировано (форма изменена): "
-                      f"{_diag['lemma_changed']}/{_diag['content_count']} "
-                      f"({_pct_l:.1f}%)")
-            else:
-                print(f"    Лемматизация недоступна (нет лемматизатора).")
-            if _diag["has_tagger"] and _diag["pos_counts"]:
-                _total_pos = sum(_diag["pos_counts"].values())
-                _x_n = _diag["pos_counts"].get("X", 0)
-                print(f"    POS-распределение (всего: {_total_pos}, "
-                      f"X/неклассиф.: {_x_n}):")
-                for _pos, _cnt in _diag["pos_counts"].most_common():
-                    _bar = "#" * min(_cnt, 30)
-                    print(f"      {_pos:<8}: {_cnt:4d}  {_bar}")
-            else:
-                print(f"    POS-теги: модель не имеет таггера "
-                      f"(POS-анализ для этого языка пропущен).")
-            if _diag["lemma_pair_sample"]:
-                print(f"    Лемматизация (примеры изменений, до 15):")
-                for _orig, _lem in _diag["lemma_pair_sample"]:
-                    print(f"      [{_fl}] {_orig!r:<24} → {_lem!r}")
-
-    # === Пересборка all_ents с правильной модели на каждое предложение ===
-    _all_ents_v2 = []
-    for _s in all_sents:
-        _all_ents_v2.extend(new_sent_ents.get(_s, []))
-
-    # === Пересборка para_lemmas с учётом языковых границ предложений ===
-    # Каждое предложение каждого абзаца получает леммы от своей языковой модели.
-    _para_lemmas_v2 = []
-    for sents_in_para in para_sentences:
-        bag = []
-        for s in sents_in_para:
-            bag.extend(new_sent_lemmas.get(s, []))
-        _para_lemmas_v2.append(" ".join(bag))
-
-    # === Диагностика ===
-    print()
-    print(f"NER: стадия 1 — {len(_stage1_ents)} сущностей | "
-          f"стадия 2 — {len(_all_ents_v2)} сущностей")
-
-    _s1_set = _C2(_stage1_ents)
-    _s2_set = _C2(_all_ents_v2)
-    _added_pairs = sum(c for k, c in _s2_set.items() if k not in _s1_set)
-    _removed_pairs = sum(c for k, c in _s1_set.items() if k not in _s2_set)
-    print(f"  Появилось во второй стадии: {_added_pairs}")
-    print(f"  Исчезло (вероятно, ошибки доминирующей модели): {_removed_pairs}")
-
-    # Сущности из иноязычных фрагментов — самая ценная диагностика
-    _foreign_sample = []
-    for foreign_lang, foreign_sents in _sent_by_lang.items():
-        if foreign_lang == LANG:
-            continue
-        seen = set()
-        for s in foreign_sents:
-            for txt, lab in new_sent_ents.get(s, []):
-                key = (foreign_lang, txt, lab)
-                if key in seen:
-                    continue
-                seen.add(key)
-                _foreign_sample.append(key)
-
-    if _foreign_sample:
-        print()
-        print(f"Сущности, извлечённые корректной моделью из иноязычных "
-              f"фрагментов (уникальных: {len(_foreign_sample)}, показываем до 20):")
-        for fl, txt, lab in _foreign_sample[:20]:
-            print(f"  [{fl}] [{lab}] {txt!r}")
-        if len(_foreign_sample) > 20:
-            print(f"  ... и ещё {len(_foreign_sample) - 20}")
-
-    print()
-    print("Финальное распределение типов сущностей (после слияния):")
-    for etype, cnt in _C2(label for _, label in _all_ents_v2).most_common():
-        print(f"  {etype:<12}: {cnt}")
-
-    # Обновляем глобалы — последующие ячейки (cell_keywords, cell_export,
-    # cell_summary) автоматически подхватят пересобранные значения.
-    all_ents = _all_ents_v2
-    para_lemmas = _para_lemmas_v2
-
-    print()
-    if _unreliable:
-        print("[ИТОГ] Анализ НЕНАДЁЖЕН для следующих языков:")
-        for lng, info in _unreliable.items():
-            print(f"  {lng}: предложений — {info['sentence_count']} "
-                  f"(уникальных — {info['unique_sentences']}), "
-                  f"отсутствуют — {info['missing']}")
-        print("  Рекомендация: установите недостающие модели и перезапустите ноутбук с этой ячейки.")
-    else:
-        print("Все необходимые модели загружены. Двухстадийный анализ выполнен полностью.")
+print(f"  Языки абзацев   : {dict(Counter(para_langs))}")
+print(f"  Языки предложений: {dict(Counter(sent_langs))}")
+_z_wstawkami = sum(1 for _w in sent_wstawki if _w)
+print(f"  Предложений с иноязычными вставками: {_z_wstawkami} "
+      f"(в HTML/DOCX каждая вставка получит свой lang-тег)")
 
 # %% [markdown] id="md_keywords" tags=["md_keywords"]
 # ## Ключевые слова (TF-IDF)
@@ -2673,8 +2198,8 @@ except Exception:
 # (см. release_notes.md, v1.5.1).
 #
 # Единственный источник границ — para_sentences, синхронизированный
-# с all_sents / df_sent / sent_scores в cell_para и перестраиваемый
-# вместе с ними в cell_foreign_resegment. Инвариант:
+# с all_sents / df_sent / sent_scores в cell_para (один проход spaCy,
+# без пересегментации). Инвариант:
 #   sum(len(p) for p in para_sentences) == len(df_sent) == len(sent_scores)
 # Ниже он проверяется явно, а срезы дополнительно ограничены по границе
 # массива — рассинхронизация приведёт к предупреждению и пропуску абзацев,
@@ -2688,8 +2213,7 @@ _n_para_sents = sum(len(p) for p in para_sentences)
 if _n_para_sents != _n_scores:
     print(f"[ВНИМАНИЕ] Предложений в абзацах: {_n_para_sents}, "
           f"оценок TF-IDF: {_n_scores}. Абзацы за границей оценок будут "
-          f"пропущены (ожидалось равенство — проверьте cell_para / "
-          f"cell_foreign_resegment).")
+          f"пропущены (ожидалось равенство — проверьте cell_para).")
 
 theses_rows = []
 sent_cursor = 0
@@ -2890,7 +2414,7 @@ else:
 #
 # **Доступный текст с языковыми метками** — два формата для офлайн-чтения экранными читалками и TTS:
 #
-# - `accessible_text.html` — строится через `BeautifulSoup`. Корневой `<html>` имеет атрибут `lang` преобладающего языка; каждый `<p>` получает свой `lang` (по `para_langs`), а внутри смешанных абзацев каждое предложение оборачивается в `<span lang="...">` (по `sent_langs`). NVDA и JAWS читают эти теги нативно и переключают голос на лету.
+# - `accessible_text.html` — строится через `BeautifulSoup`. Корневой `<html>` имеет атрибут `lang` основного языка; каждый `<p>` получает свой `lang` (по `para_langs`), а иноязычное предложение или вставка внутри абзаца — собственный `<span lang="...">` (по `sent_langs` и `sent_wstawki`). NVDA и JAWS читают эти теги нативно и переключают голос на лету.
 # - `accessible_text.docx` — собирается через `python-docx`. Для каждого `Run` свойство `<w:lang>` прописывается жёстко (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`). Word, встроенный синтезатор Windows (SAPI) и сторонние читалки опираются на этот атрибут офлайн, без обращения к онлайн-детекторам.
 #
 # Эти файлы заменяют прежний плоский `чистый_текст_для_аудио.txt`: вместо одного языкового профиля на весь поток текста читалка теперь получает корректный язык на каждом фрагменте.
@@ -2941,14 +2465,53 @@ if all_ents:
 # ============================================================
 # Доступный экспорт с тегированием языка (HTML + DOCX).
 # Заменяет прежний плоский «чистый_текст_для_аудио.txt»: каждый
-# абзац (а при смешанных языках — каждое предложение) получает
-# собственный lang-атрибут, благодаря которому NVDA/JAWS/Narrator
+# абзац, иноязычное предложение и иноязычная вставка (цитата, фамилия)
+# получает собственный lang-атрибут, благодаря которому NVDA/JAWS/Narrator
 # и встроенные TTS-движки автоматически выбирают правильный голос.
 # ============================================================
 # Поле `locale` основ.
 from shamanic_locale import PODSTAWY
 
 LANG_TO_LOCALE = {_k: _p["locale"] for _k, _p in PODSTAWY.items()}
+
+
+def _kawalki_akapitu(ids):
+    """[(текст, язык)] абзаца: предложения своего языка, вставки — своего;
+    соседние куски одного языка склеены, пробел между предложениями
+    достаётся предыдущему куску."""
+    kawalki = []
+    for n, k in enumerate(ids):
+        txt, jezyk = all_sents[k], sent_langs[k]
+        if n:
+            kawalki.append((" ", kawalki[-1][1]))
+        kursor = 0
+        for a, b, wl in sent_wstawki[k]:
+            if a > kursor:
+                kawalki.append((txt[kursor:a], jezyk))
+            kawalki.append((txt[a:b], wl))
+            kursor = b
+        if kursor < len(txt):
+            kawalki.append((txt[kursor:], jezyk))
+    scalone = []
+    for txt, jezyk in kawalki:
+        if scalone and scalone[-1][1] == jezyk:
+            scalone[-1] = (scalone[-1][0] + txt, jezyk)
+        else:
+            scalone.append((txt, jezyk))
+    return scalone
+
+
+# Иноязычные отрезки — отдельный CSV (документ, смещения в нормализованном
+# тексте документа, язык, вид, текст): шаманский слой и ручная проверка.
+# Блок на границе документа приписан документу своего начала.
+pd.DataFrame(
+    [{"doc_id": _dokument(_o.start) + 1, "start": _o.start - DOC_START[_dokument(_o.start)],
+      "end": _o.koniec - DOC_START[_dokument(_o.start)], "lang": _o.jezyk,
+      "kind": "block" if _o.blok else "inline", "text": TEKST[_o.start:_o.koniec]}
+     for _o in ODCINKI],
+    columns=["doc_id", "start", "end", "lang", "kind", "text"],
+).to_csv(out_dir / "language_spans.csv", index=False, encoding="utf-8-sig")
+exported.append("language_spans.csv")
 
 # --- HTML с p/span lang ---
 try:
@@ -2965,19 +2528,18 @@ try:
     h1.string = "Текст с языковыми метками для экранных читалок"
     body.append(h1)
 
-    for para_text, p_lang, sents in zip(paragraphs, para_langs, para_sentences):
-        s_langs_local = [_safe_detect(s) for s in sents]
+    for p_lang, ids in zip(para_langs, para_sent_ids):
         p_tag = soup.new_tag("p")
         p_tag["lang"] = p_lang
-        if all(sl == p_lang for sl in s_langs_local):
-            # Однородный абзац — атрибут lang только на <p>
-            p_tag.string = para_text
-        else:
-            # Смешанный — каждое предложение в собственном <span lang="...">
-            for i_s, (sent, sl) in enumerate(zip(sents, s_langs_local)):
+        # Кусок языка абзаца — текст прямо в <p>; иноязычное предложение
+        # или вставка — собственный <span lang="...">.
+        for txt, jezyk in _kawalki_akapitu(ids):
+            if jezyk == p_lang:
+                p_tag.append(txt)
+            else:
                 span = soup.new_tag("span")
-                span["lang"] = sl
-                span.string = sent + (" " if i_s < len(sents) - 1 else "")
+                span["lang"] = jezyk
+                span.string = txt
                 p_tag.append(span)
         body.append(p_tag)
 
@@ -3011,17 +2573,10 @@ try:
 
     docx_doc = Document()
     docx_doc.add_heading("Текст с языковыми метками", level=1)
-    for para_text, p_lang, sents in zip(paragraphs, para_langs, para_sentences):
-        s_langs_local = [_safe_detect(s) for s in sents]
+    for ids in para_sent_ids:
         p = docx_doc.add_paragraph()
-        if all(sl == p_lang for sl in s_langs_local):
-            run = p.add_run(para_text)
-            _set_run_lang(run, p_lang)
-        else:
-            for i_s, (sent, sl) in enumerate(zip(sents, s_langs_local)):
-                tail = " " if i_s < len(sents) - 1 else ""
-                run = p.add_run(sent + tail)
-                _set_run_lang(run, sl)
+        for txt, jezyk in _kawalki_akapitu(ids):
+            _set_run_lang(p.add_run(txt), jezyk)
     docx_doc.save(out_dir / "accessible_text.docx")
     exported.append("accessible_text.docx")
 except ImportError as _e:

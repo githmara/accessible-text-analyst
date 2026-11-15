@@ -1,6 +1,7 @@
 import csv
 import json
 import re
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,7 +18,7 @@ _DICT_ROOT = Path(__file__).resolve().parent / 'dictionaries'
 # nie cichy fallback; `.github/scripts/audyt_podstaw.py` sprawdza resztę.
 # Opis pól: dictionaries/pl/podstawy.yaml.
 POLA_PODSTAW = {
-    'jezyk': str, 'lingua': str, 'nazwa_ru': str, 'locale': str,
+    'jezyk': str, 'nazwa_en': str, 'iso639_3': str, 'nazwa_ru': str, 'locale': str,
     'spacy': (str, type(None)), 'alfabet': str, 'diakrytyki': str,
     'skrotowce': list, 'skrotowce_kodu': list, 'naglowki_struktury': list,
     'stopfrazy_powiazane': list, 'nav_slowa': list, 'nav_rdzenie': list,
@@ -64,14 +65,8 @@ def wczytaj_podstawy(root=_DICT_ROOT):
 
 PODSTAWY = wczytaj_podstawy()
 
-# Nazwa języka w promptach rytuałów (shamanic_ai) = nazwa enuma lingua.
-LANGUAGE_NAMES = {kod: p['lingua'].title() for kod, p in PODSTAWY.items()}
-
-
-def lingua_jezyki():
-    """Członkowie lingua.Language dla wszystkich języków z podstaw."""
-    from lingua import Language
-    return [getattr(Language, p['lingua']) for p in PODSTAWY.values()]
+# Nazwa języka w promptach rytuałów (shamanic_ai) = pole `nazwa_en` podstaw.
+LANGUAGE_NAMES = {kod: p['nazwa_en'] for kod, p in PODSTAWY.items()}
 
 
 def kody_regex():
@@ -199,7 +194,7 @@ def warianty_skrotowcow():
     jednoznaczne) oraz jednoczłonowe wpisane do `skrotowce_kodu` (np., etc.),
     każdy także bez kropki końcowej. Pozostałe jednoczłonowe (os., str., n.,
     v.) wyglądają jak kod Pythona albo pojedyncza litera, więc nie wchodzą.
-    Zapis wspólny dwóm językom wypada ze wszystkich — decyduje wtedy lingua."""
+    Zapis wspólny dwóm językom wypada ze wszystkich — decydują wtedy słowniki."""
     per_jezyk = {}
     for kod, p in PODSTAWY.items():
         zbior = set()
@@ -292,6 +287,33 @@ def t(lang, key, **kwargs):
     return value
 
 
+def _wczytaj_config():
+    """Zawartość config.json / config.ini (JSON) z katalogu bieżącego; {} bez pliku albo przy błędzie."""
+    for name in ('config.json', 'config.ini'):
+        p = Path(name)
+        if not p.is_file():
+            continue
+        try:
+            with open(p, 'r', encoding='utf-8-sig') as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return cfg if isinstance(cfg, dict) else {}
+    return {}
+
+
+def jezyki_korpusu():
+    """Języki tekstu z configu (`corpus_languages`, dawniej `ocr_languages`), tylko kody z podstaw.
+
+    Ta sama lista, z której notatnik bierze słowniki języków i silniki OCR; raport
+    taguje nią obce słowa w narracji (generate_report). Brak klucza → []."""
+    cfg = _wczytaj_config()
+    lista = cfg.get('corpus_languages') or cfg.get('ocr_languages') or []
+    if not isinstance(lista, list):
+        return []
+    return list(dict.fromkeys(k for k in (str(x).strip().lower() for x in lista) if k in PODSTAWY))
+
+
 def get_ui_lang(default='en'):
     """Wczytaj `ui_lang` z config.json / config.ini i znormalizuj do kodu ISO 639-1
     ze zbioru obsługiwanych języków. Pusty string, brak klucza lub nieznany
@@ -321,7 +343,8 @@ def detect_corpus_lang(export_dir, default='en'):
 
     Kolejność źródeł:
     1. atrybut <html lang="..."> z accessible_text.html (zapisane przez notebook),
-    2. lingua-language-detector na pierwszych ~30 zdaniach z sentences.csv,
+    2. najczęstsza wartość kolumny `lang` w sentences.csv (od ATA 2.0 język
+       zdania ze słowników; starsze eksporty bez kolumny przechodzą dalej),
     3. fallback `default` ('en').
     """
     export_dir = Path(export_dir)
@@ -340,20 +363,13 @@ def detect_corpus_lang(export_dir, default='en'):
     sentences_path = export_dir / 'sentences.csv'
     if sentences_path.exists():
         try:
-            from lingua import LanguageDetectorBuilder
-            detector = LanguageDetectorBuilder.from_languages(*lingua_jezyki()).build()
-            sample_parts = []
             with open(sentences_path, 'r', encoding='utf-8-sig') as f:
-                for i, row in enumerate(csv.DictReader(f)):
-                    if i >= 30:
-                        break
-                    sample_parts.append(row.get('sentence', ''))
-            lang_obj = detector.detect_language_of(' '.join(sample_parts))
-            if lang_obj is not None:
-                code = lang_obj.iso_code_639_1.name.lower()
+                licznik = Counter((row.get('lang') or '').strip().lower()
+                                  for row in csv.DictReader(f))
+            for code, _n in licznik.most_common():
                 if code in LANGUAGE_NAMES:
                     return code
-        except Exception:
+        except (OSError, csv.Error):
             pass
 
     return default

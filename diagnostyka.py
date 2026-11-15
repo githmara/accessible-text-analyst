@@ -38,9 +38,9 @@ AUTOMATY_OMORFI = ("omorfi_recased.describe.hfst", "omorfi.describe.hfst")
 # je osobną linią [INFO], ale nie liczy do kodu 4 — inaczej każdy przebieg
 # kończyłby się ostrzeżeniem, a nowe, ważne ginęłoby wśród stałych.
 # (kategoria, początek treści, dlaczego nieszkodliwe). Dopisuj tylko z dowodem.
+# Wpis o `pin_memory` (DataLoader easyocr) usunięty w ATA 2.0: easyocr zniknął
+# ze ścieżki OCR (skład P, 2.0), więc to ostrzeżenie z innego źródła ma być nowe.
 ZNANE_OSTRZEZENIA = (
-    ("UserWarning", "'pin_memory' argument is set as true but no accelerator",
-     "easyocr tworzy DataLoader(pin_memory=True); na CPU torch ignoruje parametr, wynik OCR bez zmian"),
     ("TqdmWarning", "IProgress not found",
      "tqdm.auto w jądrze Jupytera bez ipywidgets; paski postępu i tak są wyłączone"),
 )

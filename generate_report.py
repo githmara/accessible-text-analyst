@@ -2,11 +2,15 @@ import html as _html
 import json
 import re
 import sys
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from shamanic_locale import (PODSTAWY, get_ui_lang, kody_regex, lingua_jezyki, nazwy_regex, t,
+import detektor_pism
+import odcinki_jezykowe
+import slowniki_jezykow
+from shamanic_locale import (PODSTAWY, get_ui_lang, jezyki_korpusu, kody_regex, nazwy_regex, t,
                              warianty_skrotowcow)
 import zrodlo_raportu
 from czyszczenie_tekstu import CELE_MOJIBAKE, ZRODLA_MOJIBAKE
@@ -109,14 +113,6 @@ except ImportError:
     print(t(UI_LANG, "deps.err_missing_lib", lib="markdown", pkg="markdown"))
     sys.exit(1)
 
-try:
-    from lingua import LanguageDetectorBuilder
-except ImportError:
-    print(t(UI_LANG, "deps.err_missing_lib", lib="lingua",
-            pkg="lingua-language-detector"))
-    sys.exit(1)
-
-
 # ============================================================
 # Detektor języka per-fragment dla treści, której nie obejmuje
 # ani EN-hardkod (POS-tag, NER-label itp.), ani target-lang
@@ -125,27 +121,55 @@ except ImportError:
 # (przykłady polskich/rosyjskich skrótowców) oraz tytuły dzieł.
 # ============================================================
 # Języki = dictionaries/<kod>/podstawy.yaml (shamanic_locale.PODSTAWY).
-_SUPPORTED_LANGS = set(PODSTAWY)
 _KODY = kody_regex()   # „en|fi|is|…” do wnętrza grup regexów niżej
-_LINGUA_DETECTOR = LanguageDetectorBuilder.from_languages(*lingua_jezyki()).build()
+_ALFABETY = {kod: p["alfabet"] for kod, p in PODSTAWY.items()}
+# Słowniki tagowania (ATA 2.0, zamiast Lingua): języki tekstu z configu — tej samej
+# listy notatnik używa do OCR i odcinków językowych — oraz en, bo narracja
+# techniczna raportu jest angielska tam, gdzie nie jest rosyjska.
+_JEZYKI_TAGOWANIA = list(dict.fromkeys(jezyki_korpusu() + ["en"]))
+_SLOWO_RE = re.compile(r"[^\W\d_]+")
+
+
+@lru_cache(maxsize=1)
+def _slowniki_tagowania():
+    """{kod: Slownik} języków tagowania; brakujący słownik = ostrzeżenie, nie przerwanie raportu."""
+    wynik = {}
+    for kod in _JEZYKI_TAGOWANIA:
+        try:
+            wynik[kod] = slowniki_jezykow.slownik(kod)
+        except LookupError as e:
+            print(t(UI_LANG, "deps.warn_lexicon_missing", lang=kod, error=e))
+    return wynik
 
 
 @lru_cache(maxsize=8192)
 def _detect_lang(text):
-    """Wykryj język fragmentu — zwraca ISO 639-1 lub None.
-    Cache LRU — generator analizuje wielokrotnie te same nazwy własne
-    (Sara, Joanna, ohjaaja itd.), więc cache uniknie tysięcy wywołań lingua.
+    """Język fragmentu (ISO 639-1) albo None — pismo, potem słowniki języków tagowania.
+
+    Cyrylica → język cyrylicy z alfabetów paczek (detektor_pism). Łacinka → język,
+    którego słownik zna najwięcej słów fragmentu; słowo znane kilku językom idzie do
+    najmniejszego alfabetu, który je mieści (ta sama reguła co odcinki w notatniku:
+    wektory pl znają angielskie formy). Nikt nie zna żadnego słowa → najmniejszy
+    alfabet, który mieści litery (ASCII → en, „ł” → pl). Cache LRU — raport
+    analizuje wielokrotnie te same nazwy własne.
     """
     if not text or len(text.strip()) < 3:
         return None
-    try:
-        lang_obj = _LINGUA_DETECTOR.detect_language_of(text)
-    except Exception:
+    if detektor_pism.dominujace_pismo(text) == detektor_pism.CYRYLICA:
+        return detektor_pism.jezyk_cyrylicy(text, _ALFABETY)
+    slowa = [w for w in _SLOWO_RE.findall(text) if len(w) >= 2]
+    if not slowa:
         return None
-    if lang_obj is None:
-        return None
-    iso = lang_obj.iso_code_639_1.name.lower()
-    return iso if iso in _SUPPORTED_LANGS else None
+    sl = _slowniki_tagowania()
+    kolejnosc = list(sl)
+    glosy = Counter()
+    for w in slowa:
+        znaja = [k for k in kolejnosc if sl[k].ocen(w)]
+        if znaja:
+            glosy[odcinki_jezykowe.najmniejszy_alfabet(set(w), znaja, sl) or znaja[0]] += 1
+    if glosy:
+        return max(glosy, key=lambda k: (glosy[k], -kolejnosc.index(k)))
+    return odcinki_jezykowe.najmniejszy_alfabet(set("".join(slowa)), kolejnosc, sl)
 
 
 # ============================================================
@@ -242,9 +266,8 @@ _TECH_ACRONYMS = (
 
 # Angielskie słowa domeny NLP/ML często pojawiające się w narracji
 # rosyjskiej w cytatach lub w tabelach (np. "Term Frequency — Inverse
-# Document Frequency"). Lingua na pojedynczym 7-9 literowym słowie typu
-# "Inverse" / "Document" / "documents" zwraca it/pl losowo, więc
-# tagujemy wprost.
+# Document Frequency"). Tagujemy je wprost — bez słownika en (brak modelu)
+# trafiałyby do języka korpusu.
 _NLP_DOMAIN_WORDS = (
     # Angielskie nazwy języków — w tabelach markdown ("| Italian | it |")
     # (nazwy języków z podstaw, potem inne częste w tabelach)
@@ -254,14 +277,14 @@ _NLP_DOMAIN_WORDS = (
     r"Term|Frequency|Inverse|"
     r"machine|learning|natural|language|languages|named|entity|entities|"
     r"document|documents|sentence|sentences|token|tokens|"
-    # Hugging Face składa się z dwóch słów; Hugging matchuje przez lingua jako en,
+    # Hugging Face składa się z dwóch słów; Hugging trafia do słownika en,
     # ale Face (4 znaki) nie wpada do _PATH_SEGMENT_LATIN_RE (próg 5).
     r"Face|Hugging"
 )
 
 # Warstwa tekstu PDF i czyszczenie źródeł (od 2026-10-20: bramka ToUnicode,
 # naprawa z fontu, OCR stron nieczytelnych, U+F020, mojibake). Bez tego
-# „Symbol” dostawał od lingua lang="pl", „fonttools” lang="fi", a „cid”, „OCR”
+# „Symbol” dostawał od dawnego detektora lang="pl", „fonttools” lang="fi", a „cid”, „OCR”
 # i „U+F020” zostawały w głosie rosyjskim (zmierzone na raporcie z tymi
 # wydrukami). Nazwy kodowań biorą się ze stałych wspólnego modułu
 # `czyszczenie_tekstu`, nie z listy tutaj — nowa strona kodowa w module
@@ -413,7 +436,7 @@ def _sub_only_in_text_nodes(text, pattern, replacement, flags=0):
     """re.sub poza zawartością tagów HTML.
     Splituje tekst na (HTML-tag | text-node) i aplikuje regex tylko na
     text nodes. Zapobiega temu, by `\\blang\\b` matchowało atrybut
-    `lang="en"` albo by lingua taggowała nazwę elementu (`<strong>`).
+    `lang="en"` albo by detektor taggował nazwę elementu (`<strong>`).
     """
     parts = _TAG_RE.split(text)
     out = []
@@ -491,10 +514,10 @@ def _coalesce_same_lang_spans(text):
 
 
 # Segmenty "wyglądające jak nazwa/ścieżka". Tylko Latin (z diakrytykami),
-# bo lingua-fallback tagujemy tylko gdy detect-uje język INNY niż
+# bo segment tagujemy tylko gdy słowniki dają język INNY niż
 # document_lang (zwykle ru) — cyryliczne segmenty zawsze zwrócą ru, więc
 # ich tagowanie nic by nie dało, a nadto zwiększa szum. Próg 5 znaków:
-# poniżej lingua zwraca losowy wynik (testy: "LRU", "Run" → "is").
+# krótsze ASCII to skróty i identyfikatory, które i tak idą do en (niżej).
 _PATH_SEGMENT_LATIN_RE = re.compile(
     r'[A-Za-zÀ-ÿĀ-ſ][A-Za-zÀ-ÿĀ-ſ0-9_-]{4,}',
     re.UNICODE,
@@ -504,20 +527,20 @@ _ASCII_ONLY_TOKEN_RE = re.compile(r'^[A-Za-z0-9_-]+$')
 _CAMEL_CASE_RE = re.compile(r'[a-z][A-Z]')  # przejście lower→upper w środku
 
 
-def _lingua_word_fallback(text, document_lang="ru"):
-    """Lingua per-segment fallback dla treści w output-box, której nie
+def _slownikowy_fallback(text, document_lang="ru"):
+    """Słownikowy fallback per segment dla treści w output-box, której nie
     obejmują predefiniowane wzorce: dynamiczne ścieżki plików, nazwy
     własne korpusu, fragmenty obcojęzyczne w rosyjskiej narracji.
 
-    Heurystyki (kolejno) dla ASCII-only segmentów — zanim odpalimy lingui:
+    Heurystyki (kolejno) dla ASCII-only segmentów — zanim zapytamy słowniki:
     1. `_` lub code-look (nawiasy, kropki) → Python identifier → en.
        (get_nlp, sent_langs, accessible_text...)
     2. CamelCase / PascalCase (lower→upper przejście) → identifier → en.
        (UniGram, IceBERT, BeautifulSoup, BiGram, TriGram).
 
     Dla nazw własnych z diakrytykami (Joanna_Kos-Krauzen_särkyneet_kulissit)
-    nie trafiamy w żadną z heurystyk ASCII-only — lingui dostaje pełną nazwę
-    i wykrywa fi/pl prawidłowo.
+    nie trafiamy w żadną z heurystyk ASCII-only — słowniki dostają pełną nazwę
+    i głosują słowami (fi/pl).
 
     Cyryliczne segmenty zostawiamy w spokoju — zawsze są w document_lang.
     """
@@ -534,8 +557,7 @@ def _lingua_word_fallback(text, document_lang="ru"):
                     return f'<span lang="en">{seg}</span>'
                 return seg
             # Po cleanup z separatorów (- _ cyfra) zostają same litery.
-            # Mniej niż 5 → lingua zwraca losowo (test: "lang"→is,
-            # "lang-"→is). Fallback en.
+            # Mniej niż 5 liter → skrót albo identyfikator. Fallback en.
             letters_only = re.sub(r'[^A-Za-z]', '', seg)
             if len(letters_only) < 5:
                 if document_lang != "en":
@@ -553,7 +575,7 @@ def _lingua_word_fallback(text, document_lang="ru"):
             out.append(part)
             continue
         # Pomijamy też zawartość tagów HTML (<strong>, <li>, <a href=...>),
-        # żeby lingua nie próbowała tagować nazw elementów ani atrybutów.
+        # żeby słowniki nie próbowały tagować nazw elementów ani atrybutów.
         subparts = _TAG_RE.split(part)
         new_sub = []
         for sub in subparts:
@@ -570,19 +592,19 @@ _CODE_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
-# Hardkodowane skrótowce — krótsze niż próg lingua, ale jednoznaczne.
+# Hardkodowane skrótowce — za krótkie dla słowników, ale jednoznaczne.
 # Bez tej listy "m.in." / "т.е." / "np." są klasyfikowane heurystyką
 # fallback na "en" (krótkie ASCII), co psuje wymowę przykładów w narracji.
 # Wszystkie warianty bez końcowego przecinka — przecinek jest stripowany
 # przed lookupem, żeby pokryć "m.in,", "np.,", "т.д.,", "и т.д." itp.
 # Zapisy skrótowców z pola `skrotowce` podstaw (forma kanoniczna, rozstrzelona,
 # a dla wieloczłonowych także bez kropki końcowej). Zapis wspólny dwóm
-# językom (prof., dr.) jest niejednoznaczny i wypada — decyduje wtedy lingua.
+# językom (prof., dr.) jest niejednoznaczny i wypada — decydują wtedy słowniki.
 _ABBREV_BY_LANG = warianty_skrotowcow()
 
 # Wygląd "kodu Python/HTML/CSS": nawiasy, podkreślenia jako separator
 # słów, kropki przed identyfikatorem (.method, module.attr), strzałki,
-# znaki przypisania. Match → klasyfikujemy jako en bez angażowania lingui.
+# znaki przypisania. Match → klasyfikujemy jako en bez angażowania słowników.
 _CODE_LOOK_RE = re.compile(
     r'[(){}\[\]=<>;:&|/\\]'      # typowe znaki kodu
     r'|\.\w+'                    # kropka przed identifikatorem (spacy.blank)
@@ -599,15 +621,13 @@ def _classify_code_lang(plain):
     1. Skrótowce ze sztywnej listy (m.in., т.е., e.g.) — jednoznaczne.
        Końcowy przecinek jest pomijany, żeby "m.in," / "np.,"  trafiały
        w listę warianów bez przecinka.
-    2. Zawiera cyrylicę → lingua → ru (cyrylica jest jednoznaczna).
+    2. Zawiera cyrylicę → język cyrylicy z alfabetów paczek (zwykle ru).
        Wczesna ścieżka, żeby krótkie "что что" / "т.д." nie spadało
        do fallbacku en przez krok 4.
     3. "Code-look" (nawiasy, podkreślenia, kropki przed identyfikatorem) → en.
-    4. Po usunięciu znaków niealfabetycznych < 8 liter → en. Lingua na
-       6-7 znakowych łacińskich nazwach typu "lingua" zwraca losowo
-       (it/is/pl) — bezpieczniej zaakceptować en jako default dla
-       krótkich identyfikatorów w <code>.
-    5. Lingua na pełnej zawartości; fallback en.
+    4. Po usunięciu znaków niealfabetycznych < 8 liter → en: krótkie
+       identyfikatory w <code> są angielskie częściej niż słownik je zna.
+    5. Słowniki na pełnej zawartości; fallback en.
     """
     plain = plain.strip()
     if not plain:
@@ -617,7 +637,7 @@ def _classify_code_lang(plain):
     for lang, abbrevs in _ABBREV_BY_LANG.items():
         if plain in abbrevs or plain_norm in abbrevs:
             return lang
-    # 2. Cyrylica → lingua zawsze rozpozna ru
+    # 2. Cyrylica → pismo rozstrzyga
     if _HAS_CYRILLIC_RE.search(plain):
         return _detect_lang(plain) or "ru"
     # 3. Code-look
@@ -627,7 +647,7 @@ def _classify_code_lang(plain):
     letters_only = re.sub(r'[^A-Za-z]', '', plain)
     if len(letters_only) < 8:
         return "en"
-    # 5. Lingua
+    # 5. Słowniki
     return _detect_lang(plain) or "en"
 
 
@@ -869,13 +889,13 @@ def build_accessible_html():
         # tagów ani nie nadpisywać już zatagowanego korpusu.
         text = _apply_outside_spans(text, EN_HARDCODE_PATTERNS)
 
-        # === Krok 3: lingua per-segment fallback ===
+        # === Krok 3: słownikowy fallback per segment ===
         # Dla pozostałych nieotagowanych "słów" >= 5 znaków (typowo: ścieżki
         # plików, nazwy własne korpusu, fragmenty obcojęzyczne w narracji),
-        # jeśli lingua wykryje język inny niż domyślny dokumentu (ru), otocz
+        # jeśli słowniki dadzą język inny niż domyślny dokumentu (ru), otocz
         # spanem. Dzięki temu np. "Joanna_Kos-Krauzen_särkyneet_kulissit"
         # w ścieżce dostanie lang="fi", a "Whisper" — lang="en".
-        text = _lingua_word_fallback(text, document_lang="ru")
+        text = _slownikowy_fallback(text, document_lang="ru")
 
         # === Krok 4: scalanie sąsiadujących spanów same-lang ===
         # "TF тире IDF" → "TF-IDF" (jedno wymówienie en zamiast dwóch).
@@ -978,17 +998,17 @@ def build_accessible_html():
             # widział nazwy, której fizycznie w katalogu eksportu nie ma.
             source = source.replace("тезисы.txt", t(target_lang, "theses.filename"))
             md_html = markdown.markdown(source)
-            # 1. Per-<code> lingua: dla każdego elementu <code>/<pre><code>
+            # 1. Per-<code> słowniki: dla każdego elementu <code>/<pre><code>
             #    wykrywamy język (en/pl/ru/it/fi/is) z fallbackiem en.
             md_html = _tag_code_blocks(md_html)
             # 2. EN-hardkod dla narracji rosyjskiej: nazwy bibliotek, akronimy
             #    (PDF, HTML, NER, BoW, ...), czytniki ekranu (NVDA, JAWS),
             #    POS-tagi w tekście. Skipuje wnętrza <span lang="..."> i <code>.
             md_html = _apply_outside_spans(md_html, EN_HARDCODE_PATTERNS)
-            # 3. Lingua-fallback dla pozostałych nazw własnych w narracji
+            # 3. Słownikowy fallback dla pozostałych nazw własnych w narracji
             #    (np. polsko/fińskie segmenty w opisach), z heurystykami
             #    Python-identifier i CamelCase → en.
-            md_html = _lingua_word_fallback(md_html, document_lang="ru")
+            md_html = _slownikowy_fallback(md_html, document_lang="ru")
             # 4. Scal sąsiadujące same-lang spany (TF-IDF, UTF-8 itp.).
             md_html = _coalesce_same_lang_spans(md_html)
             html_content.append(f'<div class="markdown-cell">\n{md_html}\n</div>')

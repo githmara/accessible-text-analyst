@@ -2,7 +2,8 @@
 # Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
 
 jezyk: it
-lingua: ITALIAN
+nazwa_en: Italian
+iso639_3: ita
 nazwa_ru: итальянский
 locale: it-IT
 spacy: it_core_news_lg

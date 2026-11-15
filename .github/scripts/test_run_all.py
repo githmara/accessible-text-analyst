@@ -72,7 +72,7 @@ class TestLataOstrzezen(unittest.TestCase):
         ns = {"Path": Path}
         exec(korpus[korpus.index("_CONFIG_PATH = None"):korpus.index("if _CONFIG_PATH is not None")], ns)
         self.assertIsNone(ns["_CONFIG_PATH"])
-        self.assertIn(f"OCR_LANGS = {diagnostyka.OCR_JEZYKI!r}", korpus[nadpisanie:])
+        self.assertIn(f"CORPUS_LANGS = {diagnostyka.OCR_JEZYKI!r}", korpus[nadpisanie:])
         self.assertEqual(_indeks(kopia, run_all.LOADERS_TAG), _indeks(kopia, "cell_corpus") + 1)
         qa = next(i for i, c in enumerate(kopia.cells) if run_all._tag(c, i) in run_all.QA_TAGS)
         self.assertEqual(_indeks(kopia, run_all.COMPONENTS_TAG), qa - 1)
@@ -111,14 +111,20 @@ class TestRejestr(unittest.TestCase):
                          [["FutureWarning", "polkniete"], ["UserWarning", "drugie"]])
 
     def test_znane_nie_licza_sie_do_wyniku(self):
-        pin = ["UserWarning", "'pin_memory' argument is set as true but no accelerator is found", "x.py:1"]
+        pin = ["TqdmWarning", "IProgress not found. Please update jupyter and ipywidgets.", "x.py:1"]
         nowe = ["FutureWarning", "something changes", "y.py:2"]
         bufor = io.StringIO()
         with contextlib.redirect_stdout(bufor):
             self.assertEqual(run_all._print_warnings([("cell_a", [pin, pin]), ("cell_b", [nowe])]), (1, 1))
             self.assertEqual(run_all._print_warnings([("cell_a", [pin])]), (0, 1))
         self.assertIn("FutureWarning: something changes", bufor.getvalue())
-        self.assertNotIn("'pin_memory' argument", bufor.getvalue())
+        self.assertNotIn("IProgress not found", bufor.getvalue())
+
+    def test_pin_memory_easyocr_juz_nie_jest_znane(self):
+        # easyocr zniknął z OCR (2.0) — to ostrzeżenie z innego źródła ma być NOWE.
+        pin = ["UserWarning", "'pin_memory' argument is set as true but no accelerator is found", "x.py:1"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(run_all._print_warnings([("cell_a", [pin])]), (1, 0))
 
 
     def _sonda(self, ns):

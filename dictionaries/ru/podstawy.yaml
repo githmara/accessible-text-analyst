@@ -2,13 +2,14 @@
 # Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
 
 jezyk: ru
-lingua: RUSSIAN
+nazwa_en: Russian
+iso639_3: rus
 nazwa_ru: русский
 locale: ru-RU
 spacy: ru_core_news_lg
 
 alfabet: "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
-diakrytyki: ""               # cyrylicę lingua rozpoznaje po bloku Unicode
+diakrytyki: ""               # cyrylicę rozpoznaje pismo (detektor_pism), nie diakrytyki
 
 skrotowce: [т.е., т.д., т.п., т.к., т.н., т.наз., и.о., с.г., н.э., в.т.ч., и т.д., и т.п., и др., и пр., напр., проф., акад., доц., ул., пр., пер.]
 skrotowce_kodu: [напр.]

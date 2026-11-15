@@ -2,8 +2,8 @@
 tekstu PDF, OCR i czyszczeniu źródeł muszą dostać <span lang="en">.
 
 Bez wzorców z 2026-10-20 NVDA czytała „cid”, „OCR”, „U+F020” głosem
-rosyjskim, a lingua dawała „Symbol” lang="pl" i „fonttools” lang="fi".
-Test nie używa zgadywania lingua (krok 3 raportu) — wzorce muszą wystarczyć same.
+rosyjskim, a ówczesny detektor (Lingua) dawał „Symbol” lang="pl" i „fonttools” lang="fi".
+Test nie używa słownikowego kroku 3 raportu — wzorce muszą wystarczyć same.
 
 Uruchom:  python .github/scripts/test_wzorce_raportu.py   (stdlib + PyYAML)
 """

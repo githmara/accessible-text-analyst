@@ -21,12 +21,12 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 
 ## Co robi potok
 
-1. Wczytuje tekst z pliku (`.pdf`, `.txt`, `.docx`, `.md`, `.html` lub obrazów: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) lub z URL — usuwając powtarzające się nagłówki/stopki, panele boczne, sekcje „Powiązane artykuły” i podobne szablony. Skanowane PDF-y i obrazy są obsługiwane przez OCR: każdy język z `ocr_languages` czyta stronę własnym silnikiem (OCR wbudowany w Windows 10/11 albo Tesseract dla języka, którego Windows nie ma — dziś islandzkiego), RapidOCR czyta ją jeszcze raz jako zapas, a słownik każdego języka wybiera z wszystkich odczytów formy słownikowe.
-2. Wykrywa język korpusu przez [`lingua-language-detector`](https://github.com/pemistahl/lingua-py). Dominujący język steruje potokiem spaCy; ten sam detektor jest używany ponownie per akapit i per zdanie do eksportu z tagami językowymi.
-3. Ładuje modele spaCy **dwuetapowo**. Najpierw model dominującego języka przetwarza cały korpus od początku do końca (tokenizacja → stop-słowa → lematyzacja → POS → NER). Następnie `cell_multilang_pass` powtarza per-językowe przebiegi NLP tylko dla akapitów, których wykryty język różni się od dominującego — ładując każdy niedominujący model na żądanie przez `get_nlp()` opakowane w `functools.lru_cache(maxsize=2)`. Cache LRU ma znaczenie dopiero na tym drugim etapie; w żadnym momencie nie ma w RAM więcej niż dwóch modeli.
-4. Tokenizacja → filtrowanie stop-słów → lematyzacja → tagowanie POS → NER (dwuetapowy wielojęzyczny NER z per-zdaniowym dispatcherem modeli).
+1. Wczytuje tekst z pliku (`.pdf`, `.txt`, `.docx`, `.md`, `.html` lub obrazów: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) lub z URL — usuwając powtarzające się nagłówki/stopki, panele boczne, sekcje „Powiązane artykuły” i podobne szablony. Skanowane PDF-y i obrazy są obsługiwane przez OCR: każdy język z `corpus_languages` czyta stronę własnym silnikiem (OCR wbudowany w Windows 10/11 albo Tesseract dla języka, którego Windows nie ma — dziś islandzkiego), RapidOCR czyta ją jeszcze raz jako zapas, a słownik każdego języka wybiera z wszystkich odczytów formy słownikowe.
+2. Ustala język każdego słowa ze słowników języków wymienionych w `corpus_languages` (zob. **Język każdego słowa**): język bazowy steruje potokiem spaCy, a obce cytaty i nazwy stają się odcinkami językowymi.
+3. Uruchamia spaCy raz na każdy segment tekstu: model języka bazowego przetwarza tekst bazowy razem z obcymi wtrąceniami, a każdy obcy blok — model jego własnego języka, ładowany na żądanie przez `get_nlp()` (owinięte w `functools.lru_cache(maxsize=2)`, więc w pamięci podręcznej są najwyżej dwa modele). Nie ma przebiegu resegmentacji ani drugiego przebiegu wielojęzycznego.
+4. Tokenizacja → filtrowanie stop-słów → lematyzacja → tagowanie POS → NER, każdy token analizowany modelem własnego języka.
 5. Reprezentacje wektorowe: Bag of Words, TF-IDF + wyszukiwanie auto-zapytaniem z rankingiem kosinusowym.
-6. Struktura: zdania → akapity (po 3–6 zdań) → tezy (najlepsze zdanie na akapit). Każdy akapit i każde zdanie dostaje wykryty kod ISO 639-1.
+6. Struktura: zdania → akapity (po 3–6 zdań) → tezy (najlepsze zdanie na akapit). Każde zdanie niesie swój język i swoje obce wtrącenia; każdy akapit — swój przeważający język.
 7. Modelowanie tematów przez KMeans na wektorach akapitowych spaCy.
 8. *(Opcjonalnie, domyślnie wyłączone)* Per-akapitowa ocena sentymentu modelem `cardiffnlp/twitter-xlm-roberta-base-sentiment`, zapisywana do `sentiment.csv`. Wynik nigdy nie jest pokazywany użytkownikowi — istnieje wyłącznie jako pożywka dla warstwy szamańskiej. Zobacz **Konfiguracja** (`enable_sentiment`).
 9. Eksport CSV/JSON + tekstowy raport podsumowujący + dostępny HTML i DOCX + globalny raport HTML (`analysis_report.html`).
@@ -46,34 +46,31 @@ Dla islandzkiego nie ma pełnego modelu spaCy, więc do pustego potoku wpięte s
 
 **Opcjonalne ulepszenie fińskiej morfologii (omorfi).** Statystyczny lematyzator w `fi_core_news_lg` słabo radzi sobie z fińską morfologią aglutynacyjną — regularnie produkuje śmieciowe lematy w rodzaju *kytköknen* czy *pisttää*. Jeśli zainstalowany jest czysto pythonowy pakiet `omorfi`, a jego automaty FST zostały pobrane (patrz Instalacja, krok 5), notatnik dokłada komponent `omorfi_lemmas`, który nadpisuje lematy i cechy morfologiczne UD analizami słownikowymi wszędzie tam, gdzie zgadzają się one z częścią mowy z taggera spaCy (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Bez pakietu lub automatów potok po cichu zostaje przy standardowym zachowaniu spaCy.
 
-## Detekcja języka
+## Język każdego słowa
 
-Detekcja działa na trzech poziomach:
+Języki tekstu wymieniasz w `corpus_languages` (`config.json`; dawna nazwa `ocr_languages` nadal jest czytana). Ze słowników tych języków notatnik ustala:
 
-1. **Dominujący w korpusie** — `cell_langdet` głosuje per dokument i wybiera dominujący język jako `LANG`. Steruje potokiem spaCy.
-2. **Per akapit** (`para_langs`) — używany jako atrybut `<p lang="...">` w `accessible_text.html` i jako domyślny `<w:lang>` dla każdego akapitu w `accessible_text.docx`.
-3. **Per zdanie** (`sent_langs`) — używany do owijania pojedynczych zdań w `<span lang="...">` w akapitach mieszanych językowo (HTML) lub do ustawiania `<w:lang>` na per-zdaniowych runach (DOCX).
+1. **Język bazowy** (`LANG`) — język, którego słownik zna największą część słów korpusu (udziały są wypisywane). Steruje głównym potokiem spaCy.
+2. **Język każdego słowa** (`odcinki_jezykowe.py`). Słowo, którego nie zna słownik bazy, a zna słownik innego wymienionego języka, należy do tego języka; słowo znane kilku z nich trafia do najmniejszego alfabetu, który mieści wszystkie jego litery — dzięki temu angielskiego słowa nie przejmuje słownik polski, który zna wiele angielskich form, a `Łódź` zostaje polska. Pismo jest faktem: słowo zapisane cyrylicą w tekście łacińskim dostaje język cyrylicki, nawet gdy żaden nie jest wymieniony.
+3. **Obce odcinki** — co najmniej dwa kolejne obce słowa jednego języka w obrębie zdania albo jedno słowo z literami, których nie ma alfabet bazy. Odcinek obejmujący całe zdania jest **blokiem** i przetwarza go własny model spaCy (zdania, NER, lematy). Odcinek wewnątrz zdania bazowego jest **wtrąceniem**: zdanie zostaje przy modelu bazy, a wtrącenie dostaje lematy i tagi POS od modelu swojego języka.
 
-Wykrywanie per akapit i per zdanie używa świadomie **konserwatywnego wrappera `_safe_detect()`** w `cell_para`. Zaufanie surowemu wyjściu lingua skutkuje słyszalnymi artefaktami: lingua myli krótkie łacińskie fragmenty zdominowane przez nazwy własne („Igor de Lendorf” → it, „Mut se mies, Igor” → en), a czytnik ekranu przełączający się na głos angielski dla „Igor de Lendorf” i z powrotem na fiński dla kolejnego zdania brzmi gorzej, niż gdyby przeczytał tę nazwę z fińskim akcentem.
+Wynik niesie eksport: `<span lang="…">` w `accessible_text.html` i osobny `Run` z `<w:lang>` w `accessible_text.docx` dla każdego obcego zdania i każdego wtrącenia, więc czytnik ekranu przełącza głos dokładnie na cytacie albo nazwisku, a nie na całym zdaniu. Wszystkie odcinki są też wypisane w `language_spans.csv`, a `sentences.csv` ma kolumnę `lang`.
 
-Wrapper stosuje kolejno następujące reguły:
+Słowniki: wektory spaCy (skończona lista form) dla polskiego, angielskiego, rosyjskiego i włoskiego; `omorfi` dla fińskiego; BÍN (`islenska`) dla islandzkiego — te same słowniki, których używa głosowanie OCR. Przy jednym języku w `corpus_languages` żaden słownik się nie ładuje i oznaczane są tylko słowa innego pisma. Brak słownika zatrzymuje przebieg komunikatem, który mówi, co zrobić.
 
-1. **Cyrylica w jakimkolwiek miejscu fragmentu → `ru`.** Jednoznaczne; działa nawet dla 3-znakowych fragmentów.
-2. **Fragment krótszy niż 30 znaków → fallback `LANG`.** Lingua jest niepewna dla krótkich łacińskich fragmentów.
-3. **Fragment zawiera diakrytyki języka `LANG`** (np. `ä`/`ö` dla `fi`, `ąęć` dla `pl`) → fallback `LANG`. Fińskie zdanie z angielskim cytatem to dalej fińskie zdanie.
-4. **Lingua zgadza się z `LANG`** → akceptujemy.
-5. **Lingua się nie zgadza, ale wykryty język ma WŁASNE charakterystyczne diakrytyki we fragmencie** (`à` dla it, `ż` dla pl, `ð` dla is) → ufamy lingui.
-6. **Lingua się nie zgadza, a wykryty język nie ma charakterystycznych diakrytyk we fragmencie** (typowo `en`) → fallback `LANG`.
+**Które języki wymienić.** Zmierzone na 20 fińskich transkryptach (55 000 słów), w których pada wiele polskich nazwisk: przy `["fi", "en"]` notatnik znajduje 34 odcinki angielskie (terminy i cytaty); przy `["fi", "pl", "en"]` znajduje dodatkowo 57 odcinków polskich — polskie nazwiska i kilka polskich zwrotów, czytane teraz głosem polskim zamiast fińskiego — i żadne angielskie słowo nie trafia do polskiego. Dlatego:
 
-Motywacja reguły 6 jest czysto fonetyczna: angielski głos czytający fragmenty fińskie/polskie/włoskie produkuje wyraźną dystorsję („bełkot fonemów”), podczas gdy głos fiński/polski/włoski czytający angielski cytat z lekkim akcentem jest zrozumiały i nieuciążliwy. Kompromisem jest to, że czysto angielskie zdania zaszyte w korpusie nieangielskim są czytane głosem dominującym zamiast być przełączone na angielski. Akceptujemy ten kompromis, bo w praktyce użytkownicy czytników ekranu zgłaszają asymetryczny koszt jakości.
+- wymień każdy język, z którego w tekście padają **cytaty**;
+- dla tekstu napisanego w jednym języku, który wspomina **nazwy** z innego (polskie nazwiska w fińskim tekście), dodaj język tych nazw: nazwy w formie podstawowej i nazwy z literami, których nie ma alfabet bazy (`ł`, `ś`), przeczyta wtedy głos ich języka. Nazwa odmieniona wyłącznie literami alfabetu bazy (`Kowalskille`) i tak zostaje w języku bazowym;
+- nie wymieniaj języka, którego w tekście nie ma: dodaje tylko fałszywych kandydatów.
 
-Outliery, które przetrwały heurystykę, są wypisywane w wyjściu `cell_para` do ręcznego przeglądu (`Оставшиеся outlier-предложения...`). Ta sama logika diakrytyk rządzi heurystyką per-`<code>` (`_classify_code_lang`) w `generate_report.py` i per-segmentowym fallbackiem lingua (`_lingua_word_fallback`) dla identyfikatorów ASCII przypominających ścieżki.
+**Dlaczego nie detektor statystyczny.** Do ATA 1.x `lingua-language-detector` klasyfikował całe zdania. Na tych samych transkryptach oznaczył 127 zdań jako obce, niemal wszystkie błędnie; heurystyki potrzebne, by to stłumić, zostawiały 2 zdania i żadnego z angielskich cytatów. ATA 2.0 go usunęło. Raport globalny (`generate_report.py`) oznacza obce słowa w rosyjskiej narracji tymi samymi słownikami (języki z `corpus_languages` plus angielski).
 
 ## Wymagania
 
 - Python 3.12 lub nowszy (zależności przetestowane na Pythonie 3.14).
 - ~1,5 GB wolnego miejsca na dysku na modele `_lg` spaCy (po jednym na język). Dodaj ~1,3 GB, jeśli włączasz wsparcie dla islandzkiego (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert). Islandzki NER czyta cały dokument w nakładających się oknach: na CPU ok. 4 tys. znaków na sekundę, więc książka (1 MB tekstu islandzkiego) to kilka minut.
-- Wsparcie OCR (opcjonalne): pakiety `winrt-*` (poniżej 1 MB) oraz, dla każdego języka z `ocr_languages`, pakiet językowy Windows z optycznym rozpoznawaniem znaków (Ustawienia > Czas i język > Język i region); `rapidocr` z `onnxruntime` (modele, około 40 MB, pobierają się przy pierwszym wywołaniu OCR); dla języka bez silnika Windows (dziś islandzkiego) `tesserocr` i model tessdata_best tego języka w katalogu `tessdata` repozytorium (islandzki: https://github.com/tesseract-ocr/tessdata_best/raw/main/isl.traineddata, około 9,5 MB) oraz słownik `islenska` (~62 MB). OCR nie potrzebuje już `torch`. Brak silnika albo słownika zatrzymuje przebieg komunikatem, który wskazuje naprawę. Słownik islandzki: The Database of Icelandic Morphology (BÍN), The Árni Magnússon Institute for Icelandic Studies, autorka i redaktorka Kristín Bjarnadóttir, CC BY-SA 4.0.
+- Wsparcie OCR (opcjonalne): pakiety `winrt-*` (poniżej 1 MB) oraz, dla każdego języka z `corpus_languages`, pakiet językowy Windows z optycznym rozpoznawaniem znaków (Ustawienia > Czas i język > Język i region); `rapidocr` z `onnxruntime` (modele, około 40 MB, pobierają się przy pierwszym wywołaniu OCR); dla języka bez silnika Windows (dziś islandzkiego) `tesserocr` i model tessdata_best tego języka w katalogu `tessdata` repozytorium (islandzki: https://github.com/tesseract-ocr/tessdata_best/raw/main/isl.traineddata, około 9,5 MB) oraz słownik `islenska` (~62 MB). OCR nie potrzebuje już `torch`. Brak silnika albo słownika zatrzymuje przebieg komunikatem, który wskazuje naprawę. Słownik islandzki: The Database of Icelandic Morphology (BÍN), The Árni Magnússon Institute for Icelandic Studies, autorka i redaktorka Kristín Bjarnadóttir, CC BY-SA 4.0.
 - Dodaj ~130 MB, jeśli włączasz ulepszenie fińskiej morfologii (automaty FST `omorfi` pobierane poleceniem `omorfi-download`).
 - Połączenie z Internetem przy pierwszym uruchomieniu (pobieranie modeli).
 
@@ -176,7 +173,7 @@ Zawartość:
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"],
+  "corpus_languages": ["en"],
   "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
@@ -201,9 +198,9 @@ Zawartość:
 | `source_file`      | string           | Ścieżka do pliku (`.pdf`, `.txt`, `.docx`, `.md`, `.html` lub obraz) **albo** URL (`http://`, `https://`). Pusty string lub brak pliku → wbudowany przykładowy korpus. |
 | `custom_patterns`  | string[]         | Opcjonalna lista wyrażeń regularnych usuwanych z surowego tekstu (żywe nagłówki, stopki, powtarzające się szablony). Przykład: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean          | Przełącza `generate_report.py` między trybem czytelnika (`true`, ukrywa paski ładowania Hugging Face/torch i tabele lematyzacji/POS) a pełnym trybem diagnostycznym (`false`). |
-| `ocr_languages`    | string[]         | Języki TEKSTU skanowanych PDF-ów i obrazów (kody paczek językowych: `en`, `fi`, `is`, `it`, `pl`, `ru`). Każdy język czyta stronę własnym silnikiem OCR, a słownik wybiera słowa, więc podaj tylko języki, które naprawdę występują w dokumencie: nadmiarowy język spowalnia OCR i dokłada fałszywych kandydatów. Łacinkę i cyrylicę można łączyć (`["fi", "ru"]`). |
+| `corpus_languages` | string[]         | Języki TEKSTU (kody paczek językowych: `en`, `fi`, `is`, `it`, `pl`, `ru`); dawna nazwa `ocr_languages` nadal jest czytana. Ich słowniki wybierają język bazowy i język każdego słowa (zob. **Język każdego słowa**), a przy skanowanych PDF-ach i obrazach każdy z nich czyta stronę własnym silnikiem OCR. Wymieniaj tylko języki, które naprawdę występują w tekście: nadmiarowy język spowalnia OCR i dodaje fałszywych kandydatów. Łacinkę i cyrylicę można mieszać (`["fi", "ru"]`). |
 | `enable_sentiment` | boolean          | Włącza opcjonalną per-akapitową analizę sentymentu (domyślnie `false`). Wymaga zakomentowanych zależności sentymentu (zobacz Instalacja krok 4). Zapisuje `sentiment.csv`; wynik nigdy nie jest pokazywany użytkownikowi, służy wyłącznie jako pożywka dla warstwy szamańskiej (rytuał `emotional_undertow.txt` i pieśń Vieno). Przy jakimkolwiek błędzie ładowania jest po cichu pomijana — bez fallbacku. |
-| `ui_lang`          | string           | Język UI dla wyjścia konsoli i atrybutu `<html lang>` generowanego raportu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Pusty string lub nieznany kod → fallback `en`. Niezależny od języka analizowanego korpusu — ten wykrywany jest automatycznie. |
+| `ui_lang`          | string           | Język UI dla wyjścia konsoli i atrybutu `<html lang>` generowanego raportu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Pusty string lub nieznany kod → fallback `en`. Niezależny od języka analizowanego korpusu — ten ustalają słowniki `corpus_languages`. |
 | `lumi_katla_lines` | integer lub null | Opcjonalny limit ornamentu dla raportu Lumi z `shamanic_ai.py`: ile niepustych linii monologu Katli widzi Lumi. `null` lub brak klucza = cała treść; integer N > 0 = pierwsze N linii. |
 | `lumi_vieno_lines` | integer lub null | To samo co `lumi_katla_lines`, dla pieśni ech Vieno. |
 | `voices`           | obiekt          | Mapuje każdy głos szamański (`katla` / `vieno` / `lumi` / `sami`) na identyfikator głosu ElevenLabs, używany przez `shamanic_voice.py`. Głos z pustym lub brakującym ID jest pomijany. Potrzebne tylko, jeśli uruchamiasz dyspozytor audio. |
@@ -384,15 +381,16 @@ Każdy podkatalog zawiera:
 
 | Plik                            | Produkowany przez | Opis                                              |
 |---------------------------------|-------------------|---------------------------------------------------|
-| `sentences.csv`                 | notatnik          | każde zdanie z jego indeksem i przypisaniem do akapitu |
+| `sentences.csv`                 | notatnik          | każde zdanie z jego indeksem i językiem (`lang`)  |
 | `paragraphs.csv`                | notatnik          | akapity (po 3–6 zdań)                             |
 | `theses.csv`, `theses.txt`      | notatnik          | jedna teza na akapit (zdanie o najwyższym TF-IDF); nazwa pliku `.txt` zależy od języka korpusu (np. `tezy.txt` dla polskiego, `тезисы.txt` dla rosyjskiego) |
 | `keywords_tfidf.csv`            | notatnik          | słowa kluczowe (uni/bi/trigramy) z wagami TF-IDF  |
 | `paragraphs_with_topics.csv`    | notatnik          | akapity z przypisanym tematem KMeans              |
 | `topic_keywords.json`           | notatnik          | słowa kluczowe per temat                          |
 | `entities.csv`                  | notatnik          | wszystkie nazwane encje i ich etykiety            |
+| `language_spans.csv`            | notatnik          | obce odcinki językowe: dokument, przesunięcia znaków, język, `block` albo `inline`, tekst |
 | `sentiment.csv`                 | notatnik *(opcjonalnie)* | per-akapitowy sentyment (`para_id`, `label`, `score`, `lang`) — tylko gdy `enable_sentiment` jest `true`; pożywka dla warstwy szamańskiej, nigdy nie pokazywana użytkownikowi |
-| `accessible_text.html`          | notatnik          | atrybuty `lang` na poziomie akapitu i zdania — czytniki ekranu automatycznie przełączają głos per fragment |
+| `accessible_text.html`          | notatnik          | `lang` na każdym akapicie plus `<span lang>` na każdym obcym zdaniu i wtrąceniu (cytat, nazwisko) — czytniki ekranu automatycznie przełączają głos per fragment |
 | `accessible_text.docx`          | notatnik          | ta sama treść z `<w:lang>` ustawionym per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word i SAPI używają tego offline, bez detektora online |
 | `analysis_report.html`           | `generate_report.py` | globalny dostępny raport HTML                  |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | ustrukturyzowany raport diagnostyczny (tematy, tezy, encje wg typu, słowa kluczowe) z eksportów CSV/JSON |
@@ -406,7 +404,7 @@ To jest centralna wartość projektu. Wszystko poniżej jest celowe i musi być 
 
 - **Bez kolorów ANSI, emoji i pseudografiki w stdout.** Czytnik ekranu czyta dosłownie każdy znak — `[OK]` zamiast „🟢”, `---` zamiast „───━━━”.
 - **Wyciszone paski postępu** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` wycisza paski ładowania Hugging Face/torch i ostrzeżenia przed pobraniem IceBERT i icelandic-ner-bert dla islandzkiego; `cell_corpus._silence_ocr_progress()` robi to samo dla silników OCR.
-- **Tagi `lang` per akapit i per zdanie w eksporcie.** `accessible_text.html` i `accessible_text.docx` mają kod ISO 639-1 na każdym akapicie (i na każdym zdaniu w akapitach mieszanych językowo / runach). NVDA, JAWS, Narrator, VoiceOver, Word i SAPI respektują te tagi i przełączają głos automatycznie — nawet offline.
+- **Tagi `lang` per akapit, per zdanie i per odcinek w eksporcie.** `accessible_text.html` i `accessible_text.docx` mają kod ISO 639-1 na każdym akapicie, na każdym obcym zdaniu i na każdym obcym wtrąceniu (cytat albo nazwisko wewnątrz zdania). NVDA, JAWS, Narrator, VoiceOver, Word i SAPI respektują te tagi i przełączają głos automatycznie — nawet offline.
 - **Twardo wpisane oznaczanie angielskiego w raporcie HTML.** `generate_report.py` zawsze owija technicznie angielskie fragmenty — tagi POS (`NOUN`, `VERB`, `ADJ`), etykiety NER (`PER`, `ORG`, `[orgName]`), identyfikatory modeli spaCy / Hugging Face, ścieżki ASCII, bloki kodu — w `<span lang="en">`, więc nie są już wymawiane domyślnym rosyjskim głosem dokumentu.
 - **Per-fragmentowe oznaczanie obcego korpusu w HTML.** Gdy korpus nie jest rosyjski, ustrukturyzowane wyjścia (cytaty zdań, listy słów kluczowych, słowa tematów, wiersze rankingu RAG, tabele lematyzacji) są owinięte w `<span lang="target_lang">`.
 - **Liniowa struktura HTML** (`<main>`, poprawna hierarchia nagłówków).
@@ -421,7 +419,7 @@ Narracja notatnika i wyjście `print()` większości komórek są w języku rosy
 
 ## Znane ograniczenia
 
-- **Pochodzenie zapożyczeń nie jest tagowane.** Tagowanie językowe (atrybuty `lang`, zob. *Detekcja języka*) obejmuje tylko fragmenty zapisane obcym pismem: greckie litery, łacinkę w tekście cyrylicą. Jawny znacznik pochodzenia (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`) nie zostaje powiązany z zapożyczonym słowem, a słowo przepisane pismem tekstu (`фразис` w tekście rosyjskim) zachowuje język korpusu. Takie znaczniki nie mają stałej postaci (skrót, przymiotnik, całe wyrażenie), a oznaczenie cyrylickiego `фразис` jako greki przełączyłoby czytnik ekranu na grecki głos, co brzmi gorzej niż domyślny rosyjski.
+- **Pochodzenie zapożyczeń nie jest tagowane.** Tagowanie językowe (atrybuty `lang`, zob. *Język każdego słowa*) obejmuje słowa, które zna słownik innego wymienionego języka, oraz fragmenty zapisane obcym pismem: greckie litery, łacinkę w tekście cyrylicą. Jawny znacznik pochodzenia (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`) nie zostaje powiązany z zapożyczonym słowem, a słowo przepisane pismem tekstu (`фразис` w tekście rosyjskim) zachowuje język korpusu. Takie znaczniki nie mają stałej postaci (skrót, przymiotnik, całe wyrażenie), a oznaczenie cyrylickiego `фразис` jako greki przełączyłoby czytnik ekranu na grecki głos, co brzmi gorzej niż domyślny rosyjski.
 - **Fiński: pierwsze słowo zdania.** Na początku zdania każde słowo ma wielką literę i tagger spaCy bierze czasem tryb rozkazujący albo wykrzyknik za nazwę własną: `Anna kuulua.` („niech będzie słychać”) staje się imieniem *Anna*, `Oota, miten…` („czekaj, jak…”) imieniem *Oota*. Korekta omorfi nigdy nie nadpisuje słowa oznaczonego jako nazwa, bo inaczej prawdziwe imiona zmieniałyby się w pospolite słowa (*Tuskia* → *tuska*, „udręka”). Takie słowo zachowuje zapisaną formę jako lemat i może trafić do list lematów, słów kluczowych i śpiewu korzeni (`anna`, `oota`). Gdy tagger uzna słowo za wykrzyknik, omorfi podstawia czasownik (*Oota* → `oottaa`, od v1.11.1). Kontrola przecieku gramatyki w Księdze Niedomówień nie liczy słowa kluczowego, którego źródło używa także jako imienia w środku zdania (*Anna Maria …*).
 
 ## Układ repozytorium

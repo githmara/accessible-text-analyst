@@ -9,7 +9,8 @@
 # „ten język tego nie ma” — brak klucza to błąd, nie cichy fallback.
 
 jezyk: pl                    # == nazwa katalogu
-lingua: POLISH               # nazwa członka enuma lingua.Language; .title() = nazwa języka w promptach rytuałów
+nazwa_en: Polish             # angielska nazwa języka — w promptach rytuałów (shamanic_ai)
+iso639_3: pol                # kod ISO 639-3 = nazwa modelu Tesseracta (tessdata_best/<kod>.traineddata)
 nazwa_ru: польский           # nazwa w stdout notatnika (celowo po rosyjsku)
 locale: pl-PL                # atrybut lang= w eksporcie HTML/DOCX
 spacy: pl_core_news_lg       # null = spaCy nie ma modelu → audyt sonduje indeks spaCy

@@ -6,7 +6,7 @@ niezmieniony plik. Sonda spaCy dostaje sztuczny indeks i sztuczny „dysk”,
 więc testy nie potrzebują sieci.
 
 Uruchom:  .venv/Scripts/python .github/scripts/test_audyt_podstaw.py
-(wymaga PyYAML i lingua-language-detector)
+(wymaga PyYAML)
 """
 import re
 import shutil
@@ -21,6 +21,7 @@ import audyt_podstaw as a  # noqa: E402
 sl = a.sl
 INDEKS = {"en_core_web_lg": {"3.8"}, "pl_core_news_lg": {"3.8"}, "ru_core_news_lg": {"3.8"},
           "it_core_news_lg": {"3.8"}, "fi_core_news_lg": {"3.8"}}
+TESSDATA = {"eng", "pol", "rus", "ita", "fin", "isl", "deu", "spa", "fra"}  # audyt-podstaw: ok — sztuczny listing sondy
 
 
 def nic_na_dysku(_nazwa):
@@ -44,13 +45,13 @@ class TestAudytPodstaw(unittest.TestCase):
         self.assertEqual(s.count(stary), 1, f"sabotage target not unique in {wzgledna}: {stary!r}")
         sciezka.write_text(s.replace(stary, nowy), encoding="utf-8")
 
-    def bledy(self, indeks=INDEKS, dysk=nic_na_dysku):
+    def bledy(self, indeks=INDEKS, dysk=nic_na_dysku, tessdata=TESSDATA):
         podstawy, bledy = a.bledy_podstaw(self.k / "dictionaries")
         kody = set(podstawy) or {p.name for p in sl._katalogi_jezykow(self.k / "dictionaries")}
-        nazwy = {p["lingua"].lower() for p in podstawy.values()}
+        nazwy = {p["nazwa_en"].lower() for p in podstawy.values()}
         bledy += a.bledy_readme(self.k, kody) + a.bledy_wyliczen(self.k, kody, nazwy)
         if podstawy:
-            bledy += a.bledy_spacy(podstawy, indeks, dysk)
+            bledy += a.bledy_spacy(podstawy, indeks, dysk) + a.bledy_tessdata(podstawy, tessdata)
         return bledy
 
     def zawiera(self, fragment, **kw):
@@ -66,7 +67,7 @@ class TestAudytPodstaw(unittest.TestCase):
 
     def test_usuniete_pole_fi(self):
         for pole, linia in (("locale", "locale: fi-FI\n"), ("spacy", "spacy: fi_core_news_lg\n"),
-                            ("diakrytyki", 'diakrytyki: "äö"\n'), ("lingua", "lingua: FINNISH\n"),
+                            ("diakrytyki", 'diakrytyki: "äö"\n'), ("iso639_3", "iso639_3: fin\n"),
                             ("nav_rdzenie", "nav_rdzenie: [liittyv]\n")):
             with self.subTest(pole=pole):
                 self.tearDown()
@@ -93,13 +94,24 @@ class TestAudytPodstaw(unittest.TestCase):
         self.popsuj("dictionaries/fi/podstawy.yaml", "jezyk: fi\n", "jezyk: is\n")
         self.zawiera("jezyk 'is' != folder 'fi'")
 
-    def test_lingua_innego_jezyka(self):
-        self.popsuj("dictionaries/fi/podstawy.yaml", "lingua: FINNISH", "lingua: ESTONIAN")
-        self.zawiera("is ISO 'et', not 'fi'")
+    def test_iso639_3_zly_format(self):
+        self.popsuj("dictionaries/fi/podstawy.yaml", "iso639_3: fin", "iso639_3: fi")
+        self.zawiera("iso639_3 'fi' must be three lowercase letters")
 
-    def test_lingua_nieistniejace(self):
-        self.popsuj("dictionaries/fi/podstawy.yaml", "lingua: FINNISH", "lingua: SUOMI")
-        self.zawiera("'SUOMI' is not a lingua.Language member")
+    def test_iso639_3_powtorzony(self):
+        self.popsuj("dictionaries/fi/podstawy.yaml", "iso639_3: fin", "iso639_3: isl")
+        self.zawiera("iso639_3 'isl' is used by both")
+
+    def test_iso639_3_bez_modelu_tesseracta(self):
+        self.zawiera("no Tesseract model 'fin' in tessdata_best", tessdata=TESSDATA - {"fin"})
+
+    def test_nazwa_en_malymi(self):
+        self.popsuj("dictionaries/fi/podstawy.yaml", "nazwa_en: Finnish", "nazwa_en: finnish")
+        self.zawiera("nazwa_en 'finnish' must be a capitalised English language name")
+
+    def test_brak_sieci_tessdata_to_nie_zielone(self):
+        with self.assertRaises(a.BladSondy):
+            a.pobierz_tessdata("http://127.0.0.1:9/contents/")
 
     def test_zle_locale(self):
         self.popsuj("dictionaries/fi/podstawy.yaml", "locale: fi-FI", "locale: sv-FI")
@@ -139,20 +151,20 @@ class TestAudytPodstaw(unittest.TestCase):
     # --- nawrót wyliczeń w kodzie ---
 
     def test_nawrot_mapy_w_kodzie(self):
-        self.popsuj("generate_report.py", "_SUPPORTED_LANGS = set(PODSTAWY)",
-                    '_SUPPORTED_LANGS = {"en", "pl", "ru"}')
+        self.popsuj("generate_report.py", "_KODY = kody_regex()",
+                    '_KODY = "|".join({"en", "pl", "ru"})')
         self.zawiera("generate_report.py:")
         self.zawiera("collection of language codes ['en', 'pl', 'ru']")
 
     def test_nawrot_language_w_kodzie(self):
-        self.popsuj("shamanic_locale.py", "from_languages(*lingua_jezyki())",
-                    "from_languages(Language.FINNISH)")
+        self.popsuj("shamanic_locale.py", "LANGUAGE_NAMES = {kod: p['nazwa_en'] for kod, p in PODSTAWY.items()}",
+                    "LANGUAGE_NAMES = {kod: Language.FINNISH.name for kod in PODSTAWY}")
         self.zawiera("shamanic_locale.py:")
         self.zawiera("Language.FINNISH")
 
     def test_wyjatek_punktowy_z_powodem(self):
-        self.popsuj("generate_report.py", "_SUPPORTED_LANGS = set(PODSTAWY)",
-                    '_SUPPORTED_LANGS = {"en", "pl", "ru"}  # audyt-podstaw: ok — test')
+        self.popsuj("generate_report.py", "_KODY = kody_regex()",
+                    '_KODY = "|".join({"en", "pl", "ru"})  # audyt-podstaw: ok — test')
         self.assertEqual(self.bledy(), [])
 
     # --- pochodne w shamanic_locale ---
@@ -246,13 +258,13 @@ class TestAudytPodstaw(unittest.TestCase):
         self.zawiera("regex alternation of languages ['English', 'Polish', 'Russian']")
 
     def test_nawrot_lingua_language_przez_modul(self):
-        self.popsuj("shamanic_locale.py", "from_languages(*lingua_jezyki())",
-                    "from_languages(lingua.Language.POLISH)")
+        self.popsuj("shamanic_locale.py", "LANGUAGE_NAMES = {kod: p['nazwa_en'] for kod, p in PODSTAWY.items()}",
+                    "LANGUAGE_NAMES = {kod: lingua.Language.POLISH.name for kod in PODSTAWY}")
         self.zawiera("Language.POLISH")
 
     def test_nawrot_split_kodow(self):
-        self.popsuj("generate_report.py", "_SUPPORTED_LANGS = set(PODSTAWY)",
-                    '_SUPPORTED_LANGS = set("en pl ru".split())')
+        self.popsuj("generate_report.py", "_KODY = kody_regex()",
+                    '_KODY = "|".join("en pl ru".split())')
         self.zawiera("'...'.split() of language codes ['en', 'pl', 'ru']")
 
     def test_katalog_pomocniczy_nie_jest_jezykiem(self):

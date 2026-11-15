@@ -2,7 +2,8 @@
 # Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
 
 jezyk: fi
-lingua: FINNISH
+nazwa_en: Finnish
+iso639_3: fin
 nazwa_ru: финский
 locale: fi-FI
 spacy: fi_core_news_lg

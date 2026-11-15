@@ -10,8 +10,9 @@ zostało i żeby podstawy mówiły prawdę.
   1. KOMPLET   — każdy katalog `dictionaries/<kod>/` ma podstawy ze wszystkimi
                  polami `shamanic_locale.POLA_PODSTAW` (pusta wartość to
                  deklaracja, brak klucza to błąd).
-  2. TREŚĆ     — `jezyk` == katalog; `lingua` to członek `lingua.Language` o tym
-                 samym kodzie ISO (lingua MUSI być zainstalowana); `locale`
+  2. TREŚĆ     — `jezyk` == katalog; `nazwa_en` to angielska nazwa wielką
+                 literą; `iso639_3` to trzy małe litery, różne w każdej
+                 paczce (od ATA 2.0 — wcześniej pole `lingua`); `locale`
                  zaczyna się od `<kod>-`; alfabet wielkimi literami bez
                  powtórzeń; diakrytyki ⊂ alfabet; skrótowce z kropką, a wzorzec
                  wieloczłonowego scala jego rozstrzelony zapis; znaczniki
@@ -23,19 +24,23 @@ zostało i żeby podstawy mówiły prawdę.
                  dysku; znaleziony = błąd z poleceniem, co dopisać. Model
                  zadeklarowany musi w indeksie istnieć. Niczego nie instaluje.
   5. NAWRÓT    — w żadnym `*.py` z korzenia nie wraca wyliczenie języków:
-                 `Language.<NAZWA>` (także `lingua.Language.<NAZWA>`), słownik
+                 `Language.<NAZWA>` (enum dawnego detektora), słownik
                  z ≥2 kluczami-kodami, kolekcja z ≥3 kodami, `"en pl ru".split()`
                  z ≥3 kodami ani alternatywa w napisie/regexie („en|pl|ru”,
                  „English|Polish|Russian”) z ≥3 kodami lub nazwami. Wyjątek
                  punktowy: komentarz `# audyt-podstaw: ok — <powód>` na linii.
+  6. SONDA Tesseract — `iso639_3` każdej paczki musi nazywać model w
+                 tessdata_best (`<iso639_3>.traineddata`): to jedyny
+                 konsument pola, a OCR języka bez silnika Windows bez
+                 modelu nie ruszy. Sieć jak w sondzie spaCy (exit 3).
 
 Wynik: wszystkie błędy są wypisywane (::error), potem najwyższy kod: exit 0 =
 OK, exit 1 = błędy (także trwały problem z indeksem spaCy: 4xx albo zmieniony
 format), exit 2 = plik się nie parsuje, exit 3 = indeks spaCy chwilowo
-nieosiągalny (sieć) — „cannot verify”, które BLOKUJE wydanie do powtórki
+albo listing tessdata_best nieosiągalny (sieć) — „cannot verify”, które BLOKUJE wydanie do powtórki
 (decyzja maintainera 2026-10-16: nigdy fałszywe zielone).
 Uruchom:  .venv/Scripts/python .github/scripts/audyt_podstaw.py
-Wymaga PyYAML i lingua-language-detector.
+Wymaga PyYAML.
 """
 from __future__ import annotations
 
@@ -58,6 +63,7 @@ except ValueError as _e:  # BladPodstaw z importu — zgłoś jak każdy inny b�
 
 README_WZORCA = "en"   # README.md bez sufiksu jest po angielsku
 INDEKS_SPACY = "https://raw.githubusercontent.com/explosion/spacy-models/master/compatibility.json"
+LISTA_TESSDATA = "https://api.github.com/repos/tesseract-ocr/tessdata_best/contents/"
 _WYJATEK = re.compile(r"#\s*audyt-podstaw:\s*ok\s*[—–-]+\s*\S")
 
 
@@ -73,27 +79,27 @@ class BladSondy(Exception):
 
 # ── 1–2. komplet i treść ──────────────────────────────────────────
 
-def _lingua_kod(nazwa: str) -> str | None:
-    from lingua import Language
-    czlonek = getattr(Language, nazwa, None)
-    return czlonek.iso_code_639_1.name.lower() if czlonek is not None else None
-
-
 def bledy_podstaw(katalog: Path) -> tuple[dict, list[str]]:
     try:
         podstawy = sl.wczytaj_podstawy(katalog)
     except sl.BladPodstaw as e:
         return {}, [str(e)]
     bledy = []
+    iso3: dict[str, str] = {}
     for kod, p in podstawy.items():
         gdzie = f"dictionaries/{kod}/{sl.PLIK_PODSTAW}"
         if p["jezyk"] != kod:
             bledy.append(f"{gdzie}: jezyk '{p['jezyk']}' != folder '{kod}'")
-        iso = _lingua_kod(p["lingua"])
-        if iso is None:
-            bledy.append(f"{gdzie}: lingua '{p['lingua']}' is not a lingua.Language member")
-        elif iso != kod:
-            bledy.append(f"{gdzie}: lingua '{p['lingua']}' is ISO '{iso}', not '{kod}'")
+        n = p["nazwa_en"]
+        if not n or not n[0].isupper() or not all(c.isalpha() or c in " -" for c in n):
+            bledy.append(f"{gdzie}: nazwa_en {n!r} must be a capitalised English language name")
+        i3 = p["iso639_3"]
+        if not re.fullmatch(r"[a-z]{3}", i3):
+            bledy.append(f"{gdzie}: iso639_3 {i3!r} must be three lowercase letters")
+        elif i3 in iso3:
+            bledy.append(f"{gdzie}: iso639_3 '{i3}' is used by both '{iso3[i3]}' and '{kod}'")
+        else:
+            iso3[i3] = kod
         if not p["locale"].startswith(f"{kod}-"):
             bledy.append(f"{gdzie}: locale '{p['locale']}' does not start with '{kod}-'")
         a = p["alfabet"]
@@ -196,13 +202,46 @@ def bledy_spacy(podstawy: dict, indeks: dict[str, set[str]], zainstalowany=_zain
     return bledy
 
 
+# ── 6. sonda Tesseract ───────────────────────────────────────────
+
+def pobierz_tessdata(url: str = LISTA_TESSDATA) -> set[str]:
+    """{kod modelu} z listingu repozytorium tessdata_best (`<kod>.traineddata`).
+
+    Błędy jak w `pobierz_indeks`: sieć/5xx = chwilowe (exit 3), 4xx/format = trwałe."""
+    try:
+        zadanie = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
+                                                       "User-Agent": "ata-audyt-podstaw"})
+        with urllib.request.urlopen(zadanie, timeout=30) as r:
+            surowe = r.read()
+    except urllib.error.HTTPError as e:
+        raise BladSondy(f"cannot verify Tesseract models: {url}: HTTP {e.code}",
+                        trwaly=400 <= e.code < 500 and e.code not in (403, 429)) from e
+    except Exception as e:  # DNS, odmowa połączenia, timeout, TLS
+        raise BladSondy(f"cannot verify Tesseract models: {url}: {e}", trwaly=False) from e
+    try:
+        wynik = {w["name"].removesuffix(".traineddata") for w in json.loads(surowe)
+                 if w["name"].endswith(".traineddata")}
+    except Exception as e:
+        raise BladSondy(f"cannot verify Tesseract models: {url}: unexpected listing format: {e!r}",
+                        trwaly=True) from e
+    if not wynik:
+        raise BladSondy(f"cannot verify Tesseract models: {url} lists no models", trwaly=True)
+    return wynik
+
+
+def bledy_tessdata(podstawy: dict, modele: set[str]) -> list[str]:
+    return [f"dictionaries/{kod}/{sl.PLIK_PODSTAW}: no Tesseract model '{p['iso639_3']}' in "
+            f"tessdata_best — iso639_3 must be the model name"
+            for kod, p in sorted(podstawy.items()) if p["iso639_3"] not in modele]
+
+
 # ── 5. nawrót wyliczeń ────────────────────────────────────────────
 
 _ALTERNATYWA = re.compile(r"[A-Za-z]+(?:\|[A-Za-z]+)+")
 
 
 def _jest_language(n: ast.AST) -> bool:
-    """`Language.X` albo `<cokolwiek>.Language.X` (np. lingua.Language.POLISH)."""
+    """`Language.X` albo `<cokolwiek>.Language.X` (enum dawnego detektora, np. lingua.Language.POLISH)."""
     if not (isinstance(n, ast.Attribute) and n.attr.isupper()):
         return False
     v = n.value
@@ -229,7 +268,7 @@ def bledy_wyliczen(korzen: Path, kody: set[str], nazwy: set[str] = frozenset()) 
             if not zwolniony(wezel):
                 bledy.append(f"{plik.name}:{wezel.lineno}: {opis} — move the data to "
                              f"dictionaries/<code>/podstawy.yaml and derive it from "
-                             f"shamanic_locale (PODSTAWY, lingua_jezyki, kody_regex, nazwy_regex)")
+                             f"shamanic_locale (PODSTAWY, LANGUAGE_NAMES, kody_regex, nazwy_regex)")
 
         for n in ast.walk(drzewo):
             if _jest_language(n):
@@ -268,7 +307,7 @@ def main() -> int:
     kod_wyjscia = 0
     podstawy, bledy = bledy_podstaw(katalog)
     kody = set(podstawy) or {p.name for p in sl._katalogi_jezykow(katalog)}
-    nazwy = {p["lingua"].lower() for p in podstawy.values()}
+    nazwy = {p["nazwa_en"].lower() for p in podstawy.values()}
     bledy += bledy_readme(KORZEN, kody)
     try:
         bledy += bledy_wyliczen(KORZEN, kody, nazwy)
@@ -285,6 +324,16 @@ def main() -> int:
             else:
                 bledy.append(f"{e} — network problem; re-run the workflow, the release "
                              f"stays blocked until the index can be read")
+                kod_wyjscia = max(kod_wyjscia, 3)
+        try:
+            bledy += bledy_tessdata(podstawy, pobierz_tessdata())
+        except BladSondy as e:
+            if e.trwaly:
+                bledy.append(f"{e} — the listing moved or changed format; fix LISTA_TESSDATA "
+                             f"or the parser in audyt_podstaw.py")
+            else:
+                bledy.append(f"{e} — network or rate-limit problem; re-run the workflow, the "
+                             f"release stays blocked until the listing can be read")
                 kod_wyjscia = max(kod_wyjscia, 3)
     for b in bledy:
         print(f"::error::{b}")

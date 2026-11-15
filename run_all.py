@@ -268,7 +268,7 @@ def patch_for_warnings(nb, export_root, fixtures=None, url=""):
             "# --- run_all --warnings-as-errors: config zastąpiony korpusem syntetycznym ---",
             f"SOURCE_FILE = {str(fixtures['pdf'])!r}",
             f"CUSTOM_PATTERNS = [{dg.WZORZEC_ROSKI!r}]",
-            f"OCR_LANGS = {dg.OCR_JEZYKI!r}",
+            f"CORPUS_LANGS = {dg.OCR_JEZYKI!r}",
             "ENABLE_SENTIMENT = True",
             "",
         ])

@@ -92,7 +92,7 @@ PYTHON_PRZETESTOWANY = "3.14.3"
 #   C — narzędzia obok wyniku (notatnik, postęp), bez wpływu na treść.
 GRUPY_RYZYKA: dict[str, str] = {
     **dict.fromkeys((
-        "lingua-language-detector", "spacy", "numpy", "pandas", "scikit-learn",
+        "spacy", "numpy", "pandas", "scikit-learn",
         "pdfplumber", "fonttools", "python-docx", "beautifulsoup4", "lxml",
         "markdown", "markdownify", "omorfi", "transformers", "torch",
         "sentencepiece", "protobuf", "tiktoken", "pypdfium2", "rapidocr", "onnxruntime", "tesserocr", "pyyaml",

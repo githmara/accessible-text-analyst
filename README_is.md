@@ -21,12 +21,12 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 
 ## Hvað gerir leiðslan
 
-1. Hleður texta úr skrá (`.pdf`, `.txt`, `.docx`, `.md`, `.html` eða myndum: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) eða úr URL — fjarlægir endurteknar haus-/fótlínur, hliðarspjöld, „Related articles"-kafla og álíka kjarna. Skannaðar PDF-skrár og myndainntak eru lesin með OCR: hvert tungumál í `ocr_languages` les síðuna með eigin vél (OCR sem er innbyggt í Windows 10/11, eða Tesseract fyrir tungumál sem Windows hefur ekki — nú íslensku), RapidOCR les hana einu sinni enn til vara, og orðasafn hvers tungumáls velur orðabókarmyndir úr öllum lestrum.
-2. Greinir tungumál safnsins með [`lingua-language-detector`](https://github.com/pemistahl/lingua-py). Ríkjandi tungumál stýrir spaCy-leiðslunni; sami greinir er endurnýttur per málsgrein og per setningu fyrir tungumálamerktan útflutning.
-3. Hleður spaCy-líkönum **í tveimur þrepum**. Fyrst vinnur líkan ríkjandi tungumáls allt safnið frá byrjun til enda (tókun → stop-orð → uppslátt → POS → NER). Síðan endurkeyrir `cell_multilang_pass` málkennslupörin (NLP) aðeins fyrir málsgreinar þar sem greint tungumál er annað en ríkjandi — hleður hvert ekki-ríkjandi líkan að ósk gegnum `get_nlp()`, sem er vafið inn í `functools.lru_cache(maxsize=2)`. LRU-skyndiminnið skiptir aðeins máli í þessu öðru þrepi; aldrei eru fleiri en tvö líkön í minni samtímis.
-4. Tókun → sía stop-orða → uppslátt → POS-merking → NER (tveggja þrepa fjöltyngdur NER með per-setningar dispatcher).
+1. Hleður texta úr skrá (`.pdf`, `.txt`, `.docx`, `.md`, `.html` eða myndum: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) eða úr URL — fjarlægir endurteknar haus-/fótlínur, hliðarspjöld, „Related articles"-kafla og álíka kjarna. Skannaðar PDF-skrár og myndainntak eru lesin með OCR: hvert tungumál í `corpus_languages` les síðuna með eigin vél (OCR sem er innbyggt í Windows 10/11, eða Tesseract fyrir tungumál sem Windows hefur ekki — nú íslensku), RapidOCR les hana einu sinni enn til vara, og orðasafn hvers tungumáls velur orðabókarmyndir úr öllum lestrum.
+2. Ákveður tungumál hvers orðs út frá orðasöfnum tungumálanna í `corpus_languages` (sjá **Tungumál hvers orðs**): grunntungumálið stýrir spaCy-leiðslunni, og erlendar tilvitnanir og nöfn verða að tungumálabútum.
+3. Keyrir spaCy einu sinni á hvern textahluta: líkan grunntungumálsins vinnur grunntextann ásamt erlendum innskotum, og hverja erlenda blokk vinnur líkan hennar eigin tungumáls, sem er hlaðið eftir þörfum gegnum `get_nlp()` (vafið í `functools.lru_cache(maxsize=2)`, svo að í skyndiminni eru í mesta lagi tvö líkön). Engin endurskipting í setningar og engin önnur fjöltyngd umferð.
+4. Tókun → sía stop-orða → uppslátt → POS-merking → NER, hvert tákn greint með líkani síns eigin tungumáls.
 5. Vektorframsetning: Bag of Words, TF-IDF + sjálfsfyrirspurnaleit með cosinus-röðun.
-6. Bygging: setningar → málsgreinar (3–6 setningar hver) → meginsetningar (besta setning per málsgrein). Hver málsgrein og setning er merkt með sínu ISO 639-1 kóða.
+6. Bygging: setningar → málsgreinar (3–6 setningar hver) → meginsetningar (besta setning per málsgrein). Hver setning ber tungumál sitt og erlend innskot sín; hver málsgrein ber ríkjandi tungumál sitt.
 7. Þemamódel með KMeans yfir málsgreinavektorum spaCy.
 8. *(Valfrjálst, slökkt sjálfgefið)* Tilfinningamat per málsgrein með `cardiffnlp/twitter-xlm-roberta-base-sentiment`, skrifað í `sentiment.csv`. Niðurstaðan er aldrei sýnd notandanum — hún er aðeins til sem fóður fyrir shamaníska lagið. Sjá **Stillingar** (`enable_sentiment`).
 9. CSV/JSON-útflutningur + textaleg samantektarskýrsla + aðgengilegt HTML og DOCX + heildar HTML-skýrsla (`analysis_report.html`).
@@ -46,34 +46,31 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 
 **Valfrjáls endurbót á finnskri beygingarfræði (omorfi).** Tölfræðilega lemmunarvélin í `fi_core_news_lg` ræður illa við finnska viðskeytabeygingarfræði — hún framleiðir reglulega ruslmyndir eins og *kytköknen* eða *pisttää*. Þegar hreini Python-pakkinn `omorfi` er uppsettur og FST-stýrivélar hans sóttar (sjá Uppsetningu, skref 5), bætir minnisbókin við íhlutnum `omorfi_lemmas`, sem skiptir út lemmum og UD-beygingareinkennum fyrir orðabókargreiningar alls staðar þar sem þær eru sammála orðflokki spaCy-taggarans (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Án pakkans eða stýrivélanna heldur leiðslan hljóðlega venjulegri spaCy-hegðun.
 
-## Tungumálagreining
+## Tungumál hvers orðs
 
-Greining vinnur á þremur stigum:
+Þú telur upp tungumál textans í `corpus_languages` (`config.json`; gamla heitið `ocr_languages` er enn lesið). Út frá orðasöfnum þessara tungumála ákveður minnisbókin:
 
-1. **Ríkjandi í safni** — `cell_langdet` kýs per skjal og velur ríkjandi tungumálið sem `LANG`. Stýrir spaCy-leiðslunni.
-2. **Per málsgrein** (`para_langs`) — notað sem `<p lang="...">` eiginleiki í `accessible_text.html` og sem sjálfgefið `<w:lang>` fyrir hverja málsgrein í `accessible_text.docx`.
-3. **Per setning** (`sent_langs`) — notað til að vefja einstaka setningar í `<span lang="...">` innan málsgreina með blönduðu tungumáli (HTML) eða setja `<w:lang>` á per-setningar runa (DOCX).
+1. **Grunntungumál** (`LANG`) — tungumálið sem orðasafnið þekkir stærstan hluta orða safnsins hjá (hlutföllin eru prentuð). Það stýrir aðal-spaCy-leiðslunni.
+2. **Tungumál hvers orðs** (`odcinki_jezykowe.py`). Orð sem grunnorðasafnið þekkir ekki en orðasafn annars upptalins tungumáls þekkir tilheyrir því tungumáli; orð sem fleiri þeirra þekkja fer í minnsta stafrófið sem rúmar alla stafi þess — þannig tekur pólska orðasafnið, sem þekkir margar enskar orðmyndir, ekki til sín ensk orð, en `Łódź` helst pólskt. Letrið er staðreynd: orð með kýrillísku letri í latneskum texta fær kýrillískt tungumál, jafnvel þótt ekkert slíkt sé talið upp.
+3. **Erlendir bútar** — að minnsta kosti tvö samliggjandi erlend orð sama tungumáls innan setningar, eða eitt orð með stöfum sem grunnstafrófið vantar. Bútur sem nær yfir heilar setningar er **blokk** og eigið spaCy-líkan hans vinnur hann (setningar, NER, lemmur). Bútur inni í setningu á grunntungumálinu er **innskot**: setningin verður áfram hjá grunnlíkaninu, en innskotið fær lemmur sínar og POS-merki frá líkani síns eigin tungumáls.
 
-Per-málsgreina og per-setningar greining notar viljandi **íhaldssama `_safe_detect()`-vafningu** í `cell_para`. Að treysta hráu lingua-úttaki veldur heyranlegum gripum: lingua flokkar ranglega stutt latnesk brot sem ráðin eru af sérnöfnum („Igor de Lendorf" → it, „Mut se mies, Igor" → en), og skjálesari sem skiptir yfir í enska rödd fyrir „Igor de Lendorf" og aftur á finnsku fyrir næstu setningu hljómar verr en að lesa sérnafnið með finnskum hreim.
+Útflutningurinn ber niðurstöðuna: `<span lang="…">` í `accessible_text.html` og sérstakt `Run` með `<w:lang>` í `accessible_text.docx` fyrir hverja erlenda setningu og hvert innskot, svo að skjálesari skiptir um rödd nákvæmlega á tilvitnuninni eða nafninu, ekki á allri setningunni. Allir bútar eru líka taldir upp í `language_spans.csv`, og `sentences.csv` hefur dálkinn `lang`.
 
-Vafningin beitir eftirfarandi reglum í röð:
+Orðasöfn: spaCy-vigrar (endanlegur listi orðmynda) fyrir pólsku, ensku, rússnesku og ítölsku; `omorfi` fyrir finnsku; BÍN (`islenska`) fyrir íslensku — sömu orðasöfn og OCR-kosningin notar. Með eitt tungumál í `corpus_languages` er ekkert orðasafn hlaðið og aðeins orð með öðru letri eru merkt. Vanti orðasafn stöðvast keyrslan með skilaboðum sem segja hvernig á að laga það.
 
-1. **Kýrílskir stafir hvar sem er í broti → `ru`.** Ótvírætt; virkar jafnvel á 3-stafa brotum.
-2. **Brot styttra en 30 stafir → fallback `LANG`.** Lingua er óáreiðanleg á stuttum latneskum brotum.
-3. **Brot inniheldur diakritíska stafi `LANG`** (t.d. `ä`/`ö` fyrir `fi`, `ąęć` fyrir `pl`) → fallback `LANG`. Finnsk setning með enskri tilvitnun er enn finnsk setning.
-4. **Lingua er sammála `LANG`** → samþykkt.
-5. **Lingua er ósammála, en greint tungumál hefur SÍNA eigin einkennandi diakritísku stafi í brotinu** (`à` fyrir it, `ż` fyrir pl, `ð` fyrir is) → treyst er lingua.
-6. **Lingua er ósammála og greint tungumál hefur enga einkennandi diakritíska stafi í brotinu** (yfirleitt `en`) → fallback `LANG`.
+**Hvaða tungumál á að telja upp.** Mælt á 20 finnskum uppskriftum (55.000 orð) þar sem mörg pólsk nöfn koma fyrir: með `["fi", "en"]` finnur minnisbókin 34 enska búta (hugtök og tilvitnanir); með `["fi", "pl", "en"]` finnur hún að auki 57 pólska búta — pólsk nöfn og nokkur pólsk orðasambönd, sem nú les pólsk rödd í stað finnskrar — og ekkert enskt orð fer til pólsku. Þess vegna:
 
-Hvati reglu 6 er hreint hljóðfræðilegur: ensk rödd sem les finnsk/pólsk/ítölsk brot framleiðir greinilega bjögun, en finnsk/pólsk/ítölsk rödd sem les enska tilvitnun með léttum hreim er skiljanleg og óáreitin. Málamiðlunin er sú að hreinar enskar setningar í safni án ensku eru lesnar með ríkjandi rödd í stað þess að skipta yfir á ensku. Við sættum okkur við þessa málamiðlun því í reynd hafa notendur skjálesara greint frá ósamhverfri kostnaðargæðum.
+- teldu upp hvert tungumál sem **tilvitnanir** í textanum eru á;
+- fyrir texta skrifaðan á einu tungumáli sem nefnir **nöfn** úr öðru (pólsk nöfn í finnskum texta), bættu við tungumáli nafnanna: nöfn í grunnmynd og nöfn með stöfum sem grunnstafrófið vantar (`ł`, `ś`) les þá rödd þeirra eigin tungumáls. Nafn sem er beygt eingöngu með stöfum grunnstafrófsins (`Kowalskille`) helst hvort eð er í grunntungumálinu;
+- ekki telja upp tungumál sem kemur ekki fyrir í textanum: það bætir aðeins við fölskum kandídötum.
 
-Útlagar sem lifa af leiðslunnar eru listaðir í úttaki `cell_para` til handvirkrar yfirferðar (`Оставшиеся outlier-предложения...`). Sama diakritísk rökfræði stýrir per-`<code>` leiðslu (`_classify_code_lang`) í `generate_report.py` og per-hluta lingua-fallback (`_lingua_word_fallback`) fyrir slóðarlík ASCII-auðkenni.
+**Hvers vegna ekki tölfræðilegur greinir.** Fram að ATA 1.x flokkaði `lingua-language-detector` heilar setningar. Á sömu uppskriftum merkti hann 127 setningar sem erlendar, nær allar ranglega; varnarreglurnar sem þurfti til að bæla það niður skildu eftir 2 setningar og enga af ensku tilvitnununum. ATA 2.0 fjarlægði hann. Heildarskýrslan (`generate_report.py`) merkir erlend orð í rússnesku frásögninni með sömu orðasöfnum (tungumálin úr `corpus_languages` auk ensku).
 
 ## Kröfur
 
 - Python 3.12 eða nýrri (pakkarnir eru prófaðir á Python 3.14).
 - ~1,5 GB af lausu plássi fyrir spaCy `_lg`-líkön (eitt per tungumál). Bættu við ~1,3 GB ef þú vilt íslenskustuðning (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert). Íslenska NER-greiningin les allt skjalið í gluggum sem skarast: um 4.000 stafir á sekúndu á CPU, svo bók (1 MB af íslenskum texta) tekur nokkrar mínútur.
-- OCR-stuðningur (valfrjáls): `winrt-*`-pakkarnir (undir 1 MB) og, fyrir hvert tungumál í `ocr_languages`, tungumálapakki Windows með ljóslestri (Stillingar > Tími og tungumál > Tungumál og svæði); `rapidocr` með `onnxruntime` (líkönin, um 40 MB, sækjast við fyrsta OCR-kall); fyrir tungumál án Windows-vélar (nú íslensku) `tesserocr` og tessdata_best-líkan tungumálsins í `tessdata`-möppu geymslunnar (íslenska: https://github.com/tesseract-ocr/tessdata_best/raw/main/isl.traineddata, um 9,5 MB) ásamt orðasafninu `islenska` (~62 MB). OCR þarf ekki lengur `torch`. Ef vél eða orðasafn vantar stöðvast keyrslan með skilaboðum sem segja hvernig á að laga það. Íslenskt orðasafn: Beygingarlýsing íslensks nútímamáls (BÍN), Stofnun Árna Magnússonar í íslenskum fræðum, höfundur og ritstjóri Kristín Bjarnadóttir, CC BY-SA 4.0.
+- OCR-stuðningur (valfrjáls): `winrt-*`-pakkarnir (undir 1 MB) og, fyrir hvert tungumál í `corpus_languages`, tungumálapakki Windows með ljóslestri (Stillingar > Tími og tungumál > Tungumál og svæði); `rapidocr` með `onnxruntime` (líkönin, um 40 MB, sækjast við fyrsta OCR-kall); fyrir tungumál án Windows-vélar (nú íslensku) `tesserocr` og tessdata_best-líkan tungumálsins í `tessdata`-möppu geymslunnar (íslenska: https://github.com/tesseract-ocr/tessdata_best/raw/main/isl.traineddata, um 9,5 MB) ásamt orðasafninu `islenska` (~62 MB). OCR þarf ekki lengur `torch`. Ef vél eða orðasafn vantar stöðvast keyrslan með skilaboðum sem segja hvernig á að laga það. Íslenskt orðasafn: Beygingarlýsing íslensks nútímamáls (BÍN), Stofnun Árna Magnússonar í íslenskum fræðum, höfundur og ritstjóri Kristín Bjarnadóttir, CC BY-SA 4.0.
 - Bættu við ~130 MB ef þú vilt endurbót á finnskri beygingarfræði (FST-stýrivélar `omorfi`, sóttar með `omorfi-download`).
 - Nettenging við fyrstu keyrslu (niðurhal líkana).
 
@@ -176,7 +173,7 @@ Innihald:
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"],
+  "corpus_languages": ["en"],
   "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
@@ -201,9 +198,9 @@ Innihald:
 | `source_file`      | string          | Slóð á skrá (`.pdf`, `.txt`, `.docx`, `.md`, `.html` eða mynd) **eða** URL (`http://`, `https://`). Tómur strengur eða týnd skrá → innbyggður sýnishornssafn. |
 | `custom_patterns`  | string[]        | Valfrjáls listi af reglulegum tjáningum sem eru fjarlægðar úr hráum texta (hlaupandi hausar, fætur, endurtekið kjarnamál). Dæmi: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Skiptir `generate_report.py` á milli lesendaham (`true`, felur Hugging Face/torch hleðslulínur og uppsláttar/POS-töflur) og fullum greiningarham (`false`). |
-| `ocr_languages`    | string[]        | Tungumál TEXTANS í skönnuðum PDF-skrám og myndum (kóðar tungumálapakkanna: `en`, `fi`, `is`, `it`, `pl`, `ru`). Hvert tungumál les síðuna með eigin OCR-vél og orðasafn velur orðin, svo tilgreindu aðeins tungumál sem raunverulega eru í skjalinu: aukatungumál hægir á OCR og bætir við röngum kandídötum. Blanda má latnesku og kýrillísku letri (`["fi", "ru"]`). |
+| `corpus_languages` | string[]        | Tungumál TEXTANS (kóðar tungumálapakka: `en`, `fi`, `is`, `it`, `pl`, `ru`); gamla heitið `ocr_languages` er enn lesið. Orðasöfn þeirra velja grunntungumálið og tungumál hvers orðs (sjá **Tungumál hvers orðs**), og í skönnuðum PDF-skrám og myndum les hvert þeirra síðuna með eigin OCR-vél. Teldu aðeins upp tungumál sem raunverulega koma fyrir í textanum: aukatungumál hægir á OCR og bætir við fölskum kandídötum. Blanda má latnesku og kýrillísku letri (`["fi", "ru"]`). |
 | `enable_sentiment` | boolean         | Kveikir á valfrjálsri tilfinningagreiningu per málsgrein (`false` sjálfgefið). Krefst hinna afkommentuðu tilfinningapakka (sjá Uppsetning, skref 4). Skrifar `sentiment.csv`; niðurstaðan er aldrei sýnd notandanum, hún fóðrar aðeins shamaníska lagið (helgisiðinn `emotional_undertow.txt` og söng Vieno). Við hverja hleðsluvillu er einfaldlega sleppt — engin fallback. |
-| `ui_lang`          | string          | Tungumál notendaviðmóts fyrir úttak í skel og `<html lang>` eigind í myndaðri skýrslu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tómur strengur eða óþekktur kóði → fallback `en`. Óháð tungumáli greinda safnsins, sem er greint sjálfvirkt. |
+| `ui_lang`          | string          | Tungumál notendaviðmóts fyrir úttak í skel og `<html lang>` eigind í myndaðri skýrslu (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tómur strengur eða óþekktur kóði → fallback `en`. Óháð tungumáli greinda safnsins, sem orðasöfn `corpus_languages` ákveða. |
 | `lumi_katla_lines` | heiltala eða null | Valfrjáls skrautmark fyrir lokaskýrslu Lumi úr `shamanic_ai.py`: hve margar ekki-tómar línur einræðu Kötlu Lumi sér. `null` eða vantandi lykill = allt innihald; heiltala N > 0 = fyrstu N línurnar. |
 | `lumi_vieno_lines` | heiltala eða null | Það sama og `lumi_katla_lines`, en fyrir bergmálsöng Vieno. |
 | `voices`           | hlutur          | Varpar hverri shamanískri rödd (`katla` / `vieno` / `lumi` / `sami`) yfir á ElevenLabs radd-auðkenni, notað af `shamanic_voice.py`. Rödd með tómu eða vantandi auðkenni er sleppt. Aðeins nauðsynlegt ef þú keyrir hljóðafgreiðarann. |
@@ -384,15 +381,16 @@ Hver undirmappa inniheldur:
 
 | Skrá                            | Búin til af       | Lýsing                                            |
 |---------------------------------|-------------------|---------------------------------------------------|
-| `sentences.csv`                 | minnisbók         | hver setning með vísitölu og málsgreinatengingu   |
+| `sentences.csv`                 | minnisbók         | hver setning með vísitölu og tungumáli (`lang`)   |
 | `paragraphs.csv`                | minnisbók         | málsgreinar (3–6 setningar hver)                  |
 | `theses.csv`, `theses.txt`      | minnisbók         | ein meginsetning per málsgrein (hæsta-TF-IDF setning); `.txt`-skráarnafnið fer eftir tungumáli safnsins (t.d. `tezy.txt` fyrir pólsku, `тезисы.txt` fyrir rússnesku) |
 | `keywords_tfidf.csv`            | minnisbók         | lykilorð (uni/bi/trigröm) með TF-IDF-vægi         |
 | `paragraphs_with_topics.csv`    | minnisbók         | málsgreinar með úthlutuðu KMeans-þema             |
 | `topic_keywords.json`           | minnisbók         | lykilorð per þema                                 |
 | `entities.csv`                  | minnisbók         | öll nefnd entítet og merkimiðar þeirra            |
+| `language_spans.csv`            | minnisbók         | erlendir tungumálabútar: skjal, stafahliðranir, tungumál, `block` eða `inline`, texti |
 | `sentiment.csv`                 | minnisbók *(valfrjálst)* | tilfinning per málsgrein (`para_id`, `label`, `score`, `lang`) — aðeins þegar `enable_sentiment` er `true`; fóður fyrir shamaníska lagið, aldrei sýnt notandanum |
-| `accessible_text.html`          | minnisbók         | `lang`-eiginleikar á málsgreinar- og setningarstigi — skjálesarar skipta um rödd sjálfkrafa per brot |
+| `accessible_text.html`          | minnisbók         | `lang` á hverri málsgrein auk `<span lang>` á hverri erlendri setningu og hverju innskoti (tilvitnun, nafn) — skjálesarar skipta um rödd sjálfkrafa per brot |
 | `accessible_text.docx`          | minnisbók         | sama innihald með `<w:lang>` stilltu per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word og SAPI nota það án nets, án nettengs greinis |
 | `analysis_report.html`           | `generate_report.py` | heildar aðgengileg HTML-skýrsla                |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | uppbyggð greiningarskýrsla (þemu, tesur, nafnliðir eftir tegund, lykilorð) úr CSV/JSON-útflutningi |
@@ -406,7 +404,7 @@ Hver undirmappa inniheldur:
 
 - **Engir ANSI-litir, tjáningartákn eða gervigrafík í stdout.** Skjálesari les hvern staf bókstaflega — `[OK]` í stað „🟢", `---` í stað „───━━━".
 - **Þaggaðar framvinduslíkur** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` þaggar Hugging Face/torch hleðslulínur og viðvaranir áður en IceBERT og icelandic-ner-bert eru sótt fyrir íslensku; `cell_corpus._silence_ocr_progress()` gerir það sama fyrir OCR-vélarnar.
-- **Per-málsgreinar og per-setningar `lang`-merking í útflutningi.** `accessible_text.html` og `accessible_text.docx` bera ISO 639-1 kóða á hverri málsgrein (og á hverri setningu innan málsgreina/runa með blönduðu tungumáli). NVDA, JAWS, Narrator, VoiceOver, Word og SAPI virða þessi merki og skipta um rödd sjálfkrafa — jafnvel án nets.
+- **`lang`-merking per málsgrein, per setningu og per bút í útflutningi.** `accessible_text.html` og `accessible_text.docx` bera ISO 639-1 kóða á hverri málsgrein, á hverri erlendri setningu og á hverju erlendu innskoti (tilvitnun eða nafn inni í setningu). NVDA, JAWS, Narrator, VoiceOver, Word og SAPI virða þessi merki og skipta um rödd sjálfkrafa — jafnvel án nets.
 - **Harðkóðuð enskumerking í HTML-skýrslunni.** `generate_report.py` vefur alltaf tæknileg ensk brot — POS-merki (`NOUN`, `VERB`, `ADJ`), NER-merki (`PER`, `ORG`, `[orgName]`), auðkenni spaCy / Hugging Face líkana, ASCII-slóðir, kóðablokkir — inn í `<span lang="en">`, þannig að þau eru ekki lengur lesin með sjálfgefnu rússnesku rödd skjalsins.
 - **Per-brot merking erlends safns í HTML.** Þegar safnið er ekki rússneskt eru uppbyggð úttök (setningarútdrættir, lykilorðalistar, þemorðsorð, RAG-röðunarraðir, uppsláttartöflur) vafin í `<span lang="target_lang">`.
 - **Línuleg HTML-bygging** (`<main>`, rétt fyrirsagnastigveldi).
@@ -421,7 +419,7 @@ Frásögn vinnubókarinnar og `print()`-úttak flestra hólfa er skrifað á rú
 
 ## Þekktar takmarkanir
 
-- **Uppruni tökuorða er ekki merktur.** Tungumálamerking (`lang`-eigindin, sjá *Tungumálagreining*) nær aðeins til búta sem eru skrifaðir með erlendu letri: grískum stöfum, latnesku letri inni í kýrillískum texta. Skýr upprunamerking (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`) er ekki tengd tökuorðinu, og orð umritað með letri textans (`фразис` í rússneskum texta) heldur tungumáli safnsins. Slíkar merkingar hafa ekkert fast form (skammstöfun, lýsingarorð, heilt orðasamband), og ef kýrillíska `фразис` væri merkt sem gríska myndi skjálesarinn skipta yfir í gríska rödd, sem hljómar verr en sjálfgefna rússneska röddin.
+- **Uppruni tökuorða er ekki merktur.** Tungumálamerking (`lang`-eigindin, sjá *Tungumál hvers orðs*) nær til orða sem orðasafn annars upptalins tungumáls þekkir og til búta sem eru skrifaðir með erlendu letri: grískum stöfum, latnesku letri inni í kýrillískum texta. Skýr upprunamerking (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`) er ekki tengd tökuorðinu, og orð umritað með letri textans (`фразис` í rússneskum texta) heldur tungumáli safnsins. Slíkar merkingar hafa ekkert fast form (skammstöfun, lýsingarorð, heilt orðasamband), og ef kýrillíska `фразис` væri merkt sem gríska myndi skjálesarinn skipta yfir í gríska rödd, sem hljómar verr en sjálfgefna rússneska röddin.
 - **Finnska: fyrsta orð setningar.** Í upphafi setningar byrjar hvert orð á hástaf, og spaCy-markarinn tekur stundum boðhátt eða upphrópun fyrir sérnafn: `Anna kuulua.` („láttu það heyrast“) verður nafnið *Anna*, `Oota, miten…` („bíddu, hvernig…“) nafnið *Oota*. omorfi-leiðréttingin skrifar aldrei yfir orð sem merkt er sem nafn, því annars yrðu raunveruleg nöfn að samnöfnum (*Tuskia* → *tuska*, „kvöl“). Slíkt orð heldur rituðu formi sínu sem lemmu og getur birst í lemmulistum, lykilorðum og rótasöngnum (`anna`, `oota`). Þegar markarinn telur orðið upphrópun setur omorfi inn sögnina (*Oota* → `oottaa`, frá v1.11.1). Málfræðilekaprófun Bókar hins ósagða telur ekki lykilorð sem heimildin notar líka sem nafn inni í setningu (*Anna Maria …*).
 
 ## Bygging hugbúnaðarsafns

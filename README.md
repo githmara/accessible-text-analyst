@@ -21,12 +21,12 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 
 ## What the pipeline does
 
-1. Loads text from a file (`.pdf`, `.txt`, `.docx`, `.md`, `.html`, or images: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) or from a URL — stripping repeated headers/footers, sidebars, "Related articles" sections, and similar boilerplate. Scanned PDFs and image inputs fall back to OCR: each language from `ocr_languages` reads the page with its own engine (the OCR built into Windows 10/11, or Tesseract for a language Windows lacks — today Icelandic), RapidOCR reads it once more as a backup, and a lexicon of each language picks the dictionary forms from all readings.
-2. Detects the corpus language with [`lingua-language-detector`](https://github.com/pemistahl/lingua-py). The dominant language drives the spaCy pipeline; the same detector is reused per paragraph and per sentence to power language-tagged export.
-3. Loads spaCy models in **two stages**. First, the dominant language's model processes the entire corpus end-to-end (tokenization → stop-words → lemmatization → POS → NER). Then `cell_multilang_pass` re-runs the per-language NLP passes only for paragraphs whose detected language differs from the dominant one — loading each non-dominant model on demand through `get_nlp()`, which is wrapped in `functools.lru_cache(maxsize=2)`. The LRU cache only matters during this second stage; at most two models live in RAM at any time.
-4. Tokenization → stop-word filtering → lemmatization → POS tagging → NER (two-stage multilingual with per-sentence model dispatch).
+1. Loads text from a file (`.pdf`, `.txt`, `.docx`, `.md`, `.html`, or images: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) or from a URL — stripping repeated headers/footers, sidebars, "Related articles" sections, and similar boilerplate. Scanned PDFs and image inputs fall back to OCR: each language from `corpus_languages` reads the page with its own engine (the OCR built into Windows 10/11, or Tesseract for a language Windows lacks — today Icelandic), RapidOCR reads it once more as a backup, and a lexicon of each language picks the dictionary forms from all readings.
+2. Decides the language of every word from the lexicons of the languages listed in `corpus_languages` (see **Language of every word**): the base language drives the spaCy pipeline, foreign quotes and names become language spans.
+3. Runs spaCy once per text segment: the base language's model processes the base text together with inline foreign spans, and each foreign block is processed by its own language's model, loaded on demand through `get_nlp()` (wrapped in `functools.lru_cache(maxsize=2)`, so at most two models are cached). There is no re-segmentation pass and no second multilingual pass.
+4. Tokenization → stop-word filtering → lemmatization → POS tagging → NER, each token analysed by the model of its own language.
 5. Vector representations: Bag of Words, TF-IDF + auto-query search with cosine ranking.
-6. Structure: sentences → paragraphs (3–6 sentences each) → theses (the best sentence per paragraph). Each paragraph and sentence is tagged with its detected ISO 639-1 code.
+6. Structure: sentences → paragraphs (3–6 sentences each) → theses (the best sentence per paragraph). Each sentence carries its language and its inline foreign spans; each paragraph carries its prevailing language.
 7. Topic modeling with KMeans over spaCy paragraph vectors.
 8. *(Optional, off by default)* Per-paragraph sentiment scoring with `cardiffnlp/twitter-xlm-roberta-base-sentiment`, written to `sentiment.csv`. The result is never shown to the user — it exists only as feed for the shamanic layer. See **Configuration** (`enable_sentiment`).
 9. CSV/JSON export + a textual summary report + an accessibility-tagged HTML and DOCX export + a global HTML report (`analysis_report.html`).
@@ -46,34 +46,31 @@ There is no full spaCy model for Icelandic, so two Hugging Face models are wired
 
 **Optional Finnish morphology upgrade (omorfi).** The statistical lemmatizer in `fi_core_news_lg` struggles with Finnish agglutinative morphology — it routinely produces garbage lemmas such as *kytköknen* or *pisttää*. When the pure-Python `omorfi` package is installed and its FST automata downloaded (see Installation step 5), the notebook appends an `omorfi_lemmas` component that overrides lemmas and UD morphological features with dictionary analyses wherever they agree with the spaCy tagger's part of speech (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Without the package or the automata the pipeline silently keeps the stock spaCy behaviour.
 
-## Language detection
+## Language of every word
 
-Detection runs at three levels:
+You list the languages of the text in `corpus_languages` (`config.json`; the old name `ocr_languages` is still read). From those languages' lexicons the notebook decides:
 
-1. **Corpus-dominant** — `cell_langdet` votes per document and picks the dominant language as `LANG`. Drives the spaCy pipeline.
-2. **Per-paragraph** (`para_langs`) — used as the `<p lang="...">` attribute in `accessible_text.html` and as the default `<w:lang>` for each paragraph in `accessible_text.docx`.
-3. **Per-sentence** (`sent_langs`) — used to wrap individual sentences in `<span lang="...">` inside mixed-language paragraphs (HTML) or to set `<w:lang>` on per-sentence runs (DOCX).
+1. **Base language** (`LANG`) — the language whose lexicon knows the largest share of the corpus words (the shares are printed). It drives the main spaCy pipeline.
+2. **The language of every word** (`odcinki_jezykowe.py`). A word the base lexicon does not know but another listed language does belongs to that language; a word known to several of them goes to the smallest alphabet that holds all its letters — so an English word is not taken over by the Polish lexicon, which knows many English forms, while `Łódź` stays Polish. Script is a fact: a Cyrillic word in Latin text gets a Cyrillic language even when none is listed.
+3. **Foreign spans** — at least two consecutive foreign words of one language within a sentence, or one word with letters the base alphabet lacks. A span that covers whole sentences is a **block** and is processed by its own spaCy model (sentences, NER, lemmas). A span inside a base-language sentence is an **inline span**: the sentence stays with the base model, and the span gets its lemmas and POS tags from its own language's model.
 
-Per-paragraph and per-sentence detection uses a deliberately **conservative `_safe_detect()` wrapper** in `cell_para`. Trusting raw lingua output causes audible artefacts: lingua misclassifies short Latin fragments dominated by proper names ("Igor de Lendorf" → it, "Mut se mies, Igor" → en), and a screen reader switching to an English voice for "Igor de Lendorf" then back to Finnish for the next sentence sounds worse than reading the proper name with a Finnish accent.
+The export carries the result: `<span lang="…">` in `accessible_text.html` and a separate `Run` with `<w:lang>` in `accessible_text.docx` for every foreign sentence and every inline span, so a screen reader switches voice exactly on the quote or the name, not on the whole sentence. All spans are also listed in `language_spans.csv`, and `sentences.csv` has a `lang` column.
 
-The wrapper applies these rules in order:
+Lexicons: spaCy vectors (a finite list of word forms) for Polish, English, Russian and Italian; `omorfi` for Finnish; BÍN (`islenska`) for Icelandic — the same lexicons the OCR vote uses. With a single language in `corpus_languages`, no lexicon is loaded and only words of another script are tagged. A missing lexicon stops the run with a message naming the fix.
 
-1. **Cyrillic anywhere in the fragment → `ru`.** Unambiguous; works on fragments as short as 3 characters.
-2. **Fragment shorter than 30 characters → fallback `LANG`.** Lingua is unreliable on short Latin fragments.
-3. **Fragment contains `LANG`'s diacritics (e.g. `ä`/`ö` for `fi`, `ąęć` for `pl`) → fallback `LANG`.** A Finnish sentence with an English quote is still Finnish.
-4. **Lingua agrees with `LANG`** → keep it.
-5. **Lingua disagrees but the detected language has its OWN diacritics in the fragment** (`à` for it, `ż` for pl, `ð` for is) → trust lingua.
-6. **Lingua disagrees and the detected language has no characteristic diacritics in the fragment** (typically `en`) → fallback `LANG`.
+**Which languages to list.** Measured on 20 Finnish transcripts (55,000 words) that mention many Polish names: with `["fi", "en"]` the notebook finds 34 English spans (terms and quotes); with `["fi", "pl", "en"]` it also finds 57 Polish spans — Polish names and a few Polish phrases, now read by a Polish voice instead of a Finnish one — and no English word goes to Polish. So:
 
-The motivation for rule 6 is purely phonetic: an English voice reading Finnish/Polish/Italian fragments produces noticeable distortion ("bełkot fonemów"), whereas a Finnish/Polish/Italian voice reading an English quote with a slight accent is intelligible and unobtrusive. The trade-off is that purely-English sentences embedded in a non-English corpus are read in the dominant voice instead of being switched to English. We accept this trade-off because, in practice, screen-reader users have reported the asymmetric quality cost.
+- list every language whose **quotes** occur in the text;
+- for a text written in one language that mentions **names** from another (Polish names in a Finnish text), add the language of the names: names in their base form, and names with letters the base alphabet lacks (`ł`, `ś`), are then read by their own language's voice. A name inflected with letters of the base alphabet only (`Kowalskille`) stays in the base language either way;
+- do not list a language that does not occur in the text: it only adds false candidates.
 
-Outliers that survive the heuristic are listed in the `cell_para` output for manual review (`Оставшиеся outlier-предложения...`). Same diacritic logic governs the per-`<code>` heuristic (`_classify_code_lang`) in `generate_report.py` and the per-segment lingua fallback (`_lingua_word_fallback`) for path-like ASCII identifiers.
+**Why not a statistical detector.** Up to ATA 1.x, `lingua-language-detector` classified whole sentences. On the same transcripts it marked 127 sentences as foreign, nearly all of them wrongly; the guard heuristics needed to suppress that left 2 sentences and none of the English quotes. ATA 2.0 removed it. The global report (`generate_report.py`) tags foreign words in its Russian narration with the same lexicons (the languages from `corpus_languages` plus English).
 
 ## Requirements
 
 - Python 3.12 or newer (the dependency set is tested on Python 3.14).
 - ~1.5 GB of free disk space for spaCy `_lg` models (one per language you install). Add ~1.3 GB if you opt into Icelandic support (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert). Icelandic NER reads the whole document in overlapping windows: about 4,000 characters per second on CPU, so a book (1 MB of Icelandic text) takes a few minutes.
-- OCR support (optional): the `winrt-*` packages (under 1 MB) plus, for each language in `ocr_languages`, the Windows language pack with optical character recognition (Settings > Time & language > Language & region); `rapidocr` with `onnxruntime` (its models, about 40 MB, download on the first OCR call); for a language without a Windows engine (today Icelandic) `tesserocr` and that language's tessdata_best model in the `tessdata` folder of the repo (Icelandic: https://github.com/tesseract-ocr/tessdata_best/raw/main/isl.traineddata, about 9.5 MB) plus the `islenska` lexicon (~62 MB). OCR no longer needs `torch`. A missing engine or lexicon stops the run with a message naming the fix. Icelandic lexicon: The Database of Icelandic Morphology (BÍN), The Árni Magnússon Institute for Icelandic Studies, author and editor Kristín Bjarnadóttir, CC BY-SA 4.0.
+- OCR support (optional): the `winrt-*` packages (under 1 MB) plus, for each language in `corpus_languages`, the Windows language pack with optical character recognition (Settings > Time & language > Language & region); `rapidocr` with `onnxruntime` (its models, about 40 MB, download on the first OCR call); for a language without a Windows engine (today Icelandic) `tesserocr` and that language's tessdata_best model in the `tessdata` folder of the repo (Icelandic: https://github.com/tesseract-ocr/tessdata_best/raw/main/isl.traineddata, about 9.5 MB) plus the `islenska` lexicon (~62 MB). OCR no longer needs `torch`. A missing engine or lexicon stops the run with a message naming the fix. Icelandic lexicon: The Database of Icelandic Morphology (BÍN), The Árni Magnússon Institute for Icelandic Studies, author and editor Kristín Bjarnadóttir, CC BY-SA 4.0.
 - Add ~130 MB if you opt into the Finnish morphology upgrade (the `omorfi` FST automata downloaded by `omorfi-download`).
 - An internet connection on the first run (model downloads).
 
@@ -176,7 +173,7 @@ Contents:
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"],
+  "corpus_languages": ["en"],
   "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
@@ -201,9 +198,9 @@ Contents:
 | `source_file`      | string          | Path to a file (`.pdf`, `.txt`, `.docx`, `.md`, `.html`, or an image) **or** a URL (`http://`, `https://`). An empty string or a missing file falls back to the built-in example corpus. |
 | `custom_patterns`  | string[]        | Optional regular expressions stripped from the raw text (running heads, footers, repetitive boilerplate). Example: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Toggles `generate_report.py` between reader-facing mode (`true`, hides Hugging Face/torch loading bars and lemmatization/POS tables) and full diagnostic mode (`false`). |
-| `ocr_languages`    | string[]        | Languages of the TEXT of scanned PDFs and images (language pack codes: `en`, `fi`, `is`, `it`, `pl`, `ru`). Each language reads the page with its own OCR engine and a lexicon picks the words, so list only the languages that really occur in the document: an extra language slows OCR down and adds false candidates. Latin and Cyrillic can be mixed (`["fi", "ru"]`). |
+| `corpus_languages` | string[]        | Languages of the TEXT (language pack codes: `en`, `fi`, `is`, `it`, `pl`, `ru`); the old name `ocr_languages` is still read. Their lexicons pick the base language and the language of every word (see **Language of every word**), and for scanned PDFs and images each of them reads the page with its own OCR engine. List only the languages that really occur in the text: an extra language slows OCR down and adds false candidates. Latin and Cyrillic can be mixed (`["fi", "ru"]`). |
 | `enable_sentiment` | boolean         | Turns on the optional per-paragraph sentiment analysis (`false` by default). Requires the commented sentiment dependencies (see Installation step 4). Writes `sentiment.csv`; the result is never shown to the user, it only feeds the shamanic layer (the `emotional_undertow.txt` ritual and Vieno's chant). On any load failure it silently skips — no fallback. |
-| `ui_lang`          | string          | UI language for console output and the generated report's `<html lang>` attribute (`pl` / `en` / `ru` / `fi` / `is` / `it`). Empty string or unknown code → falls back to `en`. Independent from the analysed corpus language, which is detected automatically. |
+| `ui_lang`          | string          | UI language for console output and the generated report's `<html lang>` attribute (`pl` / `en` / `ru` / `fi` / `is` / `it`). Empty string or unknown code → falls back to `en`. Independent from the analysed corpus language, which the lexicons of `corpus_languages` decide. |
 | `lumi_katla_lines` | integer or null | Optional ornament cap for `shamanic_ai.py`'s Lumi dispatch: how many non-empty lines of Katla's monologue Lumi sees. `null` or missing key = full content; integer N > 0 = first N lines. |
 | `lumi_vieno_lines` | integer or null | Same as `lumi_katla_lines`, but for Vieno's echo chant. |
 | `voices`           | object          | Maps each shamanic voice (`katla` / `vieno` / `lumi` / `sami`) to an ElevenLabs voice ID, consumed by `shamanic_voice.py`. A voice with an empty or missing ID is skipped. Only needed if you run the audio dispatcher. |
@@ -384,15 +381,16 @@ Each subdirectory contains:
 
 | File                            | Produced by | Description                                              |
 |---------------------------------|-------------|----------------------------------------------------------|
-| `sentences.csv`                 | notebook    | every sentence with its index and paragraph assignment   |
+| `sentences.csv`                 | notebook    | every sentence with its index and its language (`lang`)  |
 | `paragraphs.csv`                | notebook    | paragraphs (3–6 sentences each)                          |
 | `theses.csv`, `theses.txt`      | notebook    | one thesis per paragraph (highest-TF-IDF sentence); the `.txt` filename follows the corpus language (e.g. `tezy.txt` for Polish, `тезисы.txt` for Russian) |
 | `keywords_tfidf.csv`            | notebook    | keywords (uni/bi/trigrams) with TF-IDF weights           |
 | `paragraphs_with_topics.csv`    | notebook    | paragraphs with their assigned KMeans topic              |
 | `topic_keywords.json`           | notebook    | keywords per topic                                       |
 | `entities.csv`                  | notebook    | all named entities and their labels                      |
+| `language_spans.csv`            | notebook    | foreign-language spans: document, character offsets, language, `block` or `inline`, text |
 | `sentiment.csv`                 | notebook *(optional)* | per-paragraph sentiment (`para_id`, `label`, `score`, `lang`) — only when `enable_sentiment` is `true`; feed for the shamanic layer, never shown to the user |
-| `accessible_text.html`          | notebook    | paragraph- and sentence-level `lang` attributes — screen readers switch voice automatically per fragment |
+| `accessible_text.html`          | notebook    | `lang` on every paragraph plus `<span lang>` on every foreign sentence and inline foreign span (quote, name) — screen readers switch voice automatically per fragment |
 | `accessible_text.docx`          | notebook    | the same content with `<w:lang>` set per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word and SAPI use it offline, no online detector required |
 | `analysis_report.html`           | `generate_report.py` | global accessible HTML report                  |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | structured diagnostic report (topics, theses, entities by type, keywords) from the CSV/JSON exports |
@@ -406,7 +404,7 @@ This is the project's central value. Everything below is intentional and must be
 
 - **No ANSI colors, emoji, or pseudographics in stdout.** A screen reader reads every character literally — `[OK]` instead of "🟢", `---` instead of "───━━━".
 - **Silenced progress bars** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` mutes Hugging Face/torch loading bars and warnings before pulling IceBERT and icelandic-ner-bert for Icelandic; `cell_corpus._silence_ocr_progress()` does the same for the OCR engines.
-- **Per-paragraph and per-sentence `lang` tagging in the export.** `accessible_text.html` and `accessible_text.docx` carry an ISO 639-1 code on every paragraph (and on every sentence inside mixed-language paragraphs / runs). NVDA, JAWS, Narrator, VoiceOver, Word, and SAPI all honour those tags and switch voice automatically — even offline.
+- **Per-paragraph, per-sentence and per-span `lang` tagging in the export.** `accessible_text.html` and `accessible_text.docx` carry an ISO 639-1 code on every paragraph, on every foreign sentence and on every inline foreign span (a quote or a name inside a sentence). NVDA, JAWS, Narrator, VoiceOver, Word, and SAPI all honour those tags and switch voice automatically — even offline.
 - **Hardcoded English tagging in the HTML report.** `generate_report.py` always wraps technical English fragments — POS tags (`NOUN`, `VERB`, `ADJ`), NER labels (`PER`, `ORG`, `[orgName]`), spaCy / Hugging Face model identifiers, ASCII filenames, code blocks — in `<span lang="en">`, so they are no longer pronounced through the document-default Russian voice.
 - **Per-fragment foreign-corpus tagging in HTML.** When the corpus is non-Russian, structured outputs (sentence excerpts, keyword lists, topic words, RAG ranking rows, lemmatization tables) are wrapped in `<span lang="target_lang">`.
 - **Linear HTML structure** (`<main>`, proper heading hierarchy).
@@ -421,7 +419,7 @@ The notebook narrative and the `print()` output of most cells are written in Rus
 
 ## Known limitations
 
-- **Loanword origins are not tagged.** Language tagging (the `lang` attributes, see *Language detection*) covers only fragments written in a foreign script: Greek letters, Latin inside a Cyrillic text. An explicit origin marker (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`) is not linked to the borrowed word, and a word transliterated into the host script (`фразис` in a Russian text) keeps the corpus language. Such markers have no fixed form (abbreviation, adjective, a whole phrase), and tagging a Cyrillic `фразис` as Greek would make the screen reader switch to a Greek voice, which is worse than the Russian default.
+- **Loanword origins are not tagged.** Language tagging (the `lang` attributes, see *Language of every word*) covers words that the lexicon of another listed language knows and fragments written in a foreign script: Greek letters, Latin inside a Cyrillic text. An explicit origin marker (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`) is not linked to the borrowed word, and a word transliterated into the host script (`фразис` in a Russian text) keeps the corpus language. Such markers have no fixed form (abbreviation, adjective, a whole phrase), and tagging a Cyrillic `фразис` as Greek would make the screen reader switch to a Greek voice, which is worse than the Russian default.
 - **Finnish: the first word of a sentence.** At the start of a sentence every word is capitalized, and the spaCy tagger sometimes takes an imperative or an interjection for a proper name: `Anna kuulua.` ("let it be heard") becomes the name *Anna*, `Oota, miten…` ("wait, how…") the name *Oota*. The omorfi correction never overrides a word tagged as a name, because otherwise real names would turn into common words (*Tuskia* → *tuska*, "anguish"). Such a word keeps its written form as its lemma and can show up in lemma lists, keywords and the root chant (`anna`, `oota`). When the tagger calls the word an interjection instead, omorfi supplies the verb (*Oota* → `oottaa`, since v1.11.1). The Book of the Unsaid's grammar-leak check does not count a keyword that the source also uses as a name in mid-sentence (*Anna Maria …*).
 
 ## Repository layout

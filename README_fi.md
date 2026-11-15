@@ -21,12 +21,12 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 
 ## Mitä putki tekee
 
-1. Lataa tekstin tiedostosta (`.pdf`, `.txt`, `.docx`, `.md`, `.html` tai kuvista: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) tai URL-osoitteesta — poistaen toistuvat ylä- ja alatunnisteet, sivupalkit, "Related articles" -osiot ja vastaavan kalvotekstin. Skannatut PDF:t ja kuvasyötteet luetaan OCR:llä: jokainen `ocr_languages`-luettelon kieli lukee sivun omalla moottorillaan (Windows 10/11:n sisäänrakennettu OCR tai Tesseract kielelle, jota Windowsissa ei ole — nykyään islanti), RapidOCR lukee sivun vielä kerran varalla, ja kunkin kielen sanasto poimii kaikista lukutuloksista sanakirjamuodot.
-2. Tunnistaa korpuksen kielen [`lingua-language-detector`-kirjastolla](https://github.com/pemistahl/lingua-py). Hallitseva kieli ohjaa spaCy-putken; sama tunnistin käytetään uudelleen kappale- ja lausekohtaisesti kielitagitettua vientiä varten.
-3. Lataa spaCy-mallit **kahdessa vaiheessa**. Ensin hallitsevan kielen malli käsittelee koko korpuksen alusta loppuun (tokenointi → stop-sanat → lemmatisointi → POS → NER). Sitten `cell_multilang_pass` toistaa kielikohtaiset NLP-läpiajot vain niille kappaleille, joiden tunnistettu kieli eroaa hallitsevasta — ladaten jokaisen ei-hallitsevan mallin tarpeen mukaan funktion `get_nlp()` kautta, joka on kääritty `functools.lru_cache(maxsize=2)`:een. LRU-välimuistilla on merkitystä vasta tässä toisessa vaiheessa; muistissa on milloin tahansa enintään kaksi mallia.
-4. Tokenointi → stop-sanojen suodatus → lemmatisointi → POS-merkitseminen → NER (kaksivaiheinen monikielinen NER lausekohtaisella mallin dispatcherilla).
+1. Lataa tekstin tiedostosta (`.pdf`, `.txt`, `.docx`, `.md`, `.html` tai kuvista: `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.bmp`, `.webp`) tai URL-osoitteesta — poistaen toistuvat ylä- ja alatunnisteet, sivupalkit, "Related articles" -osiot ja vastaavan kalvotekstin. Skannatut PDF:t ja kuvasyötteet luetaan OCR:llä: jokainen `corpus_languages`-luettelon kieli lukee sivun omalla moottorillaan (Windows 10/11:n sisäänrakennettu OCR tai Tesseract kielelle, jota Windowsissa ei ole — nykyään islanti), RapidOCR lukee sivun vielä kerran varalla, ja kunkin kielen sanasto poimii kaikista lukutuloksista sanakirjamuodot.
+2. Päättää jokaisen sanan kielen `corpus_languages`-luettelon kielten sanastoista (ks. **Jokaisen sanan kieli**): peruskieli ohjaa spaCy-putkea, ja vieraskieliset lainaukset ja nimet muuttuvat kielijaksoiksi.
+3. Ajaa spaCyn kerran jokaiselle tekstin segmentille: peruskielen malli käsittelee perustekstin yhdessä lauseen sisäisten vieraskielisten jaksojen kanssa, ja jokaisen vieraskielisen lohkon käsittelee sen oman kielen malli, joka ladataan tarvittaessa `get_nlp()`:n kautta (kääritty `functools.lru_cache(maxsize=2)`:een, joten välimuistissa on enintään kaksi mallia). Uudelleensegmentointia tai toista monikielistä ajoa ei ole.
+4. Tokenointi → stop-sanojen suodatus → lemmatisointi → POS-merkitseminen → NER, jokainen token oman kielensä mallilla analysoituna.
 5. Vektoriedustukset: Bag of Words, TF-IDF + auto-kyselyhaku kosinilajittelulla.
-6. Rakenne: lauseet → kappaleet (3–6 lausetta kukin) → teesit (paras lause per kappale). Jokainen kappale ja lause merkitään tunnistetulla ISO 639-1 -koodilla.
+6. Rakenne: lauseet → kappaleet (3–6 lausetta kukin) → teesit (paras lause per kappale). Jokainen lause kantaa kielensä ja lauseen sisäiset vieraskieliset jaksonsa; jokainen kappale vallitsevan kielensä.
 7. Aiheen mallinnus KMeansilla spaCyn kappalevektoreiden päällä.
 8. *(Valinnainen, oletuksena pois päältä)* Kappalekohtainen sentimenttipisteytys mallilla `cardiffnlp/twitter-xlm-roberta-base-sentiment`, kirjoitettuna tiedostoon `sentiment.csv`. Tulosta ei koskaan näytetä käyttäjälle — se on olemassa vain syötteenä shamanistiselle kerrokselle. Katso **Asetukset** (`enable_sentiment`).
 9. CSV/JSON-vienti + tekstimuotoinen yhteenvetoraportti + saavutettava HTML- ja DOCX-vienti + globaali HTML-raportti (`analysis_report.html`).
@@ -46,34 +46,31 @@ Islannille ei ole täyttä spaCy-mallia, joten tyhjään putkeen on liitetty kak
 
 **Valinnainen suomen morfologian parannus (omorfi).** `fi_core_news_lg`:n tilastollinen lemmatisoija pärjää huonosti suomen agglutinatiiviselle morfologialle — se tuottaa säännöllisesti roskalemmoja kuten *kytköknen* tai *pisttää*. Kun puhtaasti pythonilainen `omorfi`-paketti on asennettu ja sen FST-automaatit ladattu (ks. Asennus, vaihe 5), notebook lisää komponentin `omorfi_lemmas`, joka korvaa lemmat ja UD-morfologiset piirteet sanakirja-analyyseilla aina, kun ne ovat yhtä mieltä spaCy-taggerin sanaluokan kanssa (`kytköksistä` → `kytkös`, `Euroopassa` → `Eurooppa`, `pistät` → `pistää`). Ilman pakettia tai automaatteja putki jatkaa hiljaa spaCyn vakiokäyttäytymisellä.
 
-## Kielentunnistus
+## Jokaisen sanan kieli
 
-Tunnistus toimii kolmella tasolla:
+Tekstin kielet luetellaan avaimessa `corpus_languages` (`config.json`; vanhaa nimeä `ocr_languages` luetaan yhä). Näiden kielten sanastoista muistio päättää:
 
-1. **Hallitseva korpuksessa** — `cell_langdet` äänestää dokumenteittain ja valitsee hallitsevan kielen `LANG`:ksi. Ohjaa spaCy-putkea.
-2. **Kappaleittain** (`para_langs`) — käytetään attribuuttina `<p lang="...">` tiedostossa `accessible_text.html` ja oletuksena `<w:lang>` jokaiselle kappaleelle tiedostossa `accessible_text.docx`.
-3. **Lauseittain** (`sent_langs`) — käytetään yksittäisten lauseiden käärimiseen tagiin `<span lang="...">` sekakielisten kappaleiden sisällä (HTML) tai `<w:lang>`:n asettamiseen lausekohtaisille runeille (DOCX).
+1. **Peruskieli** (`LANG`) — kieli, jonka sanasto tuntee suurimman osan korpuksen sanoista (osuudet tulostetaan). Se ohjaa pääasiallista spaCy-putkea.
+2. **Jokaisen sanan kieli** (`odcinki_jezykowe.py`). Sana, jota perussanasto ei tunne mutta jonkin toisen luetellun kielen sanasto tuntee, kuuluu tuohon kieleen; usean kielen tuntema sana menee pienimpään aakkostoon, johon kaikki sen kirjaimet mahtuvat — näin englanninkielistä sanaa ei vie puolan sanasto, joka tuntee paljon englannin muotoja, ja `Łódź` pysyy puolana. Kirjoitusjärjestelmä on tosiasia: kyrillinen sana latinalaisessa tekstissä saa kyrillisen kielen, vaikka sellaista ei olisi lueteltu.
+3. **Vieraskieliset jaksot** — vähintään kaksi peräkkäistä saman vieraan kielen sanaa lauseen sisällä tai yksi sana, jossa on peruskielen aakkostosta puuttuvia kirjaimia. Kokonaiset lauseet kattava jakso on **lohko**, ja sen käsittelee oma spaCy-malli (lauseet, NER, lemmat). Peruskielisen lauseen sisällä oleva jakso on **lauseen sisäinen jakso**: lause jää perusmallille, ja jakso saa lemmansa ja POS-tagiensa oman kielensä mallilta.
 
-Kappale- ja lausekohtainen tunnistus käyttää tarkoituksellisesti **konservatiivista `_safe_detect()`-kääre** soluss `cell_para`. Linguan raakaan ulostuloon luottaminen aiheuttaa kuultavia artefakteja: lingua luokittelee väärin lyhyitä latinalaisia katkelmia, joita hallitsevat erisnimet ("Igor de Lendorf" → it, "Mut se mies, Igor" → en), ja ruudunlukija, joka vaihtaa englannin ääneen kohtaan "Igor de Lendorf" ja palaa suomeen seuraavalla lauseella, kuulostaa huonommalta kuin että erisnimi luettaisiin suomalaisella aksentilla.
+Tulos näkyy viennissä: `<span lang="…">` tiedostossa `accessible_text.html` ja erillinen `Run` `<w:lang>`-ominaisuudella tiedostossa `accessible_text.docx` jokaiselle vieraskieliselle lauseelle ja jokaiselle lauseen sisäiselle jaksolle, joten ruudunlukija vaihtaa ääntä täsmälleen lainauksen tai nimen kohdalla eikä koko lauseen ajaksi. Kaikki jaksot luetellaan myös tiedostossa `language_spans.csv`, ja `sentences.csv`:ssä on sarake `lang`.
 
-Kääre soveltaa seuraavia sääntöjä järjestyksessä:
+Sanastot: spaCyn vektorit (äärellinen sanamuotojen luettelo) puolalle, englannille, venäjälle ja italialle; `omorfi` suomelle; BÍN (`islenska`) islannille — samat sanastot, joita OCR-äänestys käyttää. Kun `corpus_languages` sisältää vain yhden kielen, sanastoja ei ladata ja merkitään vain toisella kirjoitusjärjestelmällä kirjoitetut sanat. Puuttuva sanasto pysäyttää ajon viestiin, joka kertoo korjauksen.
 
-1. **Kyrilliset merkit missä tahansa katkelmassa → `ru`.** Yksiselitteistä; toimii jopa 3 merkin katkelmilla.
-2. **Katkelma lyhyempi kuin 30 merkkiä → fallback `LANG`.** Lingua on epävarma lyhyillä latinalaisilla katkelmilla.
-3. **Katkelma sisältää `LANG`:n diakriittejä** (esim. `ä`/`ö` kielelle `fi`, `ąęć` kielelle `pl`) → fallback `LANG`. Suomalainen lause englanninkielisellä lainauksella on yhä suomalainen lause.
-4. **Lingua on samaa mieltä `LANG`:n kanssa** → hyväksytään.
-5. **Lingua on eri mieltä, mutta tunnistettu kieli sisältää OMIA tunnusomaisia diakriittejään katkelmassa** (`à` italialle, `ż` puolalle, `ð` islannille) → luotetaan linguaan.
-6. **Lingua on eri mieltä eikä tunnistetulla kielellä ole tunnusomaisia diakriittejä katkelmassa** (tyypillisesti `en`) → fallback `LANG`.
+**Mitkä kielet luetella.** Mitattu 20 suomenkielisellä litteroinnilla (55 000 sanaa), joissa mainitaan paljon puolalaisia nimiä: asetuksella `["fi", "en"]` muistio löytää 34 englanninkielistä jaksoa (termejä ja lainauksia); asetuksella `["fi", "pl", "en"]` lisäksi 57 puolankielistä jaksoa — puolalaisia nimiä ja muutaman puolankielisen ilmauksen, jotka nyt lukee puolalainen ääni suomalaisen sijaan — eikä yksikään englanninkielinen sana mene puolalle. Siksi:
 
-Säännön 6 motivaatio on puhtaasti foneettinen: englanninkielinen ääni, joka lukee suomalaisia/puolalaisia/italialaisia katkelmia, tuottaa kuultavaa vääristymää, kun taas suomalainen/puolalainen/italialainen ääni, joka lukee englanninkielisen lainauksen kevyellä aksentilla, on ymmärrettävä ja vähemmän häiritsevä. Kompromissi on, että puhtaasti englanninkieliset lauseet upotettuna ei-englanninkieliseen korpukseen luetaan hallitsevalla äänellä sen sijaan, että vaihdettaisiin englantiin. Hyväksymme tämän kompromissin, koska käytännössä ruudunlukijoiden käyttäjät raportoivat epäsymmetrisestä laatuhinnasta.
+- luettele jokainen kieli, jolla tekstissä on **lainauksia**;
+- kun teksti on kirjoitettu yhdellä kielellä mutta mainitsee toisen kielen **nimiä** (puolalaisia nimiä suomenkielisessä tekstissä), lisää nimien kieli: perusmuotoiset nimet ja nimet, joissa on peruskielen aakkostosta puuttuvia kirjaimia (`ł`, `ś`), lukee silloin niiden oman kielen ääni. Pelkillä peruskielen kirjaimilla taivutettu nimi (`Kowalskille`) jää joka tapauksessa peruskieleen;
+- älä luettele kieltä, jota tekstissä ei ole: se tuo vain vääriä ehdokkaita.
 
-Heuristiikasta selviytyneet poikkeamat listataan `cell_para`:n ulostulossa manuaalista tarkastelua varten (`Оставшиеся outlier-предложения...`). Sama diakriittilogiikka ohjaa pir-`<code>`-heuristiikkaa (`_classify_code_lang`) tiedostossa `generate_report.py` sekä pirsegmenttistä lingua-fallbackia (`_lingua_word_fallback`) polkumaisille ASCII-tunnisteille.
+**Miksi ei tilastollista tunnistinta.** ATA 1.x:ään asti `lingua-language-detector` luokitteli kokonaisia lauseita. Samoissa litteroinneissa se merkitsi 127 lausetta vieraskielisiksi, lähes kaikki väärin; sen hillitsemiseen tarvitut suojaheuristiikat jättivät jäljelle 2 lausetta eikä yhtään englanninkielistä lainausta. ATA 2.0 poisti sen. Kokonaisraportti (`generate_report.py`) merkitsee venäjänkielisen kerronnan vieraat sanat samoilla sanastoilla (`corpus_languages`-kielet sekä englanti).
 
 ## Vaatimukset
 
 - Python 3.12 tai uudempi (riippuvuudet on testattu Pythonilla 3.14).
 - ~1,5 GB vapaata levytilaa spaCyn `_lg`-malleja varten (yksi per kieli). Lisää ~1,3 GB, jos otat käyttöön islanninkielisen tuen (Hugging Face `transformers` + `torch` + IceBERT + icelandic-ner-bert). Islannin NER lukee koko dokumentin limittäisissä ikkunoissa: CPU:lla noin 4 000 merkkiä sekunnissa, joten kirja (1 Mt islanninkielistä tekstiä) vie muutaman minuutin.
-- OCR-tuki (valinnainen): `winrt-*`-paketit (alle 1 MB) sekä jokaiselle `ocr_languages`-kielelle Windowsin kielipaketti, jossa on optinen tekstintunnistus (Asetukset > Aika ja kieli > Kieli ja alue); `rapidocr` ja `onnxruntime` (mallit, noin 40 MB, latautuvat ensimmäisellä OCR-kutsulla); kielelle, jolle Windowsissa ei ole moottoria (nykyään islanti), `tesserocr` ja kielen tessdata_best-malli repositorion `tessdata`-kansiossa (islanti: https://github.com/tesseract-ocr/tessdata_best/raw/main/isl.traineddata, noin 9,5 MB) sekä `islenska`-sanasto (~62 MB). OCR ei enää tarvitse `torch`:ia. Puuttuva moottori tai sanasto pysäyttää ajon viestillä, joka kertoo korjauksen. Islannin sanasto: The Database of Icelandic Morphology (BÍN), The Árni Magnússon Institute for Icelandic Studies, tekijä ja toimittaja Kristín Bjarnadóttir, CC BY-SA 4.0.
+- OCR-tuki (valinnainen): `winrt-*`-paketit (alle 1 MB) sekä jokaiselle `corpus_languages`-kielelle Windowsin kielipaketti, jossa on optinen tekstintunnistus (Asetukset > Aika ja kieli > Kieli ja alue); `rapidocr` ja `onnxruntime` (mallit, noin 40 MB, latautuvat ensimmäisellä OCR-kutsulla); kielelle, jolle Windowsissa ei ole moottoria (nykyään islanti), `tesserocr` ja kielen tessdata_best-malli repositorion `tessdata`-kansiossa (islanti: https://github.com/tesseract-ocr/tessdata_best/raw/main/isl.traineddata, noin 9,5 MB) sekä `islenska`-sanasto (~62 MB). OCR ei enää tarvitse `torch`:ia. Puuttuva moottori tai sanasto pysäyttää ajon viestillä, joka kertoo korjauksen. Islannin sanasto: The Database of Icelandic Morphology (BÍN), The Árni Magnússon Institute for Icelandic Studies, tekijä ja toimittaja Kristín Bjarnadóttir, CC BY-SA 4.0.
 - Lisää ~130 MB, jos otat käyttöön suomen morfologian parannuksen (`omorfi`:n FST-automaatit, jotka ladataan komennolla `omorfi-download`).
 - Internet-yhteys ensimmäisellä ajolla (mallien lataus).
 
@@ -176,7 +173,7 @@ Sisältö:
   "source_file": "C:/path/to/document.pdf",
   "custom_patterns": [],
   "remove_noise": true,
-  "ocr_languages": ["en"],
+  "corpus_languages": ["en"],
   "enable_sentiment": false,
   "ui_lang": "",
   "lumi_katla_lines": null,
@@ -201,9 +198,9 @@ Sisältö:
 | `source_file`      | string          | Polku tiedostoon (`.pdf`, `.txt`, `.docx`, `.md`, `.html` tai kuva) **tai** URL (`http://`, `https://`). Tyhjä merkkijono tai puuttuva tiedosto → sisäänrakennettu esimerkkikorpus. |
 | `custom_patterns`  | string[]        | Valinnainen lista säännöllisistä lausekkeista, jotka poistetaan raakatekstistä (juoksevat otsikot, alatunnisteet, toistuvat kalvotekstit). Esimerkki: `["Editorial: .*", "Copyright \\d{4}"]`. |
 | `remove_noise`     | boolean         | Vaihtaa `generate_report.py`:n lukijaystävällisen tilan (`true`, piilottaa Hugging Face/torch -latauspalkit ja lemmatisointi/POS-taulukot) ja täyden diagnostisen tilan (`false`) välillä. |
-| `ocr_languages`    | string[]        | Skannattujen PDF:ien ja kuvien TEKSTIN kielet (kielipakettien koodit: `en`, `fi`, `is`, `it`, `pl`, `ru`). Jokainen kieli lukee sivun omalla OCR-moottorillaan ja sanasto valitsee sanat, joten luettele vain kielet, joita asiakirjassa todella on: ylimääräinen kieli hidastaa OCR:ää ja tuo vääriä ehdokkaita. Latinalaisia ja kyrillisiä kirjaimia voi yhdistää (`["fi", "ru"]`). |
+| `corpus_languages` | string[]        | TEKSTIN kielet (kielipakettien koodit: `en`, `fi`, `is`, `it`, `pl`, `ru`); vanhaa nimeä `ocr_languages` luetaan yhä. Niiden sanastot valitsevat peruskielen ja jokaisen sanan kielen (ks. **Jokaisen sanan kieli**), ja skannatuissa PDF:issä ja kuvissa kukin niistä lukee sivun omalla OCR-moottorillaan. Luettele vain kielet, joita tekstissä todella esiintyy: ylimääräinen kieli hidastaa OCR:ää ja tuo vääriä ehdokkaita. Latinalaisia ja kyrillisiä kirjaimia voi sekoittaa (`["fi", "ru"]`). |
 | `enable_sentiment` | boolean         | Ottaa käyttöön valinnaisen kappalekohtaisen sentimenttianalyysin (oletuksena `false`). Vaatii kommentoidut sentimenttiriippuvuudet (katso asennusvaihe 4). Kirjoittaa `sentiment.csv`-tiedoston; tulosta ei koskaan näytetä käyttäjälle, se vain syöttää shamanistista kerrosta (`emotional_undertow.txt`-rituaali ja Vienon laulu). Minkä tahansa latausvirheen sattuessa se ohitetaan hiljaisesti — ei fallbackia. |
-| `ui_lang`          | string          | Käyttöliittymän kieli konsolituloste ja luodun raportin `<html lang>` -attribuutti (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tyhjä merkkijono tai tuntematon koodi → fallback `en`. Riippumaton analysoidun korpuksen kielestä, joka tunnistetaan automaattisesti. |
+| `ui_lang`          | string          | Käyttöliittymän kieli konsolituloste ja luodun raportin `<html lang>` -attribuutti (`pl` / `en` / `ru` / `fi` / `is` / `it`). Tyhjä merkkijono tai tuntematon koodi → fallback `en`. Riippumaton analysoidun korpuksen kielestä, jonka `corpus_languages`-kielten sanastot päättävät. |
 | `lumi_katla_lines` | integer tai null | Valinnainen koristerajoitus `shamanic_ai.py`:n Lumin loppuraportille: kuinka monta ei-tyhjää riviä Katlan monologista Lumi näkee. `null` tai puuttuva avain = koko sisältö; integer N > 0 = ensimmäiset N riviä. |
 | `lumi_vieno_lines` | integer tai null | Sama kuin `lumi_katla_lines`, mutta Vienon kaikulaululle. |
 | `voices`           | object          | Yhdistää jokaisen shamanistisen äänen (`katla` / `vieno` / `lumi` / `sami`) ElevenLabs-äänen tunnisteeseen; käyttää `shamanic_voice.py`. Ääni, jonka tunniste on tyhjä tai puuttuu, ohitetaan. Tarvitaan vain, jos ajat äänidispatcherin. |
@@ -384,15 +381,16 @@ Jokainen alihakemisto sisältää:
 
 | Tiedosto                        | Tuottaja          | Kuvaus                                            |
 |---------------------------------|-------------------|---------------------------------------------------|
-| `sentences.csv`                 | notebook          | jokainen lause indeksinsä ja kappaleeseen kuulumisensa kanssa |
+| `sentences.csv`                 | notebook          | jokainen lause indeksinsä ja kielensä (`lang`) kanssa |
 | `paragraphs.csv`                | notebook          | kappaleet (3–6 lausetta kukin)                    |
 | `theses.csv`, `theses.txt`      | notebook          | yksi teesi per kappale (korkein-TF-IDF-lause); `.txt`-tiedoston nimi mukautuu korpuksen kieleen (esim. `tezy.txt` puolaksi, `тезисы.txt` venäjäksi) |
 | `keywords_tfidf.csv`            | notebook          | avainsanat (uni/bi/trigrammit) TF-IDF-painoineen  |
 | `paragraphs_with_topics.csv`    | notebook          | kappaleet määrätyllä KMeans-aiheellaan            |
 | `topic_keywords.json`           | notebook          | avainsanat aiheittain                             |
 | `entities.csv`                  | notebook          | kaikki nimennetyt entiteetit ja niiden tunnisteet |
+| `language_spans.csv`            | notebook          | vieraskieliset jaksot: dokumentti, merkkisiirtymät, kieli, `block` tai `inline`, teksti |
 | `sentiment.csv`                 | notebook *(valinnainen)* | kappalekohtainen sentimentti (`para_id`, `label`, `score`, `lang`) — vain kun `enable_sentiment` on `true`; syöte shamanistiselle kerrokselle, ei koskaan näytetä käyttäjälle |
-| `accessible_text.html`          | notebook          | kappale- ja lausetason `lang`-attribuutit — ruudunlukijat vaihtavat ääntä automaattisesti per katkelma |
+| `accessible_text.html`          | notebook          | `lang` jokaisessa kappaleessa sekä `<span lang>` jokaisessa vieraskielisessä lauseessa ja lauseen sisäisessä jaksossa (lainaus, nimi) — ruudunlukijat vaihtavat ääntä automaattisesti per katkelma |
 | `accessible_text.docx`          | notebook          | sama sisältö `<w:lang>`:lla asetettuna per `Run` (`pl-PL`, `ru-RU`, `en-US`, `it-IT`, `fi-FI`, `is-IS`) — Word ja SAPI käyttävät sitä offline-tilassa ilman online-tunnistinta |
 | `analysis_report.html`           | `generate_report.py` | globaali saavutettava HTML-raportti            |
 | `diagnostic_report.html`         | `generate_diagnostic.py` | jäsennelty diagnostiikkaraportti (aiheet, teesit, entiteetit tyypeittäin, avainsanat) CSV/JSON-vienneistä |
@@ -406,7 +404,7 @@ Tämä on projektin keskeinen arvo. Kaikki alla oleva on tarkoituksellista ja on
 
 - **Ei ANSI-värejä, emojeita tai pseudografiikkaa stdoutissa.** Ruudunlukija lukee jokaisen merkin kirjaimellisesti — `[OK]` "🟢":n sijaan, `---` "───━━━":n sijaan.
 - **Vaiennetut edistymispalkit** (`tqdm`, `transformers`, `torch`) — `cell_model._silence_hf_progress()` mykistää Hugging Face/torch -latauspalkit ja varoitukset ennen IceBERT:in ja icelandic-ner-bert:n lataamista islanninkieltä varten; `cell_corpus._silence_ocr_progress()` tekee saman OCR-moottoreille.
-- **Kappale- ja lausekohtainen `lang`-merkintä viennissä.** `accessible_text.html` ja `accessible_text.docx` kantavat ISO 639-1 -koodin jokaisessa kappaleessa (ja jokaisessa lauseessa sekakielisten kappaleiden / runejen sisällä). NVDA, JAWS, Narrator, VoiceOver, Word ja SAPI kunnioittavat näitä tageja ja vaihtavat ääntä automaattisesti — jopa offline-tilassa.
+- **Kappale-, lause- ja jaksokohtainen `lang`-merkintä viennissä.** `accessible_text.html` ja `accessible_text.docx` kantavat ISO 639-1 -koodin jokaisessa kappaleessa, jokaisessa vieraskielisessä lauseessa ja jokaisessa lauseen sisäisessä vieraskielisessä jaksossa (lainaus tai nimi lauseen sisällä). NVDA, JAWS, Narrator, VoiceOver, Word ja SAPI kunnioittavat näitä tageja ja vaihtavat ääntä automaattisesti — jopa offline-tilassa.
 - **Kovakoodattu englannin merkintä HTML-raportissa.** `generate_report.py` kääräisee aina teknisen englannin katkelmat — POS-tagit (`NOUN`, `VERB`, `ADJ`), NER-tunnisteet (`PER`, `ORG`, `[orgName]`), spaCy / Hugging Face -mallien tunnisteet, ASCII-polut, koodilohkot — tagiin `<span lang="en">`, jolloin niitä ei enää ääntää dokumentin oletusvenäläisellä äänellä.
 - **Vieraskielisen korpuksen pir-katkelmamerkintä HTML:ssä.** Kun korpus ei ole venäläinen, jäsennellyt ulostulot (lauseotteet, avainsanaluettelot, aihesanat, RAG-järjestysrivit, lemmatisointitaulukot) käärätään tagiin `<span lang="target_lang">`.
 - **Lineaarinen HTML-rakenne** (`<main>`, oikea otsikkohierarkia).
@@ -421,7 +419,7 @@ Notebookin selostus ja useimpien solujen `print()`-tuloste on kirjoitettu venäj
 
 ## Tunnetut rajoitukset
 
-- **Lainasanojen alkuperää ei merkitä.** Kielimerkintä (`lang`-attribuutit, ks. *Kielentunnistus*) kattaa vain vieraalla kirjoitusjärjestelmällä kirjoitetut katkelmat: kreikkalaiset kirjaimet, latinalaiset kirjaimet kyrillisessä tekstissä. Selvää alkuperämerkintää (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`) ei yhdistetä lainattuun sanaan, ja tekstin omalla kirjaimistolla kirjoitettu sana (`фразис` venäläisessä tekstissä) säilyttää korpuksen kielen. Merkinnöillä ei ole vakiomuotoa (lyhenne, adjektiivi, kokonainen ilmaus), ja kyrillisen `фразис`-sanan merkitseminen kreikaksi vaihtaisi ruudunlukijan kreikkalaiseen ääneen, mikä kuulostaa huonommalta kuin venäläinen oletusääni.
+- **Lainasanojen alkuperää ei merkitä.** Kielimerkintä (`lang`-attribuutit, ks. *Jokaisen sanan kieli*) kattaa sanat, jotka jonkin toisen luetellun kielen sanasto tuntee, sekä vieraalla kirjoitusjärjestelmällä kirjoitetut katkelmat: kreikkalaiset kirjaimet, latinalaiset kirjaimet kyrillisessä tekstissä. Selvää alkuperämerkintää (`греч.`, `łac.`, `z niemieckiego`, `имеет греческое происхождение`) ei yhdistetä lainattuun sanaan, ja tekstin omalla kirjaimistolla kirjoitettu sana (`фразис` venäläisessä tekstissä) säilyttää korpuksen kielen. Merkinnöillä ei ole vakiomuotoa (lyhenne, adjektiivi, kokonainen ilmaus), ja kyrillisen `фразис`-sanan merkitseminen kreikaksi vaihtaisi ruudunlukijan kreikkalaiseen ääneen, mikä kuulostaa huonommalta kuin venäläinen oletusääni.
 - **Suomi: virkkeen ensimmäinen sana.** Virkkeen alussa jokainen sana alkaa isolla kirjaimella, ja spaCyn jäsennin pitää joskus imperatiivia tai interjektiota erisnimenä: `Anna kuulua.` muuttuu nimeksi *Anna* ja `Oota, miten…` nimeksi *Oota*. omorfi-korjaus ei koskaan kirjoita nimeksi merkittyä sanaa yli, koska muuten oikeat nimet muuttuisivat yleissanoiksi (*Tuskia* → *tuska*). Tällainen sana säilyttää kirjoitetun muotonsa lemmana ja voi päätyä lemmaluetteloihin, avainsanoihin ja juurten loitsuun (`anna`, `oota`). Kun jäsennin pitää sanaa interjektiona, omorfi antaa verbin (*Oota* → `oottaa`, versiosta v1.11.1 alkaen). Sanomattomien kirjan kieliopin vuodon tarkistus ei laske avainsanaa, jota lähde käyttää myös nimenä keskellä virkettä (*Anna Maria …*).
 
 ## Repositorion rakenne

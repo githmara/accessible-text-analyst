@@ -214,7 +214,7 @@ class TestPlan(unittest.TestCase):
         # Cyrylica rozpoznana z `alfabet` podstaw, bez listy kodów i bez importu rapidocr.
         self.assertEqual(g._model_rapid("ru"), g.MODEL_RAPID_CYRYLICA)
 
-    def test_kod_tesseracta_z_pola_lingua(self):
+    def test_kod_tesseracta_z_pola_iso639_3(self):
         self.assertEqual(g._kod_tesseract("is"), "isl")
         self.assertEqual(g._kod_tesseract("fi"), "fin")
 

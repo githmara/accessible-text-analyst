@@ -2,7 +2,8 @@
 # Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
 
 jezyk: en
-lingua: ENGLISH
+nazwa_en: English
+iso639_3: eng
 nazwa_ru: английский
 locale: en-US
 spacy: en_core_web_lg

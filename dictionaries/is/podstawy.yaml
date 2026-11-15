@@ -2,7 +2,8 @@
 # Każde pole obowiązkowe; "", [], null = deklaracja „brak”.
 
 jezyk: is
-lingua: ICELANDIC
+nazwa_en: Icelandic
+iso639_3: isl
 nazwa_ru: исландский
 locale: is-IS
 # spaCy nie ma dziś modelu islandzkiego: notatnik buduje potok Hugging Face
