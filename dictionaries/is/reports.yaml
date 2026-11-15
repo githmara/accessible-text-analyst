@@ -172,6 +172,8 @@ deps:
   grupa_C: 'flokkur C: verkfæri við hlið niðurstöðunnar — uppfærðu óhikað, prófanirnar duga.'
   podsumowanie: '[SAMANTEKT] uppfært: {ok}, haldið af mörkum: {trzymane}, útrunnin höld: {przeterminowane}, viðvaranir: {ostrzezenia}, valkvætt ekki uppsett: {pominiete}.'
   wiek_nieznany: '[VIÐVÖRUN] Aldur {ile} dagsettra halda er óþekktur ({nazwy}) — requirements.txt hefur enga git-sögu, svo {limit} daga klukkan gengur ekki og útrunnið hald liti út fyrir að vera í gildi. Vekjaramerkið verður ekki vistað.'
+  cykl_nieotwarty: '[LOTA EKKI OPNUÐ] VERSION={wersja} hefur þegar merkið {tag}, og {ile} útgáfuskrár hafa breyst síðan ({pliki}). Settu VERSION á X.Y.0-WIP (minor/major) eða X.Y.Z-WIP (patch) — þangað til eru holdin hér að ofan metin miðað við gamla númerið.'
+  cykl_wip_wydanej: '[LOTA] VERSION={wersja} er WIP, en merkið {tag} er þegar til — lotan verður að bera NÆSTA númer.'
   budzik: '[VEKJARI] Niðurstaða fullrar athugunar var vistuð í {plik} — áminning umsjónarmanns í upphafi lotu les hana.'
   err_missing_lib: '[VILLA] Safnið {lib} vantar. Keyrðu: pip install {pkg}'
   warn_lexicon_missing: '[VIÐVÖRUN] Orðasafn fyrir {lang} vantar ({error}) — erlend orð í skýrslunni eru merkt án þess.'

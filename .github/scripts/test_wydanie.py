@@ -72,6 +72,44 @@ class TestWydanie(unittest.TestCase):
         self.assertEqual(tytul, "v3.0.0 — a $(rm -rf /) `x`")
         self.assertNotIn("\n", tytul)
 
+    def test_version_musi_zrownac_sie_z_sekcja(self):
+        """Od ATA 2.0: wydanie tylko przy `VERSION` == sekcja, bez `-WIP`."""
+        w.zgodnosc_z_version((2, 0, 0), "2.0.0\n")
+        for zly in (None, "2.0.0-WIP", "2.0-WIP", "1.13.0", "2.0.1", "dwa"):
+            with self.assertRaises(w.BladWydania, msg=zly):
+                w.zgodnosc_z_version((2, 0, 0), zly)
+        # `X.Y` bez patcha to ta sama wersja co `X.Y.0`.
+        w.zgodnosc_z_version((2, 0, 0), "2.0")
+
+    def test_main_odmawia_wydania_przy_wip(self):
+        """Ścieżka workflowu: nowa sekcja + `VERSION` z `-WIP` = błąd, a sekcja
+        już otagowana = spokojny `pomin` niezależnie od `VERSION`."""
+        import os
+        import tempfile
+        katalog = tempfile.TemporaryDirectory(prefix="ata_test_wydanie_")
+        self.addCleanup(katalog.cleanup)
+        k = Path(katalog.name)
+        (k / "release_notes.md").write_text(NOTATKI, encoding="utf-8")
+        (k / "tagi.txt").write_text(TAGI, encoding="utf-8")
+        stary = os.getcwd()
+        os.chdir(k)
+        self.addCleanup(os.chdir, stary)
+        stare_argv = sys.argv
+        self.addCleanup(setattr, sys, "argv", stare_argv)
+        sys.argv = ["wydanie.py", str(k / "tagi.txt")]
+        os.environ["RUNNER_TEMP"] = str(k)
+        self.addCleanup(os.environ.pop, "RUNNER_TEMP", None)
+        import contextlib
+        import io
+        with contextlib.redirect_stdout(io.StringIO()):
+            (k / "VERSION").write_text("1.8.0-WIP\n", encoding="utf-8")
+            self.assertEqual(w.main(), 1)
+            (k / "VERSION").write_text("1.8.0\n", encoding="utf-8")
+            self.assertEqual(w.main(), 0)
+            (k / "tagi.txt").write_text(TAGI + "e\trefs/tags/v1.8.0\n", encoding="utf-8")
+            (k / "VERSION").write_text("1.9.0-WIP\n", encoding="utf-8")
+            self.assertEqual(w.main(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

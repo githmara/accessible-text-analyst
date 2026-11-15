@@ -445,6 +445,7 @@ accessible_text_analyst/
 ├── CLAUDE.md                       # leiðbeiningar fyrir Claude Code
 ├── README.md                       # kanónískt README (á ensku)
 ├── README_pl.md, README_ru.md, …   # þýðingar (afturhlekkur efst)
+├── VERSION                         # útgáfulota í undirbúningi (`X.Y.Z-WIP` fram að útgáfu)
 ├── release_notes.md                # release notes í öfugri tímaröð
 └── export_results/                 # greiningarútkomur (gitignored)
     ├── Sanomattomien_kirja.md      # Bók hins ósagða, bætt við smám saman

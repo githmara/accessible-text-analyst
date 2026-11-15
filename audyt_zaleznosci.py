@@ -14,9 +14,12 @@ wracał do pakietu (pomiar 2026-11-12: 27 z 29 granic stało od v1.8.0, cztery
 wydania minor wcześniej). Dlatego:
   1. każda granica nosi datę: `pakiet<X.Y  # hold: <wersja ATA>` — wersja, w której
      zestaw z tą granicą był ostatnio PRZETESTOWANY;
-  2. hold wygasa z następnym minorem: gdy górna sekcja `release_notes.md` ma
-     wyższy (major, minor) niż hold, a nowsze wydanie pakietu istnieje, audyt
-     ostrzega PRZETERMINOWANA — przetestuj i podbij granicę albo odnów datę;
+  2. hold wygasa z następnym minorem: gdy `VERSION` ma wyższy (major, minor)
+     niż hold, a nowsze wydanie pakietu istnieje, audyt ostrzega
+     PRZETERMINOWANA — przetestuj i podbij granicę albo odnów datę. Od ATA 2.0
+     cykl otwiera się JAWNIE (`VERSION` = `X.Y.0-WIP` albo `X.Y.Z-WIP`), więc
+     holdy wygasają na początku cyklu, nie w chwili wydania; praca po tagu bez
+     `-WIP` to ostrzeżenie „cykl nieotwarty” (`.github/scripts/cykl_wersji.py`);
   3. każdy pakiet ma grupę ryzyka (`GRUPY_RYZYKA`), która mówi, CO testować.
      Pakiet z manifestu bez grupy to ostrzeżenie: nowa zależność musi dostać
      grupę w tym samym commicie.
@@ -53,7 +56,7 @@ from typing import NamedTuple, Optional
 
 ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "requirements.txt"
-NOTATKI_WYDAN = ROOT / "release_notes.md"
+PLIK_WERSJI = ROOT / "VERSION"
 # Drugi zegar holdu (budzik, 2026-11-12, bliźniak Reżysera): hold starszy niż
 # tyle dni od commitu, który ostatnio zmienił jego linię, wygasa także bez
 # nowego minora — sam zegar wersji staje, gdy projekt nie wydaje.
@@ -106,7 +109,9 @@ GRUPY_RYZYKA: dict[str, str] = {
 
 _WPIS = re.compile(r"^(?P<nazwa>[A-Za-z0-9._-]+)\s*(?P<spec>[<>=!~][^\s]*)?\s*$")
 _HOLD = re.compile(r"\bhold:\s*v?(?P<wersja>\d+\.\d+(?:\.\d+)?)")
-_SEKCJA = re.compile(r"^##\s*v?(\d+)\.(\d+)\.(\d+)\b")
+# Ten sam wzorzec co `.github/scripts/cykl_wersji._WERSJA` (skrypt CI nie jest
+# importowany z roota — trzy linie taniej niż ścieżka importu przez `.github`).
+_WERSJA = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?(-WIP)?$")
 
 
 class Wpis(NamedTuple):
@@ -142,15 +147,45 @@ def wczytaj_manifest(sciezka: Path = MANIFEST) -> list[Wpis]:
     return wynik
 
 
-def wersja_projektu(sciezka: Path = NOTATKI_WYDAN) -> Optional[tuple[int, int, int]]:
-    """Wersja z górnej sekcji `## vX.Y.Z` notatek wydań (ATA nie ma pliku VERSION)."""
+def wersja_projektu(sciezka: Path = PLIK_WERSJI) -> Optional[tuple[int, int, int]]:
+    """`VERSION` jako (major, minor, patch); `-WIP` i brak patcha = jak `X.Y.0`.
+
+    Do 1.13 wersję brała górna sekcja `release_notes.md` — ale ta sekcja
+    powstaje dopiero w commicie wydania, więc przez cały cykl audyt liczył
+    holdy względem ostatniego WYDANEGO numeru (fałszywa zieleń, 2026-11-14).
+    `VERSION` = `X.Y.Z-WIP` deklaruje cykl od pierwszego commita.
+    """
     try:
-        for linia in sciezka.read_text(encoding="utf-8").splitlines():
-            m = _SEKCJA.match(linia)
-            if m:
-                return tuple(int(x) for x in m.groups())  # type: ignore[return-value]
+        m = _WERSJA.match(sciezka.read_text(encoding="utf-8").strip())
     except OSError:
-        pass
+        return None
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+
+
+def ostrzez_cykl(ui: str) -> Optional[str]:
+    """Linia ostrzeżenia, gdy cykl wydania nie jest zadeklarowany (`cykl_wersji.py`).
+
+    Przy cyklu nieotwartym werdykty holdów wyżej są liczone względem STAREGO
+    numeru, więc audyt musi to powiedzieć obok nich, nie tylko hak startu sesji.
+    """
+    from shamanic_locale import t
+    skrypt = ROOT / ".github" / "scripts" / "cykl_wersji.py"
+    try:
+        wynik = subprocess.run([sys.executable, str(skrypt), "--json"], cwd=ROOT,
+                               capture_output=True, text=True, encoding="utf-8",
+                               errors="replace", timeout=60)
+        stan = json.loads(wynik.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    if stan.get("stan") == "nieotwarty":
+        pliki = stan.get("winowajcy", [])
+        return t(ui, "deps.cykl_nieotwarty", wersja=stan.get("wersja", "?"),
+                 tag=stan.get("tag", "?"), ile=len(pliki), pliki=", ".join(pliki[:3]))
+    if stan.get("stan") == "wip_wydanej":
+        return t(ui, "deps.cykl_wip_wydanej", wersja=stan.get("wersja", "?"),
+                 tag=stan.get("tag", "?"))
     return None
 
 
@@ -309,6 +344,9 @@ def main() -> int:
         return 0
     projekt = wersja_projektu()
     wersja_txt = ".".join(map(str, projekt)) if projekt else "?"
+    cykl = ostrzez_cykl(ui)
+    if cykl:
+        print(cykl)
     wieki = wiek_linii_manifestu()
     licznik: dict[str, int] = {}
     do_decyzji: list[str] = []

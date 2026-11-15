@@ -5,14 +5,19 @@ Wołany przez `.github/workflows/release.yml`. Tylko stdlib, bez sieci: listę
 tagów podaje workflow (`git ls-remote --tags origin`), więc całą logikę da się
 sprawdzić lokalnie (`python .github/scripts/test_wydanie.py`).
 
-Źródło prawdy o wersji jest JEDNO: pierwsza sekcja `## vX.Y.Z — tytuł`
-w `release_notes.md`. Plik VERSION celowo nie istnieje — projekt jest
-source-only, nie ma czego w nim numerować poza notatkami i tagiem.
+Wersja ma DWA zapisy, które commit wydania musi zrównać: `VERSION`
+(deklaracja cyklu — `X.Y.Z-WIP` przez cały cykl, od ATA 2.0) i pierwsza
+sekcja `## vX.Y.Z — tytuł` w `release_notes.md` (treść wydania). Do 1.13
+`VERSION` celowo nie istniał; zniesione 2026-11-14, bo bez deklaracji cyklu
+audyt zależności liczył wygaśnięcie holdów względem ostatniego WYDANEGO
+numeru (`cykl_wersji.py` opisuje, dlaczego to była fałszywa zieleń).
+Wydanie powstaje tylko wtedy, gdy `VERSION` = wersja sekcji, bez `-WIP`.
 
 Decyzja (wypisywana jako `decyzja=` do $GITHUB_OUTPUT):
   pomin    tag tej wersji już istnieje — wydanie było, nic do zrobienia;
   wydaj    tagu nie ma, a wersja jest WYŻSZA od każdego istniejącego tagu;
-  (błąd)   wersja nie wyższa od najnowszego tagu, zły nagłówek, pusta treść.
+  (błąd)   wersja nie wyższa od najnowszego tagu, zły nagłówek, pusta treść,
+           albo `VERSION` niezgodny z sekcją (brak, `-WIP`, inny numer).
 
 Bezpieczeństwo: treść notatek jest DANYMI. Wersja przechodzi ścisły wzorzec,
 zanim gdziekolwiek trafi; tytuł i treść idą do plików, nigdy do powłoki.
@@ -25,6 +30,7 @@ import sys
 from pathlib import Path
 
 PLIK_NOTATEK = "release_notes.md"
+PLIK_WERSJI = "VERSION"
 # Nagłówek sekcji: `## v1.8.0 — tytuł`. Myślnik może być długi albo zwykły.
 _NAGLOWEK = re.compile(r"^## (v(\d+)\.(\d+)\.(\d+)) [—-] (\S.*)$", re.MULTILINE)
 _TAG = re.compile(r"^refs/tags/v(\d+)\.(\d+)(?:\.(\d+))?$")
@@ -76,12 +82,34 @@ def decyzja(wersja: tuple[int, int, int], tagi: set[tuple[int, int, int]]) -> st
     return "wydaj"
 
 
+def zgodnosc_z_version(wersja: tuple[int, int, int], version: str | None) -> None:
+    """Wydanie wymaga `VERSION` == wersja sekcji, bez `-WIP` (od ATA 2.0)."""
+    from cykl_wersji import parsuj_wersje
+    sekcja = "v" + ".".join(map(str, wersja))
+    if version is None:
+        raise BladWydania(f"no VERSION file — the release commit must set it to {sekcja[1:]}")
+    odczyt = parsuj_wersje(version)
+    if odczyt is None:
+        raise BladWydania(f"VERSION {version.strip()!r} is not X.Y.Z[-WIP]")
+    numer, wip = odczyt
+    if wip:
+        raise BladWydania(
+            f"release_notes.md opens {sekcja}, but VERSION is still {version.strip()} — "
+            "the release commit drops -WIP (or keep the section out until release)")
+    if numer != wersja:
+        raise BladWydania(f"VERSION {version.strip()} does not match the top section {sekcja}")
+
+
 def main() -> int:
     katalog = Path(os.environ.get("RUNNER_TEMP", "."))
     ls_remote = Path(sys.argv[1]).read_text(encoding="utf-8")
     try:
         tag, wersja, tytul, tresc = pierwsza_sekcja(Path(PLIK_NOTATEK).read_text(encoding="utf-8"))
         wynik = decyzja(wersja, wersje_tagow(ls_remote))
+        if wynik == "wydaj":
+            plik_wersji = Path(PLIK_WERSJI)
+            zgodnosc_z_version(wersja, plik_wersji.read_text(encoding="utf-8")
+                               if plik_wersji.is_file() else None)
     except BladWydania as exc:
         print(f"::error::{exc}")
         return 1

@@ -445,6 +445,7 @@ accessible_text_analyst/
 ├── CLAUDE.md                       # guida per Claude Code
 ├── README.md                       # README canonico (in inglese)
 ├── README_pl.md, README_ru.md, …   # traduzioni (collegamento di ritorno in alto)
+├── VERSION                         # ciclo di release in preparazione (`X.Y.Z-WIP` fino al rilascio)
 ├── release_notes.md                # release notes in ordine cronologico inverso
 └── export_results/                 # risultati dell'analisi (gitignored)
     ├── Sanomattomien_kirja.md      # il Libro del non detto, aggiornato in modo incrementale

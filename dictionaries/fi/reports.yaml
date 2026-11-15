@@ -172,6 +172,8 @@ deps:
   grupa_C: 'ryhmä C: työkaluja tuloksen vierellä — päivitä vapaasti, testit riittävät.'
   podsumowanie: '[YHTEENVETO] ajan tasalla: {ok}, rajalla pidätetyt: {trzymane}, vanhentuneet pidätykset: {przeterminowane}, varoituksia: {ostrzezenia}, asentamattomia valinnaisia: {pominiete}.'
   wiek_nieznany: '[VAROITUS] {ile} päivätyn pidätyksen ikä on tuntematon ({nazwy}) — requirements.txt-tiedostolla ei ole git-historiaa, joten {limit} päivän kello ei toimi ja vanhentunut pidätys näyttäisi ajantasaiselta. Herätyksen merkkitiedostoa ei tallenneta.'
+  cykl_nieotwarty: '[SYKLI AVAAMATTA] VERSION={wersja} on jo merkitty tagilla {tag}, ja sen jälkeen on muuttunut {ile} julkaisutiedostoa ({pliki}). Aseta VERSION arvoon X.Y.0-WIP (minor/major) tai X.Y.Z-WIP (patch) — siihen asti yllä olevat holdit arvioidaan vanhan numeron mukaan.'
+  cykl_wip_wydanej: '[SYKLI] VERSION={wersja} on WIP, mutta tagi {tag} on jo olemassa — syklin on kannettava SEURAAVAA numeroa.'
   budzik: '[HERÄTYS] Täyden tarkistuksen tulos tallennettiin tiedostoon {plik} — ylläpitäjän istunnon alun muistutus lukee sen.'
   err_missing_lib: '[VIRHE] Kirjasto {lib} puuttuu. Suorita: pip install {pkg}'
   warn_lexicon_missing: '[VAROITUS] Kielen {lang} sanasto puuttuu ({error}) — raportin vieraskieliset sanat merkitään ilman sitä.'

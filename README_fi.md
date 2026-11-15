@@ -445,6 +445,7 @@ accessible_text_analyst/
 ├── CLAUDE.md                       # opas Claude Codelle
 ├── README.md                       # kanoninen README (englanniksi)
 ├── README_pl.md, README_ru.md, …   # käännökset (paluulinkki ylhäällä)
+├── VERSION                         # valmisteltava julkaisusykli (`X.Y.Z-WIP` julkaisuun asti)
 ├── release_notes.md                # release notes käänteisessä aikajärjestyksessä
 └── export_results/                 # analyysin tulokset (gitignored)
     ├── Sanomattomien_kirja.md      # Sanomattomien kirja, kasvaa merkintä kerrallaan

@@ -155,11 +155,20 @@ class TestWstrzymanie(unittest.TestCase):
         self.assertEqual((dane["format"], dane["data"], dane["do_decyzji"]),
                          (1, "2026-11-12", ["x"]))
 
-    def test_wersja_z_gornej_sekcji_notatek(self):
-        p = _plik("# Release notes\n\n## v1.13.0 — tytuł\n\n## v1.12.0 — starszy\n")
-        self.assertEqual(az.wersja_projektu(p), (1, 13, 0))
-        self.assertIsNone(az.wersja_projektu(_plik("bez sekcji\n")))
+    def test_wersja_z_pliku_version(self):
+        """Od ATA 2.0 wersja to `VERSION` (deklaracja cyklu), nie górna sekcja notatek."""
+        self.assertEqual(az.wersja_projektu(_plik("2.0.0-WIP\n")), (2, 0, 0))
+        self.assertEqual(az.wersja_projektu(_plik("1.14-WIP\n")), (1, 14, 0))
+        self.assertEqual(az.wersja_projektu(_plik("1.13.2\n")), (1, 13, 2))
+        self.assertIsNone(az.wersja_projektu(_plik("## v1.13.0 — tytuł\n")))
         self.assertIsNotNone(az.wersja_projektu())
+
+    def test_cykl_otwarty_wygasza_holdy_poprzedniego_minora(self):
+        """Sedno decyzji 2026-11-14: przy `2.0.0-WIP` hold z 1.13 wygasa już w cyklu,
+        a hold z bieżącego cyklu (2.0.0) jest ważny."""
+        projekt = az.wersja_projektu(_plik("2.0.0-WIP\n"))
+        self.assertEqual(az.ocen_wstrzymanie("trzymana", "1.13.0", projekt), "przeterminowana")
+        self.assertEqual(az.ocen_wstrzymanie("trzymana", "2.0.0", projekt), "trzymana")
 
 
 if __name__ == "__main__":

@@ -172,6 +172,8 @@ deps:
   grupa_C: 'grupa C: narzędzia obok wyniku — podbijaj śmiało, wystarczą testy.'
   podsumowanie: '[PODSUMOWANIE] aktualne: {ok}, wstrzymane granicą: {trzymane}, holdy wygasłe: {przeterminowane}, ostrzeżenia: {ostrzezenia}, opcjonalne niezainstalowane: {pominiete}.'
   wiek_nieznany: '[OSTRZEŻENIE] Wiek {ile} datowanych holdów jest nieznany ({nazwy}) — brak historii gita dla requirements.txt, więc {limit}-dniowy zegar nie działa, a przeterminowany hold wyglądałby na aktualny. Znacznik budzika nie zostanie zapisany.'
+  cykl_nieotwarty: '[CYKL NIEOTWARTY] VERSION={wersja} ma już tag {tag}, a od tagu zmieniło się {ile} plików wydania ({pliki}). Ustaw VERSION na X.Y.0-WIP (minor/major) albo X.Y.Z-WIP (patch) — do tego czasu holdy wyżej są liczone względem starego numeru.'
+  cykl_wip_wydanej: '[CYKL] VERSION={wersja} ma -WIP, ale tag {tag} już istnieje — cykl musi nieść NASTĘPNY numer.'
   budzik: '[BUDZIK] Zapisano wynik pełnego audytu w {plik} — czyta go przypomnienie na starcie sesji maintainera.'
   err_missing_lib: '[BŁĄD] Brak biblioteki {lib}. Uruchom: pip install {pkg}'
   warn_lexicon_missing: '[OSTRZEŻENIE] Brak słownika języka {lang} ({error}) — obce słowa w raporcie są oznaczane bez niego.'

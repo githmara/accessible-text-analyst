@@ -445,6 +445,7 @@ accessible_text_analyst/
 ├── CLAUDE.md                       # guide for Claude Code
 ├── README.md                       # this file (canonical, English)
 ├── README_pl.md, README_ru.md, …   # translations (link back at the top)
+├── VERSION                         # release cycle being prepared (`X.Y.Z-WIP` until release)
 ├── release_notes.md                # release notes appended in reverse-chrono order
 └── export_results/                 # analysis outputs (gitignored)
     ├── Sanomattomien_kirja.md      # the Book of the Unsaid, appended incrementally

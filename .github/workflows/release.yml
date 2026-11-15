@@ -3,8 +3,9 @@ name: Release (from release_notes.md)
 # Wydanie powstaje SAMO, gdy na main trafia sekcja `## vX.Y.Z — tytuł` na
 # szczycie release_notes.md, a tagu vX.Y.Z jeszcze nie ma. Tag i Release
 # powstają atomowo (`gh release create --target <sha>`), z tytułem i treścią
-# wyciętymi z tej sekcji. Plik VERSION celowo nie istnieje: projekt jest
-# source-only, numer żyje w notatkach i w tagu.
+# wyciętymi z tej sekcji. Od ATA 2.0 musi się z nią zgadzać plik VERSION
+# (deklaracja cyklu: `X.Y.Z-WIP` przez cały cykl, commit wydania zdejmuje
+# `-WIP`) — inaczej wydanie.py odmawia. Powód: `cykl_wersji.py`.
 #
 # Dlaczego to nie otwiera furtki (analiza przed wdrożeniem, 2026-10-15):
 #   * jedyne wyzwalacze to `push` na main i ręczny `workflow_dispatch` — oba
@@ -20,7 +21,7 @@ name: Release (from release_notes.md)
 on:
   push:
     branches: [main]
-    paths: [release_notes.md, .github/workflows/release.yml, .github/scripts/**]
+    paths: [release_notes.md, VERSION, .github/workflows/release.yml, .github/scripts/**]
   workflow_dispatch:
 
 permissions: {}
@@ -64,6 +65,7 @@ jobs:
       - name: Self-test
         run: |
           python .github/scripts/test_wydanie.py
+          python .github/scripts/test_cykl_wersji.py
           python .github/scripts/test_odcinki_jezykowe.py
           python .github/scripts/test_parytet.py
           python .github/scripts/test_bramka_printow.py
