@@ -132,23 +132,27 @@ def _bez_liter(fragment: str) -> bool:
     return not any(z.isalpha() for z in fragment)
 
 
-def _blok(tekst: str, start: int, koniec: int) -> tuple[bool, int]:
-    """(czy odcinek obejmuje całe zdania, koniec poszerzony o znak końca zdania)."""
-    przed = tekst[:start]
-    m = None
-    for m in KONIEC_ZDANIA.finditer(przed):
-        pass
-    od_zdania = przed[m.end():] if m else przed
-    if not _bez_liter(od_zdania):
+def _blok(tekst: str, start: int, koniec: int,
+          konce: Optional[list[int]] = None) -> tuple[bool, int]:
+    """(czy odcinek obejmuje całe zdania, koniec poszerzony o znak końca zdania).
+
+    `konce` — pozycje znaków `KONIEC_ZDANIA` w `tekst`, policzone RAZ przez
+    `odcinki` (audyt 2.0: skan `tekst[:start]` i kopia `tekst[koniec:]` przy
+    każdym odcinku dawały czas kwadratowy — 29 s na 1,7 mln znaków).
+    """
+    import bisect
+    if konce is None:
+        konce = [m.start() for m in KONIEC_ZDANIA.finditer(tekst)]
+    j = bisect.bisect_left(konce, start)            # konce[j-1] < start
+    if not _bez_liter(tekst[konce[j - 1] + 1 if j else 0:start]):
         return False, koniec
-    po = tekst[koniec:]
-    nast = KONIEC_ZDANIA.search(po)
-    do_konca = po[:nast.start()] if nast else po
-    if not _bez_liter(do_konca):
+    j = bisect.bisect_left(konce, koniec)           # pierwszy koniec zdania od `koniec`
+    nast = konce[j] if j < len(konce) else None
+    if not _bez_liter(tekst[koniec:nast if nast is not None else len(tekst)]):
         return False, koniec
     if nast is None:
         return True, koniec
-    k = koniec + nast.end()
+    k = nast + 1
     while k < len(tekst) and KONIEC_ZDANIA.match(tekst[k]):
         k += 1
     return True, k
@@ -161,6 +165,7 @@ def odcinki(tekst: str, baza: str, slowniki: dict, alfabety: dict[str, str]) -> 
     paczek (pismo cyrylickie rozstrzyga się także poza językami korpusu).
     """
     slowa = _slowa(tekst, baza, slowniki, alfabety)
+    konce = [m.start() for m in KONIEC_ZDANIA.finditer(tekst)]
     wynik: list[Odcinek] = []
     i, n = 0, len(slowa)
     while i < n:
@@ -183,7 +188,7 @@ def odcinki(tekst: str, baza: str, slowniki: dict, alfabety: dict[str, str]) -> 
             k += 1
         if wylacznych >= MIN_SLOW_ODCINKA or any(s.obce_pismo for s in slowa[i:ostatni + 1]):
             start, koniec = slowa[i].start, slowa[ostatni].koniec
-            blok, koniec_bloku = _blok(tekst, start, koniec)
+            blok, koniec_bloku = _blok(tekst, start, koniec, konce)
             wynik.append(Odcinek(start, koniec_bloku if blok else koniec, jezyk, blok))
         i = ostatni + 1
     return _scal_bloki(tekst, wynik)

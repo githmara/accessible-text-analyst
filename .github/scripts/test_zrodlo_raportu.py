@@ -162,6 +162,20 @@ class TestBramka(unittest.TestCase):
         self.assertEqual(z.omorfi_status(nb_z("", "--- Загрузка языковой модели ---\n[OK] pl\n")), "absent")
 
 
+class TestZastepczyWBramce(unittest.TestCase):
+    """Audyt 2.0: notatnik odtwarza litery pod ■, plik ma ■ — bramka dawała
+    „rozjazd” (exit 3) dla każdego PDF-a z odtworzoną literą w podglądzie."""
+
+    def test_kwadrat_w_pliku_pasuje_do_jednej_litery(self):
+        Z = z.ZASTEPCZY
+        plik = z.litery(f"Ma si{Z} dobrze i nic wi{Z}cej", True)
+        self.assertTrue(z._pasuje(z.litery("ma się dobrze i nic więcej"), plik))
+        self.assertTrue(z._pasuje(z.litery(f"ma si{Z} dobrze", True), plik))   # nieodtworzony ■
+        self.assertFalse(z._pasuje(z.litery("ma sięę dobrze"), plik))          # ■ = JEDNA litera
+        self.assertFalse(z._pasuje(z.litery("zupelnie inny tekst"), plik))
+        self.assertEqual(z.litery(f"si{Z}"), "si")                             # domyślnie bez ■
+
+
 class TestTonPrzecieku(unittest.TestCase):
     """ksiega_niedomowien.leak_reason: ton zależy od świadka w analysis_report.html."""
 

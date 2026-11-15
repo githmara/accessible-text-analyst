@@ -71,9 +71,24 @@ OBRAZY = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
 _ALFABET = frozenset("".join(p["alfabet"] for p in PODSTAWY.values()).casefold())
 
 
-def litery(tekst: str) -> str:
-    """Ciąg samych liter, casefold, NFC."""
-    return "".join(z for z in unicodedata.normalize("NFC", tekst).casefold() if z.isalpha())
+#: Znak zastępczy generatora PDF (`naprawa_zrodel.ZASTEPCZY`). Notatnik
+#: odtwarza pod nim litery słownikami, plik ma ■ — w bramce ■ to dżoker
+#: za jedną literę (audyt 2.0: każdy taki PDF dostawał „rozjazd” i exit 3).
+ZASTEPCZY = chr(0x25A0)
+
+
+def litery(tekst: str, zastepczy: bool = False) -> str:
+    """Ciąg samych liter, casefold, NFC; `zastepczy` = zostaw też znaki ■."""
+    return "".join(z for z in unicodedata.normalize("NFC", tekst).casefold()
+                   if z.isalpha() or (zastepczy and z == ZASTEPCZY))
+
+
+def _pasuje(cel: str, ciag: str) -> bool:
+    """`cel in ciag`, przy czym ■ w `ciag` pasuje do dowolnej jednej litery `cel`."""
+    if ZASTEPCZY not in ciag:
+        return cel in ciag
+    wzorzec = "".join("(?:" + re.escape(z) + "|" + ZASTEPCZY + ")" for z in cel)
+    return re.search(wzorzec, ciag) is not None
 
 
 # ============================================================
@@ -171,13 +186,15 @@ def _kawalki_pdf(sciezka, stan=None, wzorce=()):
     font nie rozwiązał w całości, jest pusta — loader też jej nie wpuszcza do
     korpusu (idzie do OCR). Liczbę takich stron zapisujemy w `stan`."""
     import pdfplumber
-    from naprawa_zrodel import napraw_strone, oczysc_strone_pdf
+    from naprawa_zrodel import napraw_strone, oczysc_strone_pdf, wyprostuj_znaki
     from shamanic_locale import alfabety_paczek
     alfabety = alfabety_paczek()
     pamiec = {}
     with pdfplumber.open(sciezka) as pdf:
         for strona in pdf.pages:
-            if napraw_strone(strona, pamiec).do_zgloszenia:
+            naprawa = napraw_strone(strona, pamiec)
+            wyprostuj_znaki(strona)         # jak load_pdf: kolejność liter tekstu wykresów
+            if naprawa.do_zgloszenia:
                 if stan is not None:
                     stan["wstrzymane"] = stan.get("wstrzymane", 0) + 1
                 yield ""
@@ -275,7 +292,8 @@ def sprawdz_tresc(zrodlo: str, podglady: list, wzorce=()) -> Tresc:
     czytnik = _CZYTNIKI.get(ext)
     if czytnik is None:
         return Tresc("niesprawdzalna", "format")
-    cele = [c for c in (litery(p) for p in podglady) if len(c) >= MIN_LITER]
+    pdf = ext == ".pdf"
+    cele = [c for c in (litery(p, pdf) for p in podglady) if len(c) >= MIN_LITER]
     if not cele:
         return Tresc("niesprawdzalna", "no_previews")
     niezn = set(range(len(cele)))
@@ -285,11 +303,11 @@ def sprawdz_tresc(zrodlo: str, podglady: list, wzorce=()) -> Tresc:
     try:
         for kawalek in czytnik(zrodlo, stan=stan, wzorce=wzorce):
             surowe += kawalek if len(surowe) < 4 * budzet_liter else ""
-            nowe = litery(kawalek)
+            nowe = litery(kawalek, pdf)
             if nowe:
                 niepuste += 1
             ciag += nowe
-            niezn = {i for i in niezn if cele[i] not in ciag}
+            niezn = {i for i in niezn if not _pasuje(cele[i], ciag)}
             if not niezn:
                 break
             if ext == ".pdf":
@@ -307,7 +325,7 @@ def sprawdz_tresc(zrodlo: str, podglady: list, wzorce=()) -> Tresc:
     if not ciag:
         return Tresc("niesprawdzalna", "garbled" if stan.get("wstrzymane") else "no_text",
                      sprawdzalne=len(cele))
-    obce = sum(z not in _ALFABET for z in ciag) / len(ciag)
+    obce = sum(z not in _ALFABET and z != ZASTEPCZY for z in ciag) / len(ciag)
     if obce > PROG_ZNIEKSZTALCENIA or surowe.count("(cid:") >= 3 or stan.get("wstrzymane"):
         # Warstwa tekstu PDF bez mapy ToUnicode, której font nie naprawił:
         # loader przepuścił te strony przez OCR — tekst pliku nie jest wtedy

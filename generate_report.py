@@ -257,7 +257,7 @@ _TECH_ACRONYMS = (
     # Terminy NLP/ML
     r"NLP|NER|POS|TF|IDF|BoW|RAG|LRU|"
     # Pamięć/encoding
-    r"RAM|ISO|UTF|BOM|"
+    r"RAM|ISO|UTF|BOM|WinAnsi|"
     # DataFrame'y/Vectorizers (CamelCase i ASCII upper)
     r"DataFrame|UniGram|BiGram|TriGram|"
     # Office/edytory
@@ -770,6 +770,43 @@ def _gate(nb):
     return w.ok
 
 
+# Krok 0 tagowania raportu (stosowany ZAWSZE, na tekście już HTML-escape'owanym):
+# linie notatnika z cytatem w konkretnym języku — kod ISO dostaje lang="en",
+# cytat swój własny język, niezależnie od języka korpusu.
+WZORCE_WIELOJEZYCZNE = [
+    # (sprzed 2.0) cell_multilang_pass: "  [fi] [PERSON] 'Joanna Kos'"
+    (r'^(\s+\[)(' + _KODY + r')(\]\s+\[)([A-Za-z_]+)(\]\s+&#x27;)(.+?)(&#x27;)\s*$',
+     r'\1<span lang="en">\2</span>\3<span lang="en">\4</span>\5<span lang="\2">\6</span>\7'),
+    # (sprzed 2.0) cell_multilang_pass, próbka lematów: "      [fi] 'Oletko'   → 'oletko'"
+    (r'^(\s+\[)(' + _KODY + r')(\]\s+&#x27;)(.+?)(&#x27;\s+→\s+&#x27;)(.+?)(&#x27;)\s*$',
+     r'\1<span lang="en">\2</span>\3<span lang="\2">\4</span>\5<span lang="\2">\6</span>\7'),
+    # cell_tok (ATA 2.0) — obcy odcinek: "    [Документ 3] en (блок): It was the best…".
+    # Audyt 2.0: żaden wzorzec go nie łapał, cytat szedł głosem rosyjskim
+    # (słownikowy krok 3 taguje tylko słowa od 5 liter).
+    (r'^(\s+\[Документ \d+\] )(' + _KODY + r')((?: \(блок\))?: )(.+?)\s*$',
+     r'\1<span lang="en">\2</span>\3<span lang="\2">\4</span>'),
+]
+
+
+# Wynik cell_langdet: „[РЕЗУЛЬТАТ] Основной язык: финский (fi)” (od ATA 2.0)
+# albo „Выбран язык: … (fi)” (do 1.x — stare zapisane notatniki). Do 2026-11-15
+# raport znał tylko starą formę i po ATA 2.0 każdy korpus brał domyślne „ru”:
+# fiński tekst w raporcie szedł bez lang="fi", czyli głosem rosyjskim.
+_RE_JEZYK_KORPUSU = re.compile(r"(?:Основной|Выбран) язык: [^(]*?\((\w+)\)")
+
+
+def jezyk_korpusu(nb: dict, domyslny: str = "ru") -> str:
+    """Kod języka korpusu z wydruku cell_langdet; `domyslny`, gdy go brak."""
+    for cell in nb.get("cells", []):
+        if cell.get("cell_type") != "code":
+            continue
+        for output in cell.get("outputs", []):
+            m = _RE_JEZYK_KORPUSU.search("".join(output.get("text", [])))
+            if m:
+                return m.group(1)
+    return domyslny
+
+
 def build_accessible_html():
     with open(NOTEBOOK_PATH, 'r', encoding='utf-8') as f:
         nb = json.load(f)
@@ -779,15 +816,7 @@ def build_accessible_html():
     omorfi = zrodlo_raportu.omorfi_status(nb)
 
     # 1. Znajdź język docelowy analizowanego tekstu
-    target_lang = "ru" 
-    for cell in nb.get("cells", []):
-        if cell["cell_type"] == "code":
-            for output in cell.get("outputs", []):
-                text = "".join(output.get("text", []))
-                match = re.search(r'Выбран язык: .*?\((.*?)\)', text)
-                if match:
-                    target_lang = match.group(1).strip()
-                    break
+    target_lang = jezyk_korpusu(nb)
 
     # 2. Inteligentne tagowanie
     def tag_target_language(text, lang):
@@ -803,16 +832,7 @@ def build_accessible_html():
         # wtrącenia mogą być w dowolnym z {pl, fi, it, is}. Pattern bierze
         # ISO z grupy \2 i używa go DWA razy: raz jako wartość lang="en"
         # (sam kod jest anglojęzyczny), drugi raz jako lang="\2" dla tekstu.
-        multilang_always_patterns = [
-            (r'^(\s+\[)(' + _KODY + r')(\]\s+\[)([A-Za-z_]+)(\]\s+&#x27;)(.+?)(&#x27;)\s*$',
-             r'\1<span lang="en">\2</span>\3<span lang="en">\4</span>\5<span lang="\2">\6</span>\7'),
-            # cell_multilang_pass per-language лемма-сэмпл:
-            # "      [fi] 'Oletko'                 → 'oletko'"
-            # Tagujemy kod ISO jako en, a obie strony strzałki — jako ten
-            # właśnie ISO (forma i lemma są w tym samym języku).
-            (r'^(\s+\[)(' + _KODY + r')(\]\s+&#x27;)(.+?)(&#x27;\s+→\s+&#x27;)(.+?)(&#x27;)\s*$',
-             r'\1<span lang="en">\2</span>\3<span lang="\2">\4</span>\5<span lang="\2">\6</span>\7'),
-        ]
+        multilang_always_patterns = WZORCE_WIELOJEZYCZNE
         lines0 = text.split('\n')
         tagged0 = []
         for line in lines0:

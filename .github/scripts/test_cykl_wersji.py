@@ -52,6 +52,12 @@ class TestCyklWersji(unittest.TestCase):
         (self.repo / ".github" / "ci.yml").write_text("a: 2\n", encoding="utf-8")
         self.assertEqual(cw.stan_cyklu()["stan"], "wydany")
 
+    def test_nowy_niesledzony_plik_bez_wip_to_blad(self):
+        # Audyt Reżysera 19.19: `git diff <tag>` nie widzi plików nieśledzonych.
+        (self.repo / "nowy_modul.py").write_text("Z = 1\n", encoding="utf-8")
+        stan = cw.stan_cyklu()
+        self.assertEqual((stan["stan"], stan["winowajcy"]), ("nieotwarty", ["nowy_modul.py"]))
+
     def test_praca_bez_wip_to_blad(self):
         (self.repo / "modul.py").write_text("X = 2\n", encoding="utf-8")
         stan = cw.stan_cyklu()

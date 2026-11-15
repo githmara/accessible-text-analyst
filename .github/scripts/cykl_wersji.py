@@ -95,6 +95,11 @@ def winowajcy(tag: str) -> list[str]:
     kod, surowe = _git("diff", "--name-only", tag)
     if kod != 0:
         raise RuntimeError(f"git diff {tag} failed")
+    # Nowy, jeszcze nieśledzony plik też otwiera cykl (audyt Reżysera 19.19:
+    # `git diff` go nie widzi, więc hook przed pierwszym commitem milczał).
+    kod, nowe = _git("ls-files", "--others", "--exclude-standard")
+    if kod == 0:
+        surowe += "\n" + nowe
     return [w for w in surowe.splitlines()
             if w.strip() and not w.startswith(PREFIKSY_POZA_WYDANIEM)]
 

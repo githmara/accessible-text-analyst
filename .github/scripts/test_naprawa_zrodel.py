@@ -191,6 +191,17 @@ class TestZnakZastepczy(unittest.TestCase):
                                 f"dalej Łódź i ({Z}{Z}{Z}) oraz xyz{Z}q.")
         self.assertEqual(info, {"odtworzone": 4, "niejednoznaczne": 1, "nieznane": 1, "poza_slowem": 3})
 
+    def test_wielkie_litery_z_kontekstu(self):
+        # Audyt 2.0: strona zaczęta w środku zdania dostawała wielką literę,
+        # krótkie słowo w wersalikach małą, a dwukropek liczył się jak kropka.
+        Z = self.Z
+        sl = [self._slownik({"że": 3, "życie": 40})]
+        strony = ["Powiedział wczoraj, ", f"{Z}e nie wie.", f"WIEM, {Z}E TAK", f"badania: {Z}ycie."]
+        wynik, _ = n.rekonstruuj_zastepcze(strony, sl, "ąćęłńśźż")
+        self.assertEqual(wynik[1:], ["że nie wie.", "WIEM, ŻE TAK", "badania: życie."])
+        (pierwsza,), _ = n.rekonstruuj_zastepcze([f"{Z}e to prawda."], sl, "ąćęłńśźż")
+        self.assertEqual(pierwsza, "Że to prawda.")          # początek tekstu = początek zdania
+
     def test_bez_rang_nie_rozstrzyga(self):
         from slowniki_jezykow import Slownik
         Z = self.Z
@@ -244,6 +255,25 @@ def _napis(x: float, y: float, tekst: str, rozmiar: int = 9) -> bytes:
 PROZA_KOLUMNY = ["Markets continued the rally that started a month",
                  "earlier, while investors kept expecting a deal",
                  "between the parties to reopen shipping routes."]
+
+
+def _pdf_tabela_liczbowa_i_naglowek() -> bytes:
+    """Audyt 2.0: (a) wykres + nagłówek sekcji 12 pt tuż pod nim (dy ~ 10 pt) obok
+    prozy 9 pt; (b) tabela 36 obramowanych komórek z liczbami i nazwami wierszy."""
+    t = bytearray()
+    for i, linia in enumerate(PROZA_KOLUMNY):
+        t += _napis(40, 760 - 12 * i, linia)
+    t += b"0.5 w\n"
+    for i in range(31):
+        t += b"350 %d m 550 %d l S\n" % (600 + 3 * i, 600 + 3 * i)
+    t += b"350 600 m 350 690 l S\n"
+    t += _napis(352, 592, "0 10 20 30", 7)
+    t += _napis(350, 578, "Wnioski koncowe", 12)                     # nagłówek: drukiem większym
+    for k in range(36):
+        x, y = 40 + 85 * (k % 6), 100 + 18 * (k // 6)
+        t += b"%d %d 85 18 re S\n" % (x, y)
+        t += _napis(x + 3, y + 5, "Przychody" if k % 6 == 0 else str(1000 + 37 * k), 8)
+    return _pdf_helvetica(bytes(t))
 
 
 def _pdf_z_wykresem(tabela_tekstowa: bool = False) -> bytes:
@@ -306,6 +336,23 @@ class TestEtykietyWykresow(unittest.TestCase):
         obszary, _ile, tekst = self._strona(tabela_tekstowa=True)
         self.assertEqual(len(obszary), 1)                 # tylko wykres, nie tabela
         self.assertIn("Lorem ipsum", n.rozdziel_wykresy(tekst)[0])
+
+    def test_tabela_liczbowa_i_naglowek_pod_wykresem_zostaja_w_nlp(self):
+        import pdfplumber
+        with tempfile.TemporaryDirectory() as tmp:
+            sciezka = Path(tmp) / "t.pdf"
+            sciezka.write_bytes(_pdf_tabela_liczbowa_i_naglowek())
+            with pdfplumber.open(sciezka) as pdf:
+                s = pdf.pages[0]
+                obszary = n.obszary_wykresow(s)
+                n.oznacz_wykresy(s)
+                proza, etykiety = n.rozdziel_wykresy(n.zwin_znaczniki_wykresow(s.extract_text()))
+        self.assertEqual(len(obszary), 1)                       # wykres tak, tabela nie
+        wyciete = " ".join(e for _p, e in etykiety)
+        self.assertIn("0 10 20 30", wyciete)
+        self.assertNotIn("Wnioski", wyciete)
+        self.assertIn("Wnioski koncowe", proza)
+        self.assertIn("Przychody 1037", proza)
 
     def test_zwijanie_w_obrebie_wiersza(self):
         Z, P, K = n.ZNAK_WYKRESU, n.POCZATEK_WYKRESU, n.KONIEC_WYKRESU

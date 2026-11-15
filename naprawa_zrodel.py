@@ -352,7 +352,14 @@ def rekonstruuj_zastepcze(strony: list[str], slowniki, kandydaci: str
             info["nieznane"] += 1
             return slowo
         reszta = [z for z in slowo if z != ZASTEPCZY]
-        wersaliki = len(reszta) > 1 and all(z.isupper() for z in reszta)
+        if len(reszta) > 1:
+            wersaliki = all(z.isupper() for z in reszta)
+        else:
+            # Słowo za krótkie, żeby samo powiedziało: decyduje otoczenie
+            # (audyt 2.0: „WIEM, ■E TAK” dawało „żE”).
+            otoczenie = [z for z in m.string[max(0, m.start() - 40):m.end() + 40]
+                         if z.isalpha() and z not in slowo]
+            wersaliki = len(otoczenie) >= 4 and all(z.isupper() for z in otoczenie)
         litery = kandydaci.upper() if wersaliki else kandydaci
         formy = set()
         for wybor in itertools.product(litery, repeat=len(miejsca)):
@@ -367,14 +374,16 @@ def rekonstruuj_zastepcze(strony: list[str], slowniki, kandydaci: str
             info["niejednoznaczne" if formy else "nieznane"] += 1
             return slowo
         if miejsca[0] == 0 and not wersaliki:
-            # Wielka litera na początku słowa: po końcu zdania (albo na początku
-            # strony) zawsze; w środku zdania — gdy leksykon zna ją jako częstszą
-            # (nazwa własna: „■ódź” → „Łódź”).
-            przed = m.string[:m.start()].rstrip()
+            # Wielka litera na początku słowa: po końcu zdania zawsze; w środku
+            # zdania — gdy leksykon zna ją jako częstszą (nazwa własna: „■ódź”
+            # → „Łódź”). Początek strony: koniec zdania na końcu POPRZEDNIEJ
+            # strony (pierwsza strona = początek tekstu). Dwukropek nie kończy
+            # zdania (audyt 2.0: „badania: ■ycie” → „Życie”).
+            przed = m.string[:m.start()].rstrip() or poprzednia[0]
             wielka = wynik[0].upper() + wynik[1:]
             r_mala = ranga(wynik, dokladna=True)
             r_wielka = ranga(wielka, dokladna=True) if wielka != wynik else None
-            if (not przed or przed[-1] in ".!?…:" or
+            if (not przed or przed[-1] in ".!?…" or
                     (r_wielka is not None and r_mala is not None and r_wielka < r_mala)):
                 wynik = wielka
         info["odtworzone"] += 1
@@ -382,7 +391,12 @@ def rekonstruuj_zastepcze(strony: list[str], slowniki, kandydaci: str
 
     if not kandydaci or not any(ZASTEPCZY in s for s in strony):
         return strony, info
-    return [_RE_SLOWO_ZASTEPCZE.sub(zamien, s) for s in strony], info
+    wynik_stron = []
+    poprzednia = [""]             # koniec poprzedniej strony (dla ■ na początku strony)
+    for s in strony:
+        wynik_stron.append(_RE_SLOWO_ZASTEPCZE.sub(zamien, s))
+        poprzednia[0] = wynik_stron[-1].rstrip()[-1:] or poprzednia[0]
+    return wynik_stron, info
 
 
 #: Obrót znaku (stopnie), poniżej którego znak jest poziomy mimo `upright=False`.
@@ -424,10 +438,12 @@ def wyprostuj_znaki(strona) -> int:
 # 26”, nazwy krajów z wykresu słupkowego sklejone z prozą sąsiedniej kolumny.
 # Rozpoznanie z GEOMETRII strony: skupisko obiektów wektorowych (linie,
 # prostokąty, krzywe) to wykres, gdy obiektów jest co najmniej
-# `MIN_OBIEKTOW_WYKRESU`, a liter w jego obrysie nie więcej niż
+# `MIN_OBIEKTOW_WYKRESU`, a liter I CYFR w jego obrysie nie więcej niż
 # `MAX_LITER_NA_OBIEKT` na obiekt. Zmierzone 2026-11-15 na biuletynach:
-# wykresy mają 37–253 obiekty i ≤ 1,4 litery na obiekt; tabele i ramki z
-# tekstem 7–20 obiektów i 4–260 liter na obiekt.
+# wykresy słupkowe mają 37–87 obiektów i ≤ 0,7 znaku na obiekt; tabele i ramki
+# z tekstem 7–20 obiektów i 4–260 liter na obiekt. Cyfry liczą się od audytu
+# 2.0: tabela finansowa z obramowanymi komórkami ma mało LITER (~2 na obiekt)
+# i szła do wykresów razem z nazwami wierszy.
 #
 # Znaczniki są niewidoczne (nieznaki Unicode, jak `ZNACZNIK_GRANICY`):
 # `oznacz_wykresy` poprzedza każdy znak etykiety `ZNAK_WYKRESU` (przed
@@ -486,7 +502,7 @@ def obszary_wykresow(strona) -> list[tuple[float, float, float, float]]:
             continue
         x0, top = min(o[0] for o in g), min(o[1] for o in g)
         x1, bottom = max(o[2] for o in g), max(o[3] for o in g)
-        litery = sum(1 for z in strona.chars if z["text"].isalpha()
+        litery = sum(1 for z in strona.chars if z["text"].isalnum()
                      and x0 <= (z["x0"] + z["x1"]) / 2 <= x1 and top <= (z["top"] + z["bottom"]) / 2 <= bottom)
         if litery <= MAX_LITER_NA_OBIEKT * len(g):
             wynik.append((x0, top, x1, bottom))
@@ -528,13 +544,18 @@ def oznacz_wykresy(strona) -> int:
     Etykieta = słowo, którego środek leży w obrysie wykresu (pojedynczo: wiersz
     prozy sąsiedniej kolumny bywa z nim w jednym ciągu), albo krótki ciąg
     (≤ `MAX_SLOW_ETYKIETY` słów lub same liczby) tuż obok obrysu
-    (`ZASIEG_POZIOMY` / `ZASIEG_PIONOWY`). Wywołaj PO `napraw_strone`
-    i `wyprostuj_znaki` (słowa muszą być już poprawne), a PRZED `extract_text*`;
-    wynik `extract_text` przepuść przez `zwin_znaczniki_wykresow`.
+    (`ZASIEG_POZIOMY` / `ZASIEG_PIONOWY`) i drukiem MNIEJSZYM niż dominujący
+    na stronie (audyt 2.0: nagłówek sekcji tuż pod wykresem szedł do etykiet;
+    zmierzone na biuletynach: proza 9 pt, etykiety obok 6–8 pt). Wywołaj PO
+    `napraw_strone` i `wyprostuj_znaki` (słowa muszą być już poprawne), a PRZED
+    `extract_text*`; wynik `extract_text` przepuść przez `zwin_znaczniki_wykresow`.
     """
+    from collections import Counter
     obszary = obszary_wykresow(strona)
     if not obszary:
         return 0
+    rozmiary = Counter(round(z["size"], 1) for z in strona.chars if z["text"].strip())
+    dominujacy = rozmiary.most_common(1)[0][0] if rozmiary else 0
     ile = 0
     for ciag in _ciagi_wierszy(strona.extract_words(return_chars=True)):
         etykiety = [s for s in ciag if any(_w_obszarze(s, o) for o in obszary)]
@@ -543,7 +564,8 @@ def oznacz_wykresy(strona) -> int:
                      max(s["x1"] for s in ciag), max(s["bottom"] for s in ciag))
             krotki = (len(ciag) <= MAX_SLOW_ETYKIETY
                       or not any(sum(z.isalpha() for z in s["text"]) >= 2 for s in ciag))
-            if krotki and any(_obok(ramka, o) for o in obszary):
+            drobny = max(round(z["size"], 1) for s in ciag for z in s["chars"]) < dominujacy
+            if krotki and drobny and any(_obok(ramka, o) for o in obszary):
                 etykiety = ciag
         for s in etykiety:
             for z in s["chars"]:

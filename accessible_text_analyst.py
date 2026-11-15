@@ -534,7 +534,8 @@ def load_pdf(path):
                                 serie_rozstrzelone, oznacz_granice, oczysc_strone_pdf,
                                 ZNACZNIK_GRANICY, wyprostuj_znaki, ZASTEPCZY,
                                 litery_spoza_winansi, rekonstruuj_zastepcze,
-                                oznacz_wykresy, zwin_znaczniki_wykresow)
+                                oznacz_wykresy, zwin_znaczniki_wykresow,
+                                bez_znacznikow_wykresow)
     from czyszczenie_tekstu import scal_rozstrzelone
     from shamanic_locale import alfabety_paczek
     _fonts = {}
@@ -619,7 +620,7 @@ def load_pdf(path):
     if removed_bp:
         print(f"  Удалено {len(removed_bp)} повторяющихся колонтитулов:")
         for bp in sorted(removed_bp)[:5]:
-            print(f"    - '{bp[:70]}'")
+            print(f"    - '{bez_znacznikow_wykresow(bp)[:70]}'")   # bez niewidocznych znaczników
         if len(removed_bp) > 5:
             print(f"    ... и ещё {len(removed_bp)-5}")
     # Wspólny moduł `czyszczenie_tekstu` (bliźniak bajt w bajt z Reżyserem):
@@ -2116,10 +2117,17 @@ import pandas as pd
 
 all_sents, sent_langs, sent_wstawki, sent_lemmas = [], [], [], []
 _sent_starts = []   # смещения предложений в потоке — для места подписей диаграмм
+# Короткие предложения (≤ 10 символов: «Да.», короткий заголовок) в NLP не
+# входят, но в HTML/DOCX остаются на своём месте (аудит 2.0: они пропадали
+# из экспорта молча). (смещение, текст, язык).
+KROTKIE_ZDANIA = []
 for _l, _off, _d in CZESCI:
     for _s in _d.sents:
         _txt = _s.text.strip()
         if len(_txt) <= 10:
+            if _txt:
+                KROTKIE_ZDANIA.append(
+                    (_off + _s.start_char + (len(_s.text) - len(_s.text.lstrip())), _txt, _l))
             continue
         # Смещение предложения в потоке TEKST (для сегментов LANG текст Doc
         # совпадает с потоком; у блоков вставок нет, смещения не нужны).
@@ -2165,6 +2173,13 @@ for _p, _e in PODPISI_WYKRESOW:
     PODPISI_PO_AKAPICIE[(_n - 1) // PARA_MAX if _n else -1].append(_e)
 if PODPISI_PO_AKAPICIE:
     print(f"  Абзацев с подписями диаграмм (только для HTML/DOCX): {len(PODPISI_PO_AKAPICIE)}")
+# Короткое предложение встаёт в экспорте перед первым предложением NLP,
+# которое начинается после него (индекс = число предложений перед ним).
+KROTKIE_PRZED = defaultdict(list)
+for _p, _txt, _l in KROTKIE_ZDANIA:
+    KROTKIE_PRZED[bisect.bisect_left(_sent_starts, _p)].append((_txt, _l))
+if KROTKIE_ZDANIA:
+    print(f"  Коротких предложений (≤ 10 символов) вне NLP, но в HTML/DOCX: {len(KROTKIE_ZDANIA)}")
 
 df_sent = pd.DataFrame({"sent_id": range(1, len(all_sents) + 1), "sentence": all_sents, "lang": sent_langs})
 df_para = pd.DataFrame({"para_id": range(1, len(paragraphs) + 1), "paragraph": paragraphs})
@@ -2548,9 +2563,18 @@ def _kawalki_akapitu(ids):
     соседние куски одного языка склеены, пробел между предложениями
     достаётся предыдущему куску."""
     kawalki = []
-    for n, k in enumerate(ids):
+    # Короткие предложения вне NLP (cell_para) — на своих местах; хвост
+    # документа — после последнего предложения последнего абзаца.
+    _koniec = len(all_sents) if ids and ids[-1] == len(all_sents) - 1 else None
+    for n, k in enumerate(list(ids) + ([_koniec] if _koniec is not None else [])):
+        for _t, _jl in KROTKIE_PRZED.get(k, ()):
+            if kawalki:
+                kawalki.append((" ", kawalki[-1][1]))
+            kawalki.append((_t, _jl))
+        if k == _koniec:
+            break
         txt, jezyk = all_sents[k], sent_langs[k]
-        if n:
+        if kawalki:
             kawalki.append((" ", kawalki[-1][1]))
         kursor = 0
         for a, b, wl in sent_wstawki[k]:
@@ -2576,6 +2600,8 @@ def _akapity_eksportu():
         if PODPISI_PO_AKAPICIE.get(k):
             yield LANG, [(" ".join(PODPISI_PO_AKAPICIE[k]), LANG)]
     yield from _podpisi(-1)
+    if not para_sent_ids and KROTKIE_PRZED:          # текст только из коротких предложений
+        yield LANG, [(" ".join(_t for _v in KROTKIE_PRZED.values() for _t, _jl in _v), LANG)]
     for _k, (_p_lang, _ids) in enumerate(zip(para_langs, para_sent_ids)):
         yield _p_lang, _kawalki_akapitu(_ids)
         yield from _podpisi(_k)

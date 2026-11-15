@@ -28,10 +28,12 @@ LINIE = [
     "  TXT: исправлена неверная кодировка (mojibake) в строках: 12 (cp1252>iso8859-2: 10, latin-1>koi8-r: 2).",
     "  DOCX: символов-пробелов шрифта Symbol (U+F020) заменено обычным пробелом: 253.",
     "  Сырой слой: (cid:602)(cid:619)",
+    "  PDF: генератор PDF заменил буквы вне WinAnsi символом ■ — слов восстановлено по словарю: 146.",
+    "  PDF: подписи диаграмм, символов: 658. Они остаются для чтения в HTML/DOCX, но исключаются из NLP-анализа.",
 ]
 FRAZY = ["ToUnicode", "fontTools", "pip install fonttools", "cid", "OCR", "U+F020", "Symbol",
          "mojibake", "latin-1&gt;cp1251", "cp1252&gt;iso8859-2", "latin-1&gt;koi8-r", "(cid:602)",
-         "PDF", "TXT", "DOCX"]
+         "PDF", "TXT", "DOCX", "WinAnsi", "HTML", "NLP"]
 
 
 def otaguj(linia: str) -> str:
@@ -70,6 +72,40 @@ class TestWzorceRaportu(unittest.TestCase):
                 # cała nazwa wewnątrz jednego spana lang="en".
                 self.assertRegex(otaguj(f"  Загрузка NER: {m} ..."),
                                  '<span lang="en">[^<]*' + re.escape(m) + "[^<]*</span>")
+
+    def test_jezyk_korpusu_z_wydruku_notatnika(self):
+        # Regresja ATA 2.0 (znaleziona 2026-11-15 na prawdziwym przebiegu): cell_langdet
+        # drukuje „Основной язык”, raport szukał „Выбран язык” i każdy korpus dostawał „ru”.
+        # Wydruk bierzemy ze ŹRÓDŁA notatnika, więc zmiana komunikatu wywali ten test.
+        zrodlo = (KORZEN / "accessible_text_analyst.py").read_text(encoding="utf-8")
+        linia = next(l for l in zrodlo.splitlines()
+                     if l.startswith("print(") and "[РЕЗУЛЬТАТ]" in l and "язык" in l)
+        wyrazenie = linia[len("print("):].rstrip().removesuffix(")")
+        wydruk = eval(wyrazenie, {"LANG": "fi", "LANG_NAMES": {"fi": "финский"}})  # noqa: S307
+        nb = {"cells": [{"cell_type": "code", "outputs": [{"text": [wydruk]}]}]}
+        self.assertEqual(gr.jezyk_korpusu(nb), "fi")
+        stary = {"cells": [{"cell_type": "code", "outputs": [{"text": ["Выбран язык: польский (pl)"]}]}]}
+        self.assertEqual(gr.jezyk_korpusu(stary), "pl")
+        self.assertEqual(gr.jezyk_korpusu({"cells": []}), "ru")
+
+    def test_obcy_odcinek_z_cell_tok_w_swoim_jezyku(self):
+        # Audyt 2.0: wydruk „[Документ N] en (блок): …” nie pasował do żadnego
+        # wzorca, angielski cytat szedł głosem rosyjskim. Wydruk ze ŹRÓDŁA notatnika.
+        from types import SimpleNamespace
+        zrodlo = (KORZEN / "accessible_text_analyst.py").read_text(encoding="utf-8")
+        linia = next(l.strip() for l in zrodlo.splitlines()
+                     if "[Документ {_dokument(_o.start)" in l and "print(" in l)
+        wyrazenie = linia[len("print("):].removesuffix(")")
+        for blok, kod in ((True, "en"), (False, "pl")):
+            with self.subTest(blok=blok):
+                wydruk = eval(wyrazenie, {"_dokument": lambda _p: 2,  # noqa: S307
+                                          "_o": SimpleNamespace(start=0, jezyk=kod, blok=blok),
+                                          "_f": "It was the best of times"})
+                t = html.escape(wydruk)
+                for wzorzec, zamiana in gr.WZORCE_WIELOJEZYCZNE:
+                    t = re.sub(wzorzec, zamiana, t)
+                self.assertIn(f'<span lang="{kod}">It was the best of times</span>', t)
+                self.assertIn(f'<span lang="en">{kod}</span>', t)
 
     def test_rosyjskie_slowa_nietkniete(self):
         linia = "  PDF: текст вразрядку — склеено: 342, оставлено: 10."
