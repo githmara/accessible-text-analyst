@@ -150,6 +150,7 @@ llm:
   err_no_key: '[FEHLER] {var} wurde in golden_key.env nicht gefunden (benötigt vom Anbieter {provider}). Jeder Anbieter liest nur seinen eigenen Schlüssel.'
   info_degraded: '[INFO] {endpoint} hat response_format {mode} abgelehnt ({error}). Weiter mit {next}.'
   info_no_temperature: '[INFO] Das Modell {model} akzeptiert nur die Standardtemperatur ({temperature} abgelehnt). Neuer Versuch ohne sie; der Rest dieses Laufs lässt sie für dieses Modell weg.'
+  info_no_effort: '[INFO] Das Modell {model} hat die Denkeinstellung ({effort}) abgelehnt. Neuer Versuch ohne sie; der Rest dieses Laufs lässt sie für dieses Modell weg.'
   diag_reply: '[DIAG] Modus {mode}, finish_reason {finish}, Antwort mit {chars} Zeichen{refusal}. Vollständige Antwort: {path}'
   diag_refusal: ', Ablehnung: "{text}"'
 deps:

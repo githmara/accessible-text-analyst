@@ -192,14 +192,77 @@ class LLMReply:
     mode: str
     finish_reason: str
     refusal: str
+    # Myślenie modelu: ile tokenów zapłaciliśmy (None = endpoint nie podał)
+    # i czytelne streszczenie, gdy endpoint je oddaje (OpenRouter
+    # `message.reasoning`; OpenAI Chat Completions nie oddaje nigdy).
+    reasoning_tokens: int | None = None
+    reasoning: str = ""
 
 
-def chat_json(client, settings, prompt, schema, name, ui_lang):
+# Effort myślenia (v2.0.1). Modele rozumujące (gpt-6.x, Claude 5.x) myślą
+# ZAWSZE — OpenAI przyjmuje tylko low/medium/high/xhigh, OpenRouter odpowiada
+# „Reasoning is mandatory” na próbę wyłączenia (sonda 2026-11-16). Niewysłanie
+# parametru to więc nie „bez myślenia”, tylko effort domyślny providera, za
+# który płacimy. Wołający, który wie, ile myślenia mu trzeba, podaje effort;
+# openai_compat go nie dostaje (nieznany endpoint, nieznana nazwa pola).
+EFFORT_PROVIDERS = ("openai", "openrouter")
+
+# Modele, które odrzuciły effort — per (provider, adres, model), jak `_NO_TEMPERATURE`.
+_NO_EFFORT = set()
+
+
+def effort_kwargs(settings, effort):
+    """Pole effortu w kształcie danego providera; {} gdy nie wysyłamy."""
+    if not effort or settings.provider not in EFFORT_PROVIDERS:
+        return {}
+    if (settings.provider, settings.base_url, settings.model) in _NO_EFFORT:
+        return {}
+    if settings.provider == "openai":
+        return {"reasoning_effort": effort}
+    return {"extra_body": {"reasoning": {"effort": effort}}}
+
+
+def is_effort_error(exc):
+    """Czy 400 dotyczy pola effortu (model bez rozumowania albo inna skala wartości)."""
+    if not is_structure_error(exc):
+        return False
+    if getattr(exc, "param", None) in ("reasoning_effort", "reasoning"):
+        return True
+    return "reasoning" in str(exc).lower()
+
+
+def _create(client, settings, kwargs, effort, ui_lang):
+    """`chat.completions.create` z effortem; po jego odrzuceniu jedno ponowienie bez pola."""
+    extra = effort_kwargs(settings, effort)
+    if extra:
+        try:
+            return client.chat.completions.create(**kwargs, **extra)
+        except Exception as e:
+            if not is_effort_error(e):
+                raise
+            _NO_EFFORT.add((settings.provider, settings.base_url, settings.model))
+            print(t(ui_lang, "llm.info_no_effort", model=settings.model, effort=effort))
+    return client.chat.completions.create(**kwargs)
+
+
+def _reasoning_of(resp, msg):
+    """(tokeny myślenia, czytelne streszczenie) z odpowiedzi Chat Completions."""
+    usage = getattr(resp, "usage", None)
+    details = getattr(usage, "completion_tokens_details", None)
+    tokens = getattr(details, "reasoning_tokens", None)
+    text = getattr(msg, "reasoning", None)
+    if text is None:
+        text = (getattr(msg, "model_extra", None) or {}).get("reasoning")
+    return tokens, text.strip() if isinstance(text, str) else ""
+
+
+def chat_json(client, settings, prompt, schema, name, ui_lang, effort=None):
     """Jedno wywołanie Chat Completions z możliwie najściślejszym formatem JSON.
 
     json_schema (strict) -> json_object -> sam prompt. Szczebel niżej tylko po
     błędzie struktury; 429, timeout, sieć i przepełnienie kontekstu lecą wyżej od
     razu. Bez `temperature`: część nowszych modeli odrzuca wartości niedomyślne.
+    `effort` (low/medium/high) — patrz EFFORT_PROVIDERS; None = domyślny providera.
     """
     formats = {
         "json_schema": {"type": "json_schema",
@@ -215,7 +278,7 @@ def chat_json(client, settings, prompt, schema, name, ui_lang):
         if formats[mode] is not None:
             kwargs["response_format"] = formats[mode]
         try:
-            resp = client.chat.completions.create(**kwargs)
+            resp = _create(client, settings, kwargs, effort, ui_lang)
         except Exception as e:
             if i == len(MODES) - 1 or not is_structure_error(e):
                 raise
@@ -225,9 +288,11 @@ def chat_json(client, settings, prompt, schema, name, ui_lang):
         _WORKING_MODE[cache_key] = mode
         choice = resp.choices[0] if getattr(resp, "choices", None) else None
         msg = getattr(choice, "message", None)
+        tokens, reasoning = _reasoning_of(resp, msg)
         return LLMReply(text=(getattr(msg, "content", None) or ""), mode=mode,
                         finish_reason=str(getattr(choice, "finish_reason", None) or "-"),
-                        refusal=str(getattr(msg, "refusal", None) or ""))
+                        refusal=str(getattr(msg, "refusal", None) or ""),
+                        reasoning_tokens=tokens, reasoning=reasoning)
     raise RuntimeError("unreachable")
 
 
@@ -245,25 +310,27 @@ def is_temperature_error(exc):
     return "temperature" in str(exc).lower()
 
 
-def chat_text(client, settings, messages, temperature, ui_lang):
+def chat_text(client, settings, messages, temperature, ui_lang, effort=None):
     """Chat Completions z `temperature` wołającego, a bez niej, gdy model ją odrzuca.
 
     Twórcze temperatury rytuałów zostają tam, gdzie model je przyjmuje; model,
     który zna tylko wartość domyślną (gpt-6.x: 400 „Only the default (1) value is
     supported"), dostaje jedno ponowienie bez parametru. Każdy inny błąd leci wyżej.
+    `effort` jak w chat_json (rytuały: None — pieśń ma mieć strukturę, decyzja
+    maintainera 2026-11-16).
     """
     cache_key = (settings.provider, settings.base_url, settings.model)
     kwargs = {"model": settings.model, "messages": messages}
     if cache_key not in _NO_TEMPERATURE:
         try:
-            return client.chat.completions.create(**kwargs, temperature=temperature)
+            return _create(client, settings, dict(kwargs, temperature=temperature), effort, ui_lang)
         except Exception as e:
             if not is_temperature_error(e):
                 raise
             _NO_TEMPERATURE.add(cache_key)
             print(t(ui_lang, "llm.info_no_temperature", model=settings.model,
                     temperature=temperature))
-    return client.chat.completions.create(**kwargs)
+    return _create(client, settings, kwargs, effort, ui_lang)
 
 
 def save_diagnostics(path, reply, ui_lang):

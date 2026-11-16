@@ -150,6 +150,7 @@ llm:
   err_no_key: '[ERROR] No se encontró {var} en golden_key.env (lo necesita el proveedor {provider}). Cada proveedor lee solo su propia clave.'
   info_degraded: '[INFO] {endpoint} rechazó response_format {mode} ({error}). Se pasa a {next}.'
   info_no_temperature: '[INFO] El modelo {model} solo acepta la temperatura predeterminada (rechazó {temperature}). Se reintenta sin ella; el resto de esta ejecución la omite para este modelo.'
+  info_no_effort: '[INFO] El modelo {model} rechazó el ajuste de razonamiento ({effort}). Se reintenta sin él; el resto de esta ejecución lo omite para este modelo.'
   diag_reply: '[DIAG] Modo {mode}, finish_reason {finish}, respuesta de {chars} caracteres{refusal}. Respuesta completa: {path}'
   diag_refusal: ', negativa: "{text}"'
 deps:

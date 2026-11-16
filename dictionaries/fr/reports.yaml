@@ -150,6 +150,7 @@ llm:
   err_no_key: '[ERREUR] {var} est introuvable dans golden_key.env (requis par le fournisseur {provider}). Chaque fournisseur ne lit que sa propre clé.'
   info_degraded: '[INFO] {endpoint} a refusé response_format {mode} ({error}). Repli sur {next}.'
   info_no_temperature: '[INFO] Le modèle {model} n’accepte que la température par défaut ({temperature} refusée). Nouvel essai sans elle ; le reste de cette exécution l’omet pour ce modèle.'
+  info_no_effort: '[INFO] Le modèle {model} a refusé le réglage de réflexion ({effort}). Nouvel essai sans lui ; le reste de cette exécution l’omet pour ce modèle.'
   diag_reply: '[DIAG] Mode {mode}, finish_reason {finish}, réponse de {chars} caractères{refusal}. Réponse complète : {path}'
   diag_refusal: ', refus : "{text}"'
 deps:

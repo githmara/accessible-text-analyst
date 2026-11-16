@@ -80,6 +80,14 @@ COPY_NGRAM = 7             # tyle kolejnych słów wspólnych ze źródłem = ko
 DRAFT_RETRIES = 2          # powtórki `draft` z zarzutami po odrzuceniu (łącznie 3 próby)
 FILL_RETRIES = 2           # powtórki `fill` po nieużytecznej odpowiedzi (łącznie 3 próby)
 MODEL_LANG = "en"          # zarzuty dla modelu: angielskie instrukcje są wykonywane rzetelniej
+# Effort myślenia per rola (decyzja maintainera 2026-11-16). Modele rozumujące
+# myślą zawsze, a brak pola = effort domyślny providera, za który płacimy (patrz
+# llm_klient.EFFORT_PROVIDERS). Drafter `high`: więcej szans na trzymanie się
+# reguły o realnych osobach (jedyna reguła promptu bez walidacji w kodzie).
+# Filler `low`: ślepe zgadywanie słowa ma być odruchem, nie rozważaniem.
+DRAFTER_EFFORT = "high"
+FILLER_EFFORT = "low"
+EFFORT_CHOICES = ("default", "low", "medium", "high", "xhigh")
 
 CONTENT_UPOS = {"NOUN", "PROPN", "VERB", "ADJ", "NUM"}
 GAP_RE = re.compile(r"\{\{(\d+)\}\}")
@@ -1125,6 +1133,23 @@ def _parse_draft(text):
     return {"fragments": frags}
 
 
+def _effort(args, role_default):
+    """Effort roli; ukryte `--effort` (pomiary) nadpisuje, `default` = nie wysyłaj pola."""
+    chosen = getattr(args, "effort", None) or role_default
+    return None if chosen == "default" else chosen
+
+
+def _save_thinking(path, reply):
+    """Czytelne myślenie modelu obok pakietu — płacimy za nie, więc ma się dać przeczytać.
+
+    OpenRouter oddaje streszczenie w `message.reasoning`; OpenAI Chat Completions
+    nie oddaje żadnego tekstu (sam licznik tokenów) — wtedy plik nie powstaje.
+    """
+    if reply.reasoning:
+        path.write_text(f"reasoning_tokens: {reply.reasoning_tokens}\n\n{reply.reasoning}\n",
+                        encoding="utf-8")
+
+
 def cmd_draft(args):
     """Szkic przez API + seal; po odrzuceniu do DRAFT_RETRIES powtórek z zarzutami.
 
@@ -1156,10 +1181,12 @@ def cmd_draft(args):
         print(tr(UI_LANG, "kirja.llm_drafter", model=llm.model, endpoint=llm.endpoint, n=n, max=attempts))
         try:
             reply = llm_klient.chat_json(client, llm, base.replace("<<PROBLEMS>>", problems),
-                                         DRAFT_SCHEMA, "kirja_draft", UI_LANG)
+                                         DRAFT_SCHEMA, "kirja_draft", UI_LANG,
+                                         effort=_effort(args, DRAFTER_EFFORT))
         except Exception as e:  # sieć, klucz, model, kontekst — bez powtórek
             print(tr(UI_LANG, "kirja.err_call", error=e))
             return 1
+        _save_thinking(d / f"draft_thinking_{n}.txt", reply)
         parsed = _parse_draft(reply.text)
         if parsed is None:
             print(tr(UI_LANG, "kirja.warn_bad_reply"))
@@ -1212,7 +1239,8 @@ def cmd_fill(args):
         if n > 1:
             print(tr(UI_LANG, "kirja.fill_retry", n=n, max=attempts))
         try:
-            reply = llm_klient.chat_json(client, llm, base + problem, schema, "kirja_guesses", UI_LANG)
+            reply = llm_klient.chat_json(client, llm, base + problem, schema, "kirja_guesses", UI_LANG,
+                                         effort=_effort(args, FILLER_EFFORT))
         except Exception as e:  # sieć, klucz, model, kontekst — bez powtórek
             print(tr(UI_LANG, "kirja.err_call", error=e))
             return 1
@@ -1510,9 +1538,12 @@ def main(argv=None):
     s.add_argument("--verbose", action="store_true")
     s = sub.add_parser("draft"); s.add_argument("packet", nargs="*", metavar="ID"); s.add_argument("--force", action="store_true")
     s.add_argument("--provider", choices=sorted(llm_klient.PROVIDERS)); s.add_argument("--model")
+    # pomiary: effort inny niż ustalony dla roli (`default` = bez pola)
+    s.add_argument("--effort", choices=EFFORT_CHOICES, help=argparse.SUPPRESS)
     s = sub.add_parser("seal"); s.add_argument("packet", nargs="*", metavar="ID")
     s = sub.add_parser("fill"); s.add_argument("packet", nargs="*", metavar="ID")
     s.add_argument("--provider", choices=sorted(llm_klient.PROVIDERS)); s.add_argument("--model")
+    s.add_argument("--effort", choices=EFFORT_CHOICES, help=argparse.SUPPRESS)
     s = sub.add_parser("judge"); s.add_argument("packet", nargs="*", metavar="ID")
     sub.add_parser("status")
     s = sub.add_parser("tidy"); s.add_argument("--apply", action="store_true")

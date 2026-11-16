@@ -150,6 +150,7 @@ llm:
   err_no_key: '[VILLA] {var} fannst ekki í golden_key.env (þjónustan {provider} þarf hann). Hver þjónusta les aðeins sinn eigin lykil.'
   info_degraded: '[INFO] {endpoint} hafnaði response_format {mode} ({error}). Fer yfir í {next}.'
   info_no_temperature: '[INFO] Líkanið {model} tekur aðeins við sjálfgefnu hitastigi (hafnaði {temperature}). Reyni aftur án þess; það sem eftir er af keyrslunni sleppi ég því fyrir þetta líkan.'
+  info_no_effort: '[INFO] Líkanið {model} hafnaði hugsunarstillingunni ({effort}). Reyni aftur án hennar; það sem eftir er af keyrslunni sleppi ég henni fyrir þetta líkan.'
   diag_reply: '[GREINING] Háttur {mode}, finish_reason {finish}, svar upp á {chars} stafi{refusal}. Allt svarið: {path}'
   diag_refusal: ', synjun: "{text}"'
 deps:

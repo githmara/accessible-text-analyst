@@ -80,6 +80,8 @@ jobs:
           python .github/scripts/test_ocr_windows.py
           # Głosowanie OCR na sztucznych słownikach — bez silników i modeli.
           python .github/scripts/test_glosowanie_ocr.py
+          # Effort myślenia per provider i rola Księgi — atrapa klienta, zero sieci.
+          python .github/scripts/test_llm_effort.py
           # Wspólny moduł z Reżyserem (bajt w bajt) — runner i wektory też wspólne, sam stdlib.
           python czyszczenie_tekstu_wektory.py
           # Drugi wspólny moduł (bajt w bajt): pismo tekstu i język cyrylicy z alfabetów.
