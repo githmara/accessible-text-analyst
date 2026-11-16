@@ -97,6 +97,40 @@ class TestEffort(unittest.TestCase):
         self.assertEqual(k.wyslane[0]["temperature"], 0.8)
         self.assertNotIn("extra_body", k.wyslane[0])
 
+    def test_blad_innego_pola_ze_slowem_reasoning_nie_jest_odrzuceniem_effortu(self):
+        # Audyt 2.0.1, Z1: param wskazuje inne pole — treść nie może przeważyć.
+        e = _Blad400("response_format is not supported together with reasoning models", "response_format")
+        self.assertFalse(lk.is_effort_error(e))
+        k = _Klient([e, ('{"a": "x"}', None, None)])
+        lk.chat_json(k, _ustawienia("openai"), "p", SCHEMAT, "n", "en", effort="high")
+        self.assertEqual(k.wyslane[1]["reasoning_effort"], "high")       # effort nie zatruty
+        self.assertFalse(lk._NO_EFFORT)
+
+    def test_pamiec_odrzucenia_jest_per_wartosc_effortu(self):
+        # Audyt 2.0.1, Z3: odrzucone xhigh nie wyłącza high.
+        ust = _ustawienia("openai", "m2")
+        k = _Klient([_Blad400("bad value", "reasoning_effort"), ('{"a": "x"}', None, None),
+                     ('{"a": "y"}', None, None)])
+        lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort="xhigh")
+        lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort="high")
+        self.assertEqual(k.wyslane[2]["reasoning_effort"], "high")
+
+    def test_draft_czysci_stare_mysli_i_podpisuje_nowe(self):
+        # Audyt 2.0.1, Z2: myśli innego szkicu nie mogą leżeć obok nowego draft.json.
+        import tempfile
+        import ksiega_niedomowien as kn
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            for nazwa in ("draft_thinking_1.txt", "draft_thinking_3.txt", "draft_reply_2.txt", "packet.json"):
+                (d / nazwa).write_text("stare", encoding="utf-8")
+            kn._clear_draft_leftovers(d)
+            self.assertEqual(sorted(p.name for p in d.iterdir()), ["packet.json"])
+            odp = lk.LLMReply(text="{}", mode="json_schema", finish_reason="stop", refusal="", reasoning_tokens=7, reasoning="Mietin.")
+            kn._save_thinking(d / "draft_thinking_1.txt", odp, _ustawienia("openrouter", "m3"), None)
+            tekst = (d / "draft_thinking_1.txt").read_text(encoding="utf-8")
+            self.assertTrue(tekst.startswith("provider: openrouter\nmodel: m3\neffort: default\n"))
+            self.assertIn("Mietin.", tekst)
+
     def test_ksiega_ma_effort_per_rola(self):
         import ksiega_niedomowien as kn
         self.assertEqual((kn.DRAFTER_EFFORT, kn.FILLER_EFFORT), ("high", "low"))

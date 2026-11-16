@@ -1139,15 +1139,24 @@ def _effort(args, role_default):
     return None if chosen == "default" else chosen
 
 
-def _save_thinking(path, reply):
+def _save_thinking(path, reply, llm, effort):
     """Czytelne myślenie modelu obok pakietu — płacimy za nie, więc ma się dać przeczytać.
 
     OpenRouter oddaje streszczenie w `message.reasoning`; OpenAI Chat Completions
     nie oddaje żadnego tekstu (sam licznik tokenów) — wtedy plik nie powstaje.
     """
     if reply.reasoning:
-        path.write_text(f"reasoning_tokens: {reply.reasoning_tokens}\n\n{reply.reasoning}\n",
+        path.write_text(f"provider: {llm.provider}\nmodel: {llm.model}\neffort: {effort or 'default'}\n"
+                        f"reasoning_tokens: {reply.reasoning_tokens}\n\n{reply.reasoning}\n",
                         encoding="utf-8")
+
+
+def _clear_draft_leftovers(d):
+    """Myśli i diagnostyka poprzedniego szkicu (`--force`, przerwany bieg) nie mogą leżeć
+    obok nowego draft.json — przegląd czyta je razem (audyt 2.0.1, Z2)."""
+    for pattern in ("draft_thinking_*.txt", "draft_reply_*.txt"):
+        for old in d.glob(pattern):
+            old.unlink()
 
 
 def cmd_draft(args):
@@ -1171,6 +1180,8 @@ def cmd_draft(args):
     if got is None:
         return 1
     llm, client = got
+    _clear_draft_leftovers(d)
+    effort = _effort(args, DRAFTER_EFFORT)
     sents = packet["truth"]["sentences"]
     print(tr(UI_LANG, "kirja.draft_privacy", count=len(sents), endpoint=llm.endpoint))
     base = DRAFTER_PROMPT.replace("<<PACKET>>", json.dumps(
@@ -1181,12 +1192,11 @@ def cmd_draft(args):
         print(tr(UI_LANG, "kirja.llm_drafter", model=llm.model, endpoint=llm.endpoint, n=n, max=attempts))
         try:
             reply = llm_klient.chat_json(client, llm, base.replace("<<PROBLEMS>>", problems),
-                                         DRAFT_SCHEMA, "kirja_draft", UI_LANG,
-                                         effort=_effort(args, DRAFTER_EFFORT))
+                                         DRAFT_SCHEMA, "kirja_draft", UI_LANG, effort=effort)
         except Exception as e:  # sieć, klucz, model, kontekst — bez powtórek
             print(tr(UI_LANG, "kirja.err_call", error=e))
             return 1
-        _save_thinking(d / f"draft_thinking_{n}.txt", reply)
+        _save_thinking(d / f"draft_thinking_{n}.txt", reply, llm, effort)
         parsed = _parse_draft(reply.text)
         if parsed is None:
             print(tr(UI_LANG, "kirja.warn_bad_reply"))

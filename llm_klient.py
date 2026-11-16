@@ -215,7 +215,7 @@ def effort_kwargs(settings, effort):
     """Pole effortu w kształcie danego providera; {} gdy nie wysyłamy."""
     if not effort or settings.provider not in EFFORT_PROVIDERS:
         return {}
-    if (settings.provider, settings.base_url, settings.model) in _NO_EFFORT:
+    if (settings.provider, settings.base_url, settings.model, effort) in _NO_EFFORT:
         return {}
     if settings.provider == "openai":
         return {"reasoning_effort": effort}
@@ -226,8 +226,9 @@ def is_effort_error(exc):
     """Czy 400 dotyczy pola effortu (model bez rozumowania albo inna skala wartości)."""
     if not is_structure_error(exc):
         return False
-    if getattr(exc, "param", None) in ("reasoning_effort", "reasoning"):
-        return True
+    param = getattr(exc, "param", None)
+    if param:            # provider wskazał pole wprost — rozstrzyga tylko ono (audyt 2.0.1, Z1)
+        return param in ("reasoning_effort", "reasoning")
     return "reasoning" in str(exc).lower()
 
 
@@ -240,7 +241,7 @@ def _create(client, settings, kwargs, effort, ui_lang):
         except Exception as e:
             if not is_effort_error(e):
                 raise
-            _NO_EFFORT.add((settings.provider, settings.base_url, settings.model))
+            _NO_EFFORT.add((settings.provider, settings.base_url, settings.model, effort))
             print(t(ui_lang, "llm.info_no_effort", model=settings.model, effort=effort))
     return client.chat.completions.create(**kwargs)
 
