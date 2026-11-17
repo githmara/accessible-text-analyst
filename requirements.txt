@@ -25,6 +25,10 @@
 # z sentymentem: 92 eksporty bajtowo identyczne z przebiegiem na 5.22.2/3.50.0/12.3.0
 # (docx: członki XML); `run_all.py --warnings-as-errors`: czysto (OCR, islandzki,
 # sentyment działają); żywe wywołanie llm_klient (OpenRouter, tekst + json_schema).
+# Upgrade 2026-11-17 (hold 2.0.2): openai 3.52.0 — ta sama wersja przeszła w bliźniaku
+# Reżysera 19.20.0 żywe wywołania 6/6 (w tym OpenRouter i produkcyjna sonda Sami), więc
+# tu tylko zestaw testów wydania (240) z atrapą klienta; własnego żywego wywołania
+# nie było (decyzja maintainera 2026-11-17).
 # Minimalny Python wynika z zależności: 3.12 (numpy 2.5).
 # Nowsze wydania sprawdza `python audyt_zaleznosci.py` (tylko ostrzega).
 # KANON ŚRODOWISKA (od 2026-11-12, bliźniak Reżysera 19.18): każda granica nosi
@@ -83,7 +87,7 @@ tqdm<4.71  # hold: 1.8.0
 # Generowanie raportu
 markdown<3.12  # hold: 1.13.0
 markdownify<1.3  # hold: 1.8.0
-openai<3.52  # hold: 2.0.0
+openai<3.53  # hold: 2.0.2
 python-dotenv<1.3  # hold: 1.8.0
 
 # Opcjonalna analiza sentymentu (pożywka dla rytuału Vieno i lokalnego rytuału

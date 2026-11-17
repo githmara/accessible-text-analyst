@@ -288,9 +288,15 @@ def is_effort_error(exc):
     if not is_structure_error(exc):
         return False
     param = getattr(exc, "param", None)
-    if param:            # provider wskazał pole wprost — rozstrzyga tylko ono (audyt 2.0.1, Z1)
-        return param in ("reasoning_effort", "reasoning")
-    return "reasoning" in str(exc).lower()
+    if isinstance(param, str) and param:   # provider wskazał pole wprost — rozstrzyga tylko ono (audyt 2.0.1, Z1)
+        return param.split(".")[0] in ("reasoning_effort", "reasoning")
+    # OpenRouter `param` NIE podaje (zmierzone w bliźniaku Reżysera, 19.20), więc tam
+    # decyduje treść. Błąd, który nazywa format odpowiedzi, dotyczy formatu — nawet
+    # gdy wspomina rozumowanie; inaczej effort zostałby zatruty na cały przebieg (2.0.2).
+    text = str(exc).lower()
+    if "response_format" in text or "json_schema" in text:
+        return False
+    return "reasoning" in text
 
 
 def _create(client, settings, kwargs, effort, ui_lang):

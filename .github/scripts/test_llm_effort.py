@@ -107,6 +107,18 @@ class TestEffort(unittest.TestCase):
         self.assertEqual(k.wyslane[1]["reasoning_effort"], "low")        # effort nie zatruty
         self.assertFalse(lk._NO_EFFORT)
 
+    def test_blad_formatu_bez_param_nie_jest_odrzuceniem_effortu(self):
+        # 2.0.2: OpenRouter nie podaje param — treść nazywająca format nie zdejmuje effortu.
+        for tekst in ("response_format json_schema is not supported with reasoning",
+                      "Invalid json_schema for reasoning model"):
+            self.assertFalse(lk.is_effort_error(_Blad400(tekst)), tekst)
+        self.assertTrue(lk.is_effort_error(_Blad400("Reasoning is mandatory for this endpoint")))
+        self.assertTrue(lk.is_effort_error(_Blad400("bad value", "reasoning.effort")))
+        k = _Klient([_Blad400("response_format is not supported with reasoning"),
+                     ('{"a": "x"}', None, None)])
+        lk.chat_json(k, _ustawienia("openrouter"), "p", SCHEMAT, "n", "en", effort="low")
+        self.assertFalse(lk._NO_EFFORT)
+
     def test_pamiec_odrzucenia_jest_per_wartosc_effortu(self):
         # Audyt 2.0.1, Z3: odrzucone xhigh nie wyłącza high.
         # Podbity effort idzie tylko przy czytelnym myśleniu — stąd Claude przez OpenRoutera.

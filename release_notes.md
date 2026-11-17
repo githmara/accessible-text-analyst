@@ -4,6 +4,19 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v2.0.2 — a format error no longer switches the thinking setting off
+
+**Theme.** OpenRouter does not say which request field an error is about, so the client reads the error message. Before this patch, a rejected answer format whose message mentioned reasoning was taken for a rejected thinking setting.
+
+### What changed
+- **Format errors keep the thinking setting.** A 400 whose message names `response_format` or `json_schema` is now treated as a format error, even when it mentions reasoning. Before, the setting was dropped for that model for the rest of the run, and the Book drafter could lose its high effort because of an unrelated error. The same rule was added to the Director in 19.20.0.
+- **Environment.** `openai` 3.52.0, the version the Director 19.20.0 already tested with live calls.
+
+### Verified
+- Every release self-test passes locally (240 tests).
+
+---
+
 ## v2.0.1 — thinking effort per step, paid only where it can be read
 
 **Theme.** The reasoning models behind both hosted providers think on every call and cannot be switched off. Sending no setting means the provider's default effort, which is paid for. This patch sets the effort per step and raises it only where the thinking comes back as readable text.
