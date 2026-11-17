@@ -151,9 +151,9 @@ llm:
   info_degraded: '[INFO] {endpoint} hafnaði response_format {mode} ({error}). Fer yfir í {next}.'
   info_no_temperature: '[INFO] Líkanið {model} tekur aðeins við sjálfgefnu hitastigi (hafnaði {temperature}). Reyni aftur án þess; það sem eftir er af keyrslunni sleppi ég því fyrir þetta líkan.'
   info_no_effort: '[INFO] Líkanið {model} hafnaði hugsunarstillingunni ({effort}). Reyni aftur án hennar; það sem eftir er af keyrslunni sleppi ég henni fyrir þetta líkan.'
-  warn_thinking_unreadable: '[VIÐVÖRUN] {model} í gegnum {provider} skilar ekki læsilegri hugsun, svo greitt yrði fyrir umbeðna áreynslu {effort} án þess að hægt sé að lesa hana. Sendi low í staðinn; engin hugsunarskrá verður til.'
+  warn_thinking_unreadable: '[VIÐVÖRUN] {model} í gegnum {provider} skilar ekki læsilegri hugsun, svo greitt yrði fyrir umbeðna áreynslu {effort} án þess að hægt sé að lesa hana. Sendi low í staðinn.'
   warn_thinking_mandatory: '[VIÐVÖRUN] {model} í gegnum {provider} hugsar alltaf — ekki er hægt að slökkva á hugsun, svo hún keyrir á low. Kvaðning þessa skrefs er stillt fyrir líkan sem hugsar ekki.'
-  warn_thinking_compat: '[VIÐVÖRUN] {model} í gegnum openai_compat: ekkert hugsunarsvið er til að senda, svo hugsandi líkan hugsar með sjálfgefinni áreynslu (beðið um: {effort}). Engin hugsunarskrá verður til.'
+  warn_thinking_compat: '[VIÐVÖRUN] {model} í gegnum openai_compat: ekkert hugsunarsvið er til að senda, svo hugsandi líkan hugsar með sjálfgefinni áreynslu (beðið um: {effort}).'
   diag_reply: '[GREINING] Háttur {mode}, finish_reason {finish}, svar upp á {chars} stafi{refusal}. Allt svarið: {path}'
   diag_refusal: ', synjun: "{text}"'
 deps:

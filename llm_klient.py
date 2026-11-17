@@ -197,6 +197,9 @@ class LLMReply:
     # `message.reasoning`; OpenAI Chat Completions nie oddaje nigdy).
     reasoning_tokens: int | None = None
     reasoning: str = ""
+    # Effort, który naprawdę poszedł (None = pole nie poszło: rytuał, compat albo
+    # odrzucone przez model) — nagłówek pliku myślenia Księgi (audyt 2.0.1, Z1).
+    effort_sent: str | None = None
 
 
 # Effort myślenia (v2.0.1). Modele rozumujące (gpt-6.x, Claude 5.x) myślą
@@ -237,13 +240,16 @@ def effective_effort(settings, effort):
     return effort
 
 
-def _warn_thinking(settings, effort, ui_lang):
+def _warn_thinking(settings, effort, ui_lang, after_call=False):
     """Raz na model: myślenie inne, niż chce krok (bliźniak `core_llm._ostrzez_o_mysleniu`).
 
     * krok chce czytelnego myślenia (effort powyżej low), a model go nie odda;
     * krok chce minimum (low), a model myśli zawsze (wyłączyć się nie da);
     * openai_compat: pola myślenia nie ma, model rozumujący myśli z domyślnym effortem.
     Claude przez OpenRoutera na low myślał 0 tokenów — tam cisza. effort=None = cisza.
+    `after_call=False` (przed wywołaniem): tylko compat i unreadable; `True` (po
+    udanym wywołaniu z polem): tylko mandatory — model, który odrzuci pole, nie
+    rozumuje, więc „myśli zawsze” byłoby nieprawdą (audyt 2.0.1, Z3).
     """
     if not effort:
         return
@@ -255,6 +261,8 @@ def _warn_thinking(settings, effort, ui_lang):
         kind = "unreadable"
     else:
         kind = "mandatory"
+    if (kind == "mandatory") != after_call:
+        return
     key = (settings.provider, settings.base_url, settings.model, kind)
     if key in _THINKING_WARNED:
         return
@@ -286,19 +294,30 @@ def is_effort_error(exc):
 
 
 def _create(client, settings, kwargs, effort, ui_lang):
-    """`chat.completions.create` z effortem; po jego odrzuceniu jedno ponowienie bez pola."""
-    _warn_thinking(settings, effort, ui_lang)
+    """`chat.completions.create` z effortem; po jego odrzuceniu jedno ponowienie bez pola.
+
+    Zwraca (odpowiedź, effort faktycznie wysłany albo None). Ostrzeżenie „model
+    myśli zawsze” pada dopiero PO udanym wywołaniu z polem (audyt 2.0.1, Z3):
+    model, który pole odrzuci, nie rozumuje, a dwa sprzeczne komunikaty pod rząd
+    to szum dla czytnika ekranu.
+    """
+    requested = effort
+    _warn_thinking(settings, requested, ui_lang, after_call=False)
     effort = effective_effort(settings, effort)
     extra = effort_kwargs(settings, effort)
     if extra:
         try:
-            return client.chat.completions.create(**kwargs, **extra)
+            resp = client.chat.completions.create(**kwargs, **extra)
         except Exception as e:
             if not is_effort_error(e):
                 raise
             _NO_EFFORT.add((settings.provider, settings.base_url, settings.model, effort))
             print(t(ui_lang, "llm.info_no_effort", model=settings.model, effort=effort))
-    return client.chat.completions.create(**kwargs)
+        else:
+            if effort == requested:   # obniżony effort ma już swoje ostrzeżenie
+                _warn_thinking(settings, effort, ui_lang, after_call=True)
+            return resp, effort
+    return client.chat.completions.create(**kwargs), None
 
 
 def _reasoning_of(resp, msg):
@@ -334,7 +353,7 @@ def chat_json(client, settings, prompt, schema, name, ui_lang, effort=None):
         if formats[mode] is not None:
             kwargs["response_format"] = formats[mode]
         try:
-            resp = _create(client, settings, kwargs, effort, ui_lang)
+            resp, effort_sent = _create(client, settings, kwargs, effort, ui_lang)
         except Exception as e:
             if i == len(MODES) - 1 or not is_structure_error(e):
                 raise
@@ -348,7 +367,7 @@ def chat_json(client, settings, prompt, schema, name, ui_lang, effort=None):
         return LLMReply(text=(getattr(msg, "content", None) or ""), mode=mode,
                         finish_reason=str(getattr(choice, "finish_reason", None) or "-"),
                         refusal=str(getattr(msg, "refusal", None) or ""),
-                        reasoning_tokens=tokens, reasoning=reasoning)
+                        reasoning_tokens=tokens, reasoning=reasoning, effort_sent=effort_sent)
     raise RuntimeError("unreachable")
 
 
@@ -379,14 +398,14 @@ def chat_text(client, settings, messages, temperature, ui_lang, effort=None):
     kwargs = {"model": settings.model, "messages": messages}
     if cache_key not in _NO_TEMPERATURE:
         try:
-            return _create(client, settings, dict(kwargs, temperature=temperature), effort, ui_lang)
+            return _create(client, settings, dict(kwargs, temperature=temperature), effort, ui_lang)[0]
         except Exception as e:
             if not is_temperature_error(e):
                 raise
             _NO_TEMPERATURE.add(cache_key)
             print(t(ui_lang, "llm.info_no_temperature", model=settings.model,
                     temperature=temperature))
-    return _create(client, settings, kwargs, effort, ui_lang)
+    return _create(client, settings, kwargs, effort, ui_lang)[0]
 
 
 def save_diagnostics(path, reply, ui_lang):

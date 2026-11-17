@@ -151,9 +151,9 @@ llm:
   info_degraded: '[INFO] {endpoint} a refusé response_format {mode} ({error}). Repli sur {next}.'
   info_no_temperature: '[INFO] Le modèle {model} n’accepte que la température par défaut ({temperature} refusée). Nouvel essai sans elle ; le reste de cette exécution l’omet pour ce modèle.'
   info_no_effort: '[INFO] Le modèle {model} a refusé le réglage de réflexion ({effort}). Nouvel essai sans lui ; le reste de cette exécution l’omet pour ce modèle.'
-  warn_thinking_unreadable: '[AVERTISSEMENT] {model} via {provider} ne renvoie pas de réflexion lisible : l’effort demandé {effort} serait payé sans pouvoir être lu. Envoi de low à la place ; aucun fichier de réflexion ne sera écrit.'
+  warn_thinking_unreadable: '[AVERTISSEMENT] {model} via {provider} ne renvoie pas de réflexion lisible : l’effort demandé {effort} serait payé sans pouvoir être lu. Envoi de low à la place.'
   warn_thinking_mandatory: '[AVERTISSEMENT] {model} via {provider} raisonne toujours — la réflexion ne peut pas être désactivée, elle tourne donc en low. Le prompt de cette étape est réglé pour un modèle qui ne raisonne pas.'
-  warn_thinking_compat: '[AVERTISSEMENT] {model} via openai_compat : aucun champ de réflexion à envoyer, un modèle qui raisonne pense donc avec son effort par défaut (demandé : {effort}). Aucun fichier de réflexion ne sera écrit.'
+  warn_thinking_compat: '[AVERTISSEMENT] {model} via openai_compat : aucun champ de réflexion à envoyer, un modèle qui raisonne pense donc avec son effort par défaut (demandé : {effort}).'
   diag_reply: '[DIAG] Mode {mode}, finish_reason {finish}, réponse de {chars} caractères{refusal}. Réponse complète : {path}'
   diag_refusal: ', refus : "{text}"'
 deps:

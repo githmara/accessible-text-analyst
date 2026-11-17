@@ -162,8 +162,34 @@ class TestEffort(unittest.TestCase):
                           reasoning_tokens=7, reasoning="Ajattelen.")
         with tempfile.TemporaryDirectory() as tmp:
             cel = Path(tmp) / "draft_thinking_1.txt"
-            kn._save_thinking(cel, odp, _ustawienia("openrouter", "openai/gpt-6-luna"), "high")
-            self.assertIn("effort: low", cel.read_text(encoding="utf-8"))
+            kn._save_thinking(cel, odp, _ustawienia("openrouter", "openai/gpt-6-luna"))
+            self.assertIn("effort: default", cel.read_text(encoding="utf-8"))   # effort_sent puste
+
+    def test_effort_sent_po_obnizeniu_i_po_odrzuceniu(self):
+        # Audyt 2.0.1, Z1: nagłówek pliku myślenia nie może podawać effortu, który nie poszedł.
+        k = _Klient([('{"a": "x"}', "Ajattelen.", 5)])
+        r = lk.chat_json(k, _ustawienia("openrouter", "openai/gpt-6-luna"), "p", SCHEMAT, "n", "en", effort="high")
+        self.assertEqual(r.effort_sent, "low")
+        k = _Klient([_Blad400("bad", "reasoning"), ('{"a": "x"}', "Ajattelen.", 5)])
+        r = lk.chat_json(k, _ustawienia("openrouter", "anthropic/claude-x"), "p", SCHEMAT, "n", "en", effort="high")
+        self.assertIsNone(r.effort_sent)
+        import tempfile
+        import ksiega_niedomowien as kn
+        with tempfile.TemporaryDirectory() as tmp:
+            cel = Path(tmp) / "draft_thinking_1.txt"
+            kn._save_thinking(cel, r, _ustawienia("openrouter", "anthropic/claude-x"))
+            self.assertIn("effort: default", cel.read_text(encoding="utf-8"))
+
+    def test_odrzucony_effort_nie_daje_ostrzezenia_mysli_zawsze(self):
+        # Audyt 2.0.1, Z3: model, który odrzuca pole, nie rozumuje.
+        import contextlib
+        import io
+        bufor = io.StringIO()
+        k = _Klient([_Blad400("Unsupported parameter", "reasoning_effort"), ('{"a": "x"}', None, None)])
+        with contextlib.redirect_stdout(bufor):
+            lk.chat_json(k, _ustawienia("openai", "gpt-4.1"), "p", SCHEMAT, "n", "en", effort="low")
+        self.assertNotIn("always reasons", bufor.getvalue())
+        self.assertIn("rejected the thinking setting", bufor.getvalue())
 
     def test_draft_czysci_stare_mysli_i_podpisuje_nowe(self):
         # Audyt 2.0.1, Z2: myśli innego szkicu nie mogą leżeć obok nowego draft.json.
@@ -176,7 +202,7 @@ class TestEffort(unittest.TestCase):
             kn._clear_draft_leftovers(d)
             self.assertEqual(sorted(p.name for p in d.iterdir()), ["packet.json"])
             odp = lk.LLMReply(text="{}", mode="json_schema", finish_reason="stop", refusal="", reasoning_tokens=7, reasoning="Mietin.")
-            kn._save_thinking(d / "draft_thinking_1.txt", odp, _ustawienia("openrouter", "m3"), None)
+            kn._save_thinking(d / "draft_thinking_1.txt", odp, _ustawienia("openrouter", "m3"))
             tekst = (d / "draft_thinking_1.txt").read_text(encoding="utf-8")
             self.assertTrue(tekst.startswith("provider: openrouter\nmodel: m3\neffort: default\n"))
             self.assertIn("Mietin.", tekst)

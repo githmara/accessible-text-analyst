@@ -1139,14 +1139,16 @@ def _effort(args, role_default):
     return None if chosen == "default" else chosen
 
 
-def _save_thinking(path, reply, llm, effort):
+def _save_thinking(path, reply, llm):
     """Czytelne myślenie modelu obok pakietu — płacimy za nie, więc ma się dać przeczytać.
 
     OpenRouter oddaje streszczenie w `message.reasoning`; OpenAI Chat Completions
     nie oddaje żadnego tekstu (sam licznik tokenów) — wtedy plik nie powstaje.
+    Nagłówek podaje effort, który NAPRAWDĘ poszedł (`reply.effort_sent`): także po
+    obniżeniu na modelu nieczytelnym i po odrzuceniu pola przez model (audyt 2.0.1, Z1).
     """
     if reply.reasoning:
-        effort = llm_klient.effective_effort(llm, effort)   # to, co naprawdę poszło
+        effort = reply.effort_sent
         path.write_text(f"provider: {llm.provider}\nmodel: {llm.model}\neffort: {effort or 'default'}\n"
                         f"reasoning_tokens: {reply.reasoning_tokens}\n\n{reply.reasoning}\n",
                         encoding="utf-8")
@@ -1197,7 +1199,7 @@ def cmd_draft(args):
         except Exception as e:  # sieć, klucz, model, kontekst — bez powtórek
             print(tr(UI_LANG, "kirja.err_call", error=e))
             return 1
-        _save_thinking(d / f"draft_thinking_{n}.txt", reply, llm, effort)
+        _save_thinking(d / f"draft_thinking_{n}.txt", reply, llm)
         parsed = _parse_draft(reply.text)
         if parsed is None:
             print(tr(UI_LANG, "kirja.warn_bad_reply"))

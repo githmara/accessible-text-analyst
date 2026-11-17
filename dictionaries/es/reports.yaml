@@ -151,9 +151,9 @@ llm:
   info_degraded: '[INFO] {endpoint} rechazó response_format {mode} ({error}). Se pasa a {next}.'
   info_no_temperature: '[INFO] El modelo {model} solo acepta la temperatura predeterminada (rechazó {temperature}). Se reintenta sin ella; el resto de esta ejecución la omite para este modelo.'
   info_no_effort: '[INFO] El modelo {model} rechazó el ajuste de razonamiento ({effort}). Se reintenta sin él; el resto de esta ejecución lo omite para este modelo.'
-  warn_thinking_unreadable: '[ADVERTENCIA] {model} vía {provider} no devuelve un razonamiento legible, así que el esfuerzo pedido {effort} se pagaría sin poder leerse. Se envía low en su lugar; no se escribirá archivo de razonamiento.'
+  warn_thinking_unreadable: '[ADVERTENCIA] {model} vía {provider} no devuelve un razonamiento legible, así que el esfuerzo pedido {effort} se pagaría sin poder leerse. Se envía low en su lugar.'
   warn_thinking_mandatory: '[ADVERTENCIA] {model} vía {provider} razona siempre — el razonamiento no se puede desactivar, así que va en low. El prompt de este paso está ajustado para un modelo que no razona.'
-  warn_thinking_compat: '[ADVERTENCIA] {model} vía openai_compat: no hay campo de razonamiento que enviar, así que un modelo que razona piensa con su esfuerzo por defecto (pedido: {effort}). No se escribirá archivo de razonamiento.'
+  warn_thinking_compat: '[ADVERTENCIA] {model} vía openai_compat: no hay campo de razonamiento que enviar, así que un modelo que razona piensa con su esfuerzo por defecto (pedido: {effort}).'
   diag_reply: '[DIAG] Modo {mode}, finish_reason {finish}, respuesta de {chars} caracteres{refusal}. Respuesta completa: {path}'
   diag_refusal: ', negativa: "{text}"'
 deps:

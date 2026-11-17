@@ -151,9 +151,9 @@ llm:
   info_degraded: '[INFO] {endpoint} hat response_format {mode} abgelehnt ({error}). Weiter mit {next}.'
   info_no_temperature: '[INFO] Das Modell {model} akzeptiert nur die Standardtemperatur ({temperature} abgelehnt). Neuer Versuch ohne sie; der Rest dieses Laufs lässt sie für dieses Modell weg.'
   info_no_effort: '[INFO] Das Modell {model} hat die Denkeinstellung ({effort}) abgelehnt. Neuer Versuch ohne sie; der Rest dieses Laufs lässt sie für dieses Modell weg.'
-  warn_thinking_unreadable: '[WARNUNG] {model} über {provider} liefert kein lesbares Denken; der angeforderte Effort {effort} würde bezahlt und nie gelesen. Stattdessen wird low gesendet; es entsteht keine Denkdatei.'
+  warn_thinking_unreadable: '[WARNUNG] {model} über {provider} liefert kein lesbares Denken; der angeforderte Effort {effort} würde bezahlt und nie gelesen. Stattdessen wird low gesendet.'
   warn_thinking_mandatory: '[WARNUNG] {model} über {provider} denkt immer — das Denken lässt sich nicht abschalten, daher läuft es auf low. Der Prompt dieses Schritts ist für ein Modell ohne Denken abgestimmt.'
-  warn_thinking_compat: '[WARNUNG] {model} über openai_compat: Es gibt kein Denkfeld zum Senden, daher denkt ein Reasoning-Modell mit seinem Standard-Effort (angefordert: {effort}). Es entsteht keine Denkdatei.'
+  warn_thinking_compat: '[WARNUNG] {model} über openai_compat: Es gibt kein Denkfeld zum Senden, daher denkt ein Reasoning-Modell mit seinem Standard-Effort (angefordert: {effort}).'
   diag_reply: '[DIAG] Modus {mode}, finish_reason {finish}, Antwort mit {chars} Zeichen{refusal}. Vollständige Antwort: {path}'
   diag_refusal: ', Ablehnung: "{text}"'
 deps:
