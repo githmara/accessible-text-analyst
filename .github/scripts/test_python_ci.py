@@ -206,6 +206,15 @@ class TestPythonCI(unittest.TestCase):
                          "PYTHON_PRZETESTOWANY must be an exact X.Y.Z patch")
         self.assertEqual(rozjazdy(KORZEN / ".github" / "workflows", oczekiwana), [])
 
+    def test_dokladny_patch_nigdy_na_ruchomym_obrazie(self):
+        # ubuntu-latest przeszedł na 26.04, a CPython 3.14.3 nie ma tam buildu
+        # (pierwszy: 3.14.6) — setup-python pada. Bliźniak testu Reżysera (2026-11-17).
+        katalog = KORZEN / ".github" / "workflows"
+        zle = [wf.name for wf in sorted(katalog.glob("*.yml"))
+               if "setup-python" in (t := wf.read_text(encoding="utf-8"))
+               and any(w.strip().startswith("runs-on:") and "-latest" in w for w in t.splitlines())]
+        self.assertEqual(zle, [], "exact Python patch on a moving runner image")
+
     def test_bramka_lapie_wersje_bez_patcha(self):
         q = chr(39)
         tekst = f"    with:{chr(10)}      python-version: {q}3.14{q}{chr(10)}"
