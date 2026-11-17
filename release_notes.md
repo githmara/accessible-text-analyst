@@ -4,6 +4,21 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v2.0.1 — thinking effort per step, paid only where it can be read
+
+**Theme.** The reasoning models behind both hosted providers think on every call and cannot be switched off. Sending no setting means the provider's default effort, which is paid for. This patch sets the effort per step and raises it only where the thinking comes back as readable text.
+
+### What changed
+- **Effort per step in the Book of the Unsaid.** The drafter asks for high effort, and the blind gap-filler for low. The four rituals keep the provider's default. The setting goes to OpenAI as `reasoning_effort` and to OpenRouter as `reasoning.effort`; `openai_compat` gets nothing, because the field name of an unknown endpoint is unknown. A model that rejects the setting is asked again without it, and the rest of the run skips it for that model.
+- **Raised effort only where the thinking can be read.** Measured on 2026-11-17: GPT through OpenRouter returns its thinking encrypted, with a readable summary in one call out of ten, and OpenAI Chat Completions returns only a token count. Only Claude through OpenRouter returns the thinking as text. A step that asks for more than low effort on any other model gets low effort and one console warning per model. A warning also appears when a step asks for low effort on a model that always reasons, and on `openai_compat`, where no setting can be sent. The rituals stay silent.
+- **The drafter's thinking is saved.** When the endpoint returns readable thinking, it is written next to the packet as `draft_thinking_<n>.txt`. A header names the provider, the model, the effort actually sent and the reasoning token count. A new draft removes the thinking and replies of an earlier one.
+- **CI.** The release workflow runs on a pinned `ubuntu-24.04` image: the exact Python patch it tests is not built for the newer image.
+
+### Verified
+- Every release self-test passes locally (239 tests). Translation parity, the console hard-code gate and the language basics audit (9 languages) are clean.
+
+---
+
 ## v2.0.0 — the language of every word from lexicons, OCR voting without easyocr, German, Spanish and French
 
 **Theme.** Up to 1.x a statistical detector (Lingua) guessed the language of whole sentences, and on Finnish transcripts it was wrong far more often than right. ATA 2.0 removes it. You list the languages of the text, and their lexicons decide the language of every word, so a screen reader switches voice exactly on the quote or the name. OCR is rebuilt on the same lexicons, three new languages arrive, and PDF repair learns several new kinds of damage. Major bump: `ocr_languages` is now `corpus_languages` with a wider meaning, Lingua and easyocr are gone, and the export format gains language spans.
