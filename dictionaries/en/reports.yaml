@@ -151,6 +151,9 @@ llm:
   info_degraded: '[INFO] {endpoint} rejected response_format {mode} ({error}). Falling back to {next}.'
   info_no_temperature: '[INFO] Model {model} accepts only the default temperature (rejected {temperature}). Retrying without it; the rest of this run skips it for this model.'
   info_no_effort: '[INFO] Model {model} rejected the thinking setting ({effort}). Retrying without it; the rest of this run skips it for this model.'
+  warn_thinking_unreadable: '[WARNING] {model} via {provider} does not return readable thinking, so the requested effort {effort} would be paid for and never read. Sending low instead; no thinking file will be written.'
+  warn_thinking_mandatory: '[WARNING] {model} via {provider} always reasons — thinking cannot be switched off, so it runs at low. The prompt of this step is tuned for a model that does not reason.'
+  warn_thinking_compat: '[WARNING] {model} via openai_compat: there is no thinking field to send, so a reasoning model thinks at its default effort (requested: {effort}). No thinking file will be written.'
   diag_reply: '[DIAG] Mode {mode}, finish_reason {finish}, reply of {chars} characters{refusal}. Full reply: {path}'
   diag_refusal: ', refusal: "{text}"'
 deps:

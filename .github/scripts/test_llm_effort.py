@@ -53,11 +53,12 @@ class TestEffort(unittest.TestCase):
         lk._NO_EFFORT.clear()
         lk._WORKING_MODE.clear()
         lk._NO_TEMPERATURE.clear()
+        lk._THINKING_WARNED.clear()
 
     def test_openai_dostaje_reasoning_effort(self):
         k = _Klient([('{"a": "x"}', None, 50)])
-        r = lk.chat_json(k, _ustawienia("openai"), "p", SCHEMAT, "n", "en", effort="high")
-        self.assertEqual(k.wyslane[0]["reasoning_effort"], "high")
+        r = lk.chat_json(k, _ustawienia("openai"), "p", SCHEMAT, "n", "en", effort="low")
+        self.assertEqual(k.wyslane[0]["reasoning_effort"], "low")
         self.assertNotIn("extra_body", k.wyslane[0])
         self.assertEqual(r.reasoning_tokens, 50)
 
@@ -78,18 +79,18 @@ class TestEffort(unittest.TestCase):
         ust = _ustawienia("openai", "stary-model")
         k = _Klient([_Blad400("Unsupported parameter: 'reasoning_effort'", "reasoning_effort"),
                      ('{"a": "x"}', None, None), ('{"a": "y"}', None, None)])
-        lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort="high")
+        lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort="low")
         self.assertNotIn("reasoning_effort", k.wyslane[1])
         self.assertEqual(k.wyslane[1]["response_format"]["type"], "json_schema")   # szczebel ten sam
-        lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort="high")
+        lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort="low")
         self.assertEqual(len(k.wyslane), 3)
         self.assertNotIn("reasoning_effort", k.wyslane[2])                         # bez jałowego 400
 
     def test_inny_blad_struktury_dalej_schodzi_po_drabinie(self):
         k = _Klient([_Blad400("response_format json_schema is not supported"), ('{"a": "x"}', None, None)])
-        lk.chat_json(k, _ustawienia("openai"), "p", SCHEMAT, "n", "en", effort="high")
+        lk.chat_json(k, _ustawienia("openai"), "p", SCHEMAT, "n", "en", effort="low")
         self.assertEqual(k.wyslane[1]["response_format"]["type"], "json_object")
-        self.assertEqual(k.wyslane[1]["reasoning_effort"], "high")
+        self.assertEqual(k.wyslane[1]["reasoning_effort"], "low")
 
     def test_rytualy_bez_effortu_jak_dotad(self):
         k = _Klient([("piesn", None, None)])
@@ -102,18 +103,67 @@ class TestEffort(unittest.TestCase):
         e = _Blad400("response_format is not supported together with reasoning models", "response_format")
         self.assertFalse(lk.is_effort_error(e))
         k = _Klient([e, ('{"a": "x"}', None, None)])
-        lk.chat_json(k, _ustawienia("openai"), "p", SCHEMAT, "n", "en", effort="high")
-        self.assertEqual(k.wyslane[1]["reasoning_effort"], "high")       # effort nie zatruty
+        lk.chat_json(k, _ustawienia("openai"), "p", SCHEMAT, "n", "en", effort="low")
+        self.assertEqual(k.wyslane[1]["reasoning_effort"], "low")        # effort nie zatruty
         self.assertFalse(lk._NO_EFFORT)
 
     def test_pamiec_odrzucenia_jest_per_wartosc_effortu(self):
         # Audyt 2.0.1, Z3: odrzucone xhigh nie wyłącza high.
-        ust = _ustawienia("openai", "m2")
-        k = _Klient([_Blad400("bad value", "reasoning_effort"), ('{"a": "x"}', None, None),
+        # Podbity effort idzie tylko przy czytelnym myśleniu — stąd Claude przez OpenRoutera.
+        ust = _ustawienia("openrouter", "anthropic/m2")
+        k = _Klient([_Blad400("bad value", "reasoning"), ('{"a": "x"}', None, None),
                      ('{"a": "y"}', None, None)])
         lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort="xhigh")
         lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort="high")
-        self.assertEqual(k.wyslane[2]["reasoning_effort"], "high")
+        self.assertEqual(k.wyslane[2]["extra_body"], {"reasoning": {"effort": "high"}})
+
+    def _z_wyjsciem(self, ust, effort, ile=1):
+        import contextlib
+        import io
+        bufor = io.StringIO()
+        k = _Klient([('{"a": "x"}', None, None)] * ile)
+        with contextlib.redirect_stdout(bufor):
+            for _ in range(ile):
+                lk.chat_json(k, ust, "p", SCHEMAT, "n", "en", effort=effort)
+        return k.wyslane, bufor.getvalue()
+
+    def test_nieczytelne_myslenie_nie_jest_podbijane(self):
+        # Pomiar 2026-11-17: GPT przez OpenRoutera = reasoning.encrypted; OpenAI CC = sam licznik.
+        for ust in (_ustawienia("openai", "gpt-6.1-sol"), _ustawienia("openrouter", "openai/gpt-6.1-sol")):
+            wyslane, wyjscie = self._z_wyjsciem(ust, "high", ile=2)
+            pole = wyslane[0].get("reasoning_effort") or wyslane[0]["extra_body"]["reasoning"]["effort"]
+            self.assertEqual(pole, "low", ust.provider)
+            self.assertEqual(wyjscie.count("does not return readable thinking"), 1, ust.provider)
+
+    def test_czytelne_myslenie_claude_dostaje_high_bez_ostrzezenia(self):
+        wyslane, wyjscie = self._z_wyjsciem(_ustawienia("openrouter", "anthropic/claude-sonnet-5.5"), "high")
+        self.assertEqual(wyslane[0]["extra_body"], {"reasoning": {"effort": "high"}})
+        self.assertNotIn("[WARNING]", wyjscie)
+
+    def test_low_na_gpt_ostrzega_ze_mysli_zawsze(self):
+        _, wyjscie = self._z_wyjsciem(_ustawienia("openrouter", "openai/gpt-6.1-sol"), "low")
+        self.assertIn("always reasons", wyjscie)
+        _, wyjscie = self._z_wyjsciem(_ustawienia("openrouter", "anthropic/claude-sonnet-5.5"), "low")
+        self.assertNotIn("[WARNING]", wyjscie)
+
+    def test_compat_ostrzega_o_domyslnym_effortcie(self):
+        wyslane, wyjscie = self._z_wyjsciem(_ustawienia("openai_compat", "gpt-6.1-sol"), "high")
+        self.assertNotIn("extra_body", wyslane[0])
+        self.assertIn("default effort", wyjscie)
+
+    def test_rytualy_bez_effortu_nie_ostrzegaja(self):
+        _, wyjscie = self._z_wyjsciem(_ustawienia("openai", "gpt-6.1-sol"), None)
+        self.assertNotIn("[WARNING]", wyjscie)
+
+    def test_naglowek_mysli_podaje_effort_ktory_naprawde_poszedl(self):
+        import tempfile
+        import ksiega_niedomowien as kn
+        odp = lk.LLMReply(text="{}", mode="json_schema", finish_reason="stop", refusal="",
+                          reasoning_tokens=7, reasoning="Ajattelen.")
+        with tempfile.TemporaryDirectory() as tmp:
+            cel = Path(tmp) / "draft_thinking_1.txt"
+            kn._save_thinking(cel, odp, _ustawienia("openrouter", "openai/gpt-6-luna"), "high")
+            self.assertIn("effort: low", cel.read_text(encoding="utf-8"))
 
     def test_draft_czysci_stare_mysli_i_podpisuje_nowe(self):
         # Audyt 2.0.1, Z2: myśli innego szkicu nie mogą leżeć obok nowego draft.json.

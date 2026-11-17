@@ -151,6 +151,9 @@ llm:
   info_degraded: '[INFO] {endpoint} hylkäsi response_format-tilan {mode} ({error}). Siirryn tilaan {next}.'
   info_no_temperature: '[INFO] Malli {model} hyväksyy vain oletuslämpötilan (hylkäsi arvon {temperature}). Yritän uudelleen ilman sitä; tämän ajon loppuun asti jätän sen pois tältä mallilta.'
   info_no_effort: '[INFO] Malli {model} hylkäsi ajattelun asetuksen ({effort}). Yritän uudelleen ilman sitä; tämän ajon loppuun asti jätän sen pois tältä mallilta.'
+  warn_thinking_unreadable: '[VAROITUS] {model} palvelun {provider} kautta ei palauta luettavaa ajattelua, joten pyydetystä efortista {effort} maksettaisiin lukematta. Lähetän sen sijaan low; ajattelutiedostoa ei synny.'
+  warn_thinking_mandatory: '[VAROITUS] {model} palvelun {provider} kautta ajattelee aina — ajattelua ei voi sammuttaa, joten se ajetaan tasolla low. Tämän vaiheen kehote on viritetty mallille, joka ei ajattele.'
+  warn_thinking_compat: '[VAROITUS] {model} openai_compatin kautta: ajattelukenttää ei ole, joten ajatteleva malli ajattelee oletusefortillaan (pyydetty: {effort}). Ajattelutiedostoa ei synny.'
   diag_reply: '[DIAG] Tila {mode}, finish_reason {finish}, vastauksen pituus {chars} merkkiä{refusal}. Koko vastaus: {path}'
   diag_refusal: ', kieltäytyminen: "{text}"'
 deps:

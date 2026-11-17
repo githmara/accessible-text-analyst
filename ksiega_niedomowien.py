@@ -1146,6 +1146,7 @@ def _save_thinking(path, reply, llm, effort):
     nie oddaje żadnego tekstu (sam licznik tokenów) — wtedy plik nie powstaje.
     """
     if reply.reasoning:
+        effort = llm_klient.effective_effort(llm, effort)   # to, co naprawdę poszło
         path.write_text(f"provider: {llm.provider}\nmodel: {llm.model}\neffort: {effort or 'default'}\n"
                         f"reasoning_tokens: {reply.reasoning_tokens}\n\n{reply.reasoning}\n",
                         encoding="utf-8")

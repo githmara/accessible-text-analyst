@@ -151,6 +151,9 @@ llm:
   info_degraded: '[INFO] {endpoint} odrzucił response_format {mode} ({error}). Przechodzę na {next}.'
   info_no_temperature: '[INFO] Model {model} przyjmuje tylko domyślną temperaturę (odrzucił {temperature}). Ponawiam bez niej; do końca tego uruchomienia pomijam ją dla tego modelu.'
   info_no_effort: '[INFO] Model {model} odrzucił ustawienie myślenia ({effort}). Ponawiam bez niego; do końca tego uruchomienia pomijam je dla tego modelu.'
+  warn_thinking_unreadable: '[UWAGA] {model} przez {provider} nie oddaje czytelnego myślenia, więc za żądany effort {effort} płacilibyśmy bez możliwości przeczytania. Wysyłam low; plik myślenia nie powstanie.'
+  warn_thinking_mandatory: '[UWAGA] {model} przez {provider} rozumuje zawsze — myślenia nie da się wyłączyć, więc idzie na low. Prompt tego kroku jest strojony pod model, który nie rozumuje.'
+  warn_thinking_compat: '[UWAGA] {model} przez openai_compat: nie ma pola myślenia do wysłania, więc model rozumujący myśli z domyślnym effortem (żądany: {effort}). Plik myślenia nie powstanie.'
   diag_reply: '[DIAG] Tryb {mode}, finish_reason {finish}, odpowiedź ma {chars} znaków{refusal}. Pełna odpowiedź: {path}'
   diag_refusal: ', odmowa: "{text}"'
 deps:

@@ -151,6 +151,9 @@ llm:
   info_degraded: '[INFO] {endpoint} ha rifiutato response_format {mode} ({error}). Passo a {next}.'
   info_no_temperature: '[INFO] Il modello {model} accetta solo la temperatura predefinita (ha rifiutato {temperature}). Riprovo senza; per il resto di questa esecuzione la ometto per questo modello.'
   info_no_effort: '[INFO] Il modello {model} ha rifiutato l’impostazione di ragionamento ({effort}). Riprovo senza; per il resto di questa esecuzione la ometto per questo modello.'
+  warn_thinking_unreadable: '[AVVISO] {model} tramite {provider} non restituisce un ragionamento leggibile, quindi lo sforzo richiesto {effort} verrebbe pagato senza poterlo leggere. Invio low al suo posto; nessun file di ragionamento verrà scritto.'
+  warn_thinking_mandatory: '[AVVISO] {model} tramite {provider} ragiona sempre — il ragionamento non si può disattivare, quindi gira su low. Il prompt di questo passaggio è tarato per un modello che non ragiona.'
+  warn_thinking_compat: '[AVVISO] {model} tramite openai_compat: non c’è un campo di ragionamento da inviare, quindi un modello che ragiona pensa con lo sforzo predefinito (richiesto: {effort}). Nessun file di ragionamento verrà scritto.'
   diag_reply: '[DIAG] Modalità {mode}, finish_reason {finish}, risposta di {chars} caratteri{refusal}. Risposta completa: {path}'
   diag_refusal: ', rifiuto: "{text}"'
 deps:

@@ -211,8 +211,61 @@ EFFORT_PROVIDERS = ("openai", "openrouter")
 _NO_EFFORT = set()
 
 
+# Myślenie da się PRZECZYTAĆ tylko u Claude'a przez OpenRoutera (`message.reasoning`).
+# Zmierzone 2026-11-17 w Reżyserze (`skrypty/pomiar_reasoning_gpt_openrouter.py`):
+# GPT przez OpenRoutera oddaje `reasoning.encrypted` — płatne, streszczenie raz na
+# 10 wywołań, także z `summary: detailed|auto`; OpenAI Chat Completions nie oddaje
+# tekstu nigdy. Podbity effort nieczytelnego modelu to czysty koszt, więc idzie
+# LOW_EFFORT (decyzja maintainera, bliźniak `core_llm.mysli_czytelnie`).
+LOW_EFFORT = "low"
+_THINKING_WARNED = set()
+
+
+def reads_thinking(settings):
+    """Czy myślenie tego modelu wraca jako czytelny tekst."""
+    return settings.provider == "openrouter" and str(settings.model).startswith("anthropic/")
+
+
+def effective_effort(settings, effort):
+    """Effort, który naprawdę pójdzie: powyżej `low` tylko przy czytelnym myśleniu.
+
+    None (rytuały, decyzja „domyślny providera”) przechodzi bez zmian.
+    """
+    if effort and effort != LOW_EFFORT and settings.provider in EFFORT_PROVIDERS \
+            and not reads_thinking(settings):
+        return LOW_EFFORT
+    return effort
+
+
+def _warn_thinking(settings, effort, ui_lang):
+    """Raz na model: myślenie inne, niż chce krok (bliźniak `core_llm._ostrzez_o_mysleniu`).
+
+    * krok chce czytelnego myślenia (effort powyżej low), a model go nie odda;
+    * krok chce minimum (low), a model myśli zawsze (wyłączyć się nie da);
+    * openai_compat: pola myślenia nie ma, model rozumujący myśli z domyślnym effortem.
+    Claude przez OpenRoutera na low myślał 0 tokenów — tam cisza. effort=None = cisza.
+    """
+    if not effort:
+        return
+    if settings.provider not in EFFORT_PROVIDERS:
+        kind = "compat"
+    elif reads_thinking(settings):
+        return
+    elif effort != LOW_EFFORT:
+        kind = "unreadable"
+    else:
+        kind = "mandatory"
+    key = (settings.provider, settings.base_url, settings.model, kind)
+    if key in _THINKING_WARNED:
+        return
+    _THINKING_WARNED.add(key)
+    print(t(ui_lang, f"llm.warn_thinking_{kind}", model=settings.model,
+            provider=settings.provider, effort=effort))
+
+
 def effort_kwargs(settings, effort):
     """Pole effortu w kształcie danego providera; {} gdy nie wysyłamy."""
+    effort = effective_effort(settings, effort)
     if not effort or settings.provider not in EFFORT_PROVIDERS:
         return {}
     if (settings.provider, settings.base_url, settings.model, effort) in _NO_EFFORT:
@@ -234,6 +287,8 @@ def is_effort_error(exc):
 
 def _create(client, settings, kwargs, effort, ui_lang):
     """`chat.completions.create` z effortem; po jego odrzuceniu jedno ponowienie bez pola."""
+    _warn_thinking(settings, effort, ui_lang)
+    effort = effective_effort(settings, effort)
     extra = effort_kwargs(settings, effort)
     if extra:
         try:
