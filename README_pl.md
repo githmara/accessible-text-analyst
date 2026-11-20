@@ -18,6 +18,7 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 - `shamanic_voice.py` *(opcjonalny, wymaga ElevenLabs)* — samodzielny skrypt jednorazowy, który syntetyzuje cztery artefakty narracyjne wytworzone przez `shamanic_ai.py` do plików audio `.mp3` przez API ElevenLabs, loguje każdy sukces/błąd do konsoli i kończy działanie (bez bota, bez serwera). Wymaga `ELEVENLABS_API_KEY` w `golden_key.env` oraz mapowania `voices` w konfiguracji.
 - `shamanic_locale.py` — pakiet lokalizacyjny dla obu skryptów szamańskich (szablony, nagłówki i fallbacki Lumi we wszystkich dziewięciu językach).
 - `ksiega_niedomowien.py` *(opcjonalny, tylko fiński, z udziałem agenta)* — Księga Niedomówień (*Sanomattomien kirja*): zamienia `raw_roots_chant.txt` w przyrostowo rosnący kryptograficzny dziennik z lukami, których ślepy model nie zdołał odgadnąć. To deterministyczny pomocnik skilla z `skills/ksiega-niedomowien/SKILL.md`; komunikaty konsoli podążają za `ui_lang`.
+- `helsinki_reacts.py` *(opcjonalnie, z LLM)* — satyryczny scenariusz streamu: Valtteri z Helsinek reaguje razem z fińskim czatem na nagranie (folder eksportu albo plik tekstowy). Prompt systemowy leży poza kodem (`helsinki_reacts.example.md`, własna kopia w `helsinki_reacts.md`), a język streama idzie za `ui_lang`. Wymaga klucza wybranego providera w `golden_key.env`.
 
 ## Co robi potok
 
@@ -193,6 +194,9 @@ Zawartość:
   "kirja_llm_provider": "",
   "kirja_drafter_model": "",
   "kirja_filler_model": "",
+  "reacts_llm_provider": "",
+  "reacts_model": "",
+  "reacts_lang": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -219,12 +223,15 @@ Zawartość:
 | `kirja_llm_provider` | string | Opcjonalne nadpisanie providera dla Księgi (`ksiega_niedomowien.py draft` / `fill`). Pusty = `llm_provider`. |
 | `kirja_drafter_model` | string | Model dla `draft` (autor szkiców Księgi przez API). Pusty = domyślny providera albo `llm_model`, gdy Księga używa providera globalnego. |
 | `kirja_filler_model` | string | Model dla `fill` (ślepy wypełniacz luk Księgi). Ten sam fallback co `kirja_drafter_model`. |
+| `reacts_llm_provider` | string | Opcjonalne nadpisanie providera dla `helsinki_reacts.py`. Pusty = `llm_provider`. |
+| `reacts_model` | string | Model dla `helsinki_reacts.py`. Pusty = domyślny providera albo `llm_model`, gdy Helsinki Reacts używa providera globalnego. |
+| `reacts_lang` | string | Język streama `helsinki_reacts.py` (kod jak w `ui_lang`). Pusty = `ui_lang`. `fi` = stream po fińsku; każdy inny = jego przekład z fińskimi wtrąceniami. |
 
 > **Providerzy LLM i klucze.** Klucz jest przywiązany do jednego hosta i nigdy nie jest wysyłany gdzie indziej: `openai` → `OPENAI_API_KEY` → `api.openai.com`; `openrouter` → `OPENROUTER_API_KEY` → `openrouter.ai`; `openai_compat` → `LLM_COMPAT_API_KEY` → `llm_base_url`. Provider jest wybierany jawnie, nigdy nie jest zgadywany z adresu, więc skierowanie jednego skryptu do innej usługi nie może ani ujawnić klucza pierwszej usługi, ani zepsuć drugiego skryptu. Klucz sprzed v1.7.0 `kirja_filler_base_url` (wysyłał `OPENAI_API_KEY` pod dowolny adres) jest odrzucany z komunikatem migracyjnym. W OpenRouterze identyfikatory modeli mają prefiks dostawcy (`openai/gpt-4o`, `anthropic/claude-sonnet-5.5`), a ustawienia prywatności konta pozwalają wykluczyć dostawców, którzy mogą trenować na Twoich promptach.
 
 > **Analiza sentymentu — koszt CPU.** Przy `enable_sentiment: true` przebieg per akapit jest obliczeniowo kosztowny na CPU — z grubsza porównywalny z uruchomieniem lokalnego Whisper (mowa na tekst) na CPU. Na starszych lub ograniczonych termicznie maszynach to utrzymujące się obciążenie może być realnym obciążeniem dla procesora; włączaj je świadomie, najlepiej na maszynie z GPU lub z zapasem mocy na długotrwałą pracę pod pełnym obciążeniem.
 
-> **`ui_lang` — zakres lokalizacji.** Wyjście konsolowe samodzielnych skryptów (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) jest lokalizowane przez `ui_lang`. Wyjście stdout **notatnika nie jest** lokalizowane — jest zahardkodowane po rosyjsku (tylko nazwa pliku z tezami podąża za wykrytym językiem korpusu). Raport w trybie czytnika `analysis_report.html` zachowuje rosyjską narrację notatnika (jego korzeniem jest `<html lang="ru">`); w pełni zlokalizowanym przez `ui_lang`, skierowanym do użytkownika artefaktem jest **`diagnostic_report.html`** produkowany przez `generate_diagnostic.py`. Tłumaczenia w `fi` / `is` / `it` / `de` / `es` / `fr` są w wersji draft i nie zweryfikowane — zgłaszaj nieścisłości na GitHubie.
+> **`ui_lang` — zakres lokalizacji.** Wyjście konsolowe samodzielnych skryptów (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`, `helsinki_reacts.py`) jest lokalizowane przez `ui_lang`. Wyjście stdout **notatnika nie jest** lokalizowane — jest zahardkodowane po rosyjsku (tylko nazwa pliku z tezami podąża za wykrytym językiem korpusu). Raport w trybie czytnika `analysis_report.html` zachowuje rosyjską narrację notatnika (jego korzeniem jest `<html lang="ru">`); w pełni zlokalizowanym przez `ui_lang`, skierowanym do użytkownika artefaktem jest **`diagnostic_report.html`** produkowany przez `generate_diagnostic.py`. Tłumaczenia w `fi` / `is` / `it` / `de` / `es` / `fr` są w wersji draft i nie zweryfikowane — zgłaszaj nieścisłości na GitHubie.
 
 > **Ścieżki Windows i regexy — ważne.** Treść configu jest JSON-em, a JSON nie ma składni raw-string. Pojedynczy backslash escapeuje kolejny znak (`\U`, `\d`, `\n` są specjalne), więc ścieżka windowsowa zapisana jako `"C:\Users\marek\doc.pdf"` da błąd parsowania JSON. Są dwa poprawne sposoby:
 >
@@ -382,6 +389,29 @@ Skrypt to połowa deterministyczna (filtry, bloki, źródło prawdy, walidacja, 
 
 > **Prywatność i koszt.** Trzy poziomy, od najmniejszej do największej ilości danych: `fill` wysyła wyłącznie mglisty tekst wpisu (nie źródło); `draft` wysyła dosłowne zdania źródła (`truth.sentences`) i przed wywołaniem wypisuje, ile ich jest; agent prowadzony przez skill czyta fragmenty źródła i wysyła je do własnego dostawcy modelu — a w sesji chmurowej pracuje na kopii plików w chmurze. Wszystkie wywołania API są płatne. Używaj ich tylko na materiale, który możesz udostępnić tym dostawcom.
 
+### 8. Helsinki Reacts (opcjonalnie, wymaga klucza API LLM)
+
+```bash
+python helsinki_reacts.py <project> [<project> …]
+# → export_results/_streams/<project>.md
+python helsinki_reacts.py notes.txt             # działa też dowolny plik tekstowy
+python helsinki_reacts.py <project> --dry-run   # pokaż, co zostałoby wysłane, nic nie wysyłaj
+python helsinki_reacts.py <project> --lang en   # język streama dla tego przebiegu
+python helsinki_reacts.py <project> --kirja     # dołącz wpis folderu z Księgi Niedomówień
+```
+
+Satyryczny scenariusz streamu: Valtteri, streamer z Helsinek, reaguje razem ze swoim czatem na nagranie, a Lumi, chłodny syntezator mowy, czyta donejty. Wejściem jest goła nazwa folderu z `export_results/` (tekst jego `accessible_text.html` bez znaczników i nagłówków) albo dowolny plik tekstowy; scenariusz trafia do `export_results/_streams/<nazwa>.md`, a kolejny przebieg tej samej nazwy dostaje `_2`, `_3`.
+
+**Prompt należy do Ciebie.** Prompt systemowy nie siedzi w kodzie: domyślny `helsinki_reacts.example.md` jest celowo skromny. Skopiuj go do `helsinki_reacts.md` (jest w `.gitignore` i używany automatycznie, gdy istnieje) i zmieniaj, co chcesz, albo wskaż dowolny plik przez `--prompt`. Jedna reguła więcej lub mniej mocno zmienia stream, więc porównaj kilka przebiegów, zanim zostaniesz przy wersji. Skrypt sam dokleja tylko to, co musi działać niezależnie od promptu: nagranie, język wyjścia i — z `--kirja` — blok Księgi Niedomówień.
+
+**Język.** `--lang`, potem `reacts_lang` z configu, potem `ui_lang`. Fiński daje sam stream, zwykłą fińszczyzną; każdy inny język daje jego przekład, w którym krótkie fińskie wtrącenia zostają bez tłumaczenia.
+
+**Księga Niedomówień (`--kirja`).** Dla folderu z wpisem w `Sanomattomien_kirja.md` czat dostaje mglisty tekst wpisu i chybione odpowiedzi ślepego wypełniacza jako teorie do kłótni. Klucz odpowiedzi nigdy nie trafia do modelu, a stała reguła nie pozwala Valtteriemu zestawiać luki z nagraniem, bo luki kryją słowa z tego samego nagrania. Bez wpisu stream powstaje bez Księgi.
+
+Provider i model: `reacts_llm_provider` / `reacts_model` (puste = `llm_provider` / `llm_model`), nadpisywane przez `--provider` / `--model`; effort myślenia domyślnie `low` (`--effort`). Odpowiedź krótsza niż `--min-chars` (1500) jest odrzucana jako odmowa i wypisywana w konsoli.
+
+> **Prywatność i koszt.** Cały tekst każdego nagrania trafia do skonfigurowanego providera, a to płatne API; skrypt mówi o tym przed pierwszym wywołaniem. Wynik to satyra o materiale napisana przez AI: przeczytaj ją przed udostępnieniem, zwłaszcza gdy wymienia prawdziwe osoby — nic nie sprawdza, co model im przypisuje.
+
 ## Wyjście
 
 Każdy analizowany korpus dostaje własny podkatalog w `export_results/`, nazwany po pliku źródłowym (z usuniętą ścieżką i rozszerzeniem) albo po `domain_slug` dla URL-i. Wbudowany przykładowy korpus używa `export_results/_default/`.
@@ -446,6 +476,9 @@ accessible_text_analyst/
 ├── shamanic_voice.py               # opcjonalnie: dyspozytor audio ElevenLabs (jednorazowy)
 ├── shamanic_locale.py              # pakiet lokalizacyjny dla warstwy szamańskiej
 ├── ksiega_niedomowien.py           # opcjonalnie: Księga Niedomówień (tylko fiński)
+├── helsinki_reacts.py              # opcjonalnie: scenariusze streamów Helsinki Reacts (LLM)
+├── helsinki_reacts.example.md      # domyślny prompt Helsinki Reacts (wersjonowany)
+├── helsinki_reacts.md              # Twoja kopia tego promptu (gitignorowana)
 ├── skills/ksiega-niedomowien/SKILL.md  # skill agenta dla ksiega_niedomowien.py
 ├── config.example.json             # szablon konfiguracji, rozszerzenie JSON (wersjonowane)
 ├── config.example.ini              # szablon konfiguracji, rozszerzenie INI (wersjonowane)
@@ -459,6 +492,7 @@ accessible_text_analyst/
 ├── release_notes.md                # release notes w odwrotnej kolejności chronologicznej
 └── export_results/                 # wyniki analizy (gitignored)
     ├── Sanomattomien_kirja.md      # Księga Niedomówień, dopisywana przyrostowo
+    ├── _streams/                   # scenariusze Helsinki Reacts
     └── <project_name>/
         ├── sentences.csv
         ├── paragraphs.csv

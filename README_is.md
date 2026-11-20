@@ -18,6 +18,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 - `shamanic_voice.py` *(valfrjálst, krefst ElevenLabs)* — sjálfstæður afgreiðari sem keyrir einu sinni og myndgerir frásagnargripina fjóra sem `shamanic_ai.py` bjó til í `.mp3`-hljóð gegnum ElevenLabs API-ið, skráir hvern árangur/villu í skelina og hættir svo (enginn botni, enginn þjónn). Þarf `ELEVENLABS_API_KEY` í `golden_key.env` og `voices`-vörpun í stillingunum.
 - `shamanic_locale.py` — staðfærsluböggull fyrir bæði shamanísku forritin (sniðmát, hausa og fallback-strengi Lumi á öllum níu tungumálum).
 - `ksiega_niedomowien.py` *(valfrjálst, aðeins finnska, með aðstoð gervigreindarþjóns)* — Bók hins ósagða (*Sanomattomien kirja*): breytir `raw_roots_chant.txt` í dulkóðaða dagbók sem vex smám saman, með eyðum sem blint líkan gat ekki giskað á. Þetta er ákveðinn (deterministic) hjálpari fyrir hæfnina í `skills/ksiega-niedomowien/SKILL.md`; skelúttakið fylgir `ui_lang`.
+- `helsinki_reacts.py` *(valfrjálst, með LLM)* — háðskt handrit að streymi: Valtteri frá Helsinki bregst ásamt finnsku spjalli við upptöku (útflutningsmöppu eða textaskrá). Kerfisfyrirmælin eru utan kóðans (`helsinki_reacts.example.md`, eigið eintak í `helsinki_reacts.md`) og tungumál streymisins fylgir `ui_lang`. Krefst lykils valinnar þjónustu í `golden_key.env`.
 
 ## Hvað gerir leiðslan
 
@@ -193,6 +194,9 @@ Innihald:
   "kirja_llm_provider": "",
   "kirja_drafter_model": "",
   "kirja_filler_model": "",
+  "reacts_llm_provider": "",
+  "reacts_model": "",
+  "reacts_lang": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -219,12 +223,15 @@ Innihald:
 | `kirja_llm_provider` | strengur | Valfrjáls yfirskrift þjónustu fyrir Bókina (`ksiega_niedomowien.py draft` / `fill`). Tómt = `llm_provider`. |
 | `kirja_drafter_model` | strengur | Líkan fyrir `draft` (höfund draga Bókarinnar gegnum API). Tómt = sjálfgefið líkan þjónustunnar, eða `llm_model` þegar Bókin notar almennu þjónustuna. |
 | `kirja_filler_model` | strengur | Líkan fyrir `fill` (blindan eyðufyllanda Bókarinnar). Sama varaleið og `kirja_drafter_model`. |
+| `reacts_llm_provider` | string | Valfrjáls hnekking þjónustu fyrir `helsinki_reacts.py`. Tómt = `llm_provider`. |
+| `reacts_model` | string | Líkan fyrir `helsinki_reacts.py`. Tómt = sjálfgefið líkan þjónustunnar, eða `llm_model` þegar Helsinki Reacts notar almennu þjónustuna. |
+| `reacts_lang` | string | Tungumál streymis í `helsinki_reacts.py` (`ui_lang`-kóði). Tómt = `ui_lang`. `fi` = streymið á finnsku; hvert annað = þýðing þess með finnskum innskotsorðum. |
 
 > **LLM-þjónustur og lyklar.** Lykill er bundinn einum hýsli og er aldrei sendur annað: `openai` → `OPENAI_API_KEY` → `api.openai.com`; `openrouter` → `OPENROUTER_API_KEY` → `openrouter.ai`; `openai_compat` → `LLM_COMPAT_API_KEY` → `llm_base_url`. Þjónustan er valin sérstaklega og aldrei ráðin af slóð, svo að það að beina einni skriftu að annarri þjónustu getur hvorki lekið lykli fyrri þjónustunnar né brotið hina skriftuna. Lykillinn `kirja_filler_base_url` frá því fyrir v1.7.0 (hann sendi `OPENAI_API_KEY` á hvaða slóð sem var) er hafnað með leiðbeiningum um flutning. Á OpenRouter bera auðkenni líkana forskeyti framleiðanda (`openai/gpt-4o`, `anthropic/claude-sonnet-5.5`), og persónuverndarstillingar aðgangsins leyfa að útiloka þjónustur sem kunna að þjálfa á fyrirmælum þínum.
 
 > **Tilfinningagreining — álag á örgjörva.** Þegar `enable_sentiment: true` er virkt er greiningin per málsgrein reikniþung á CPU — nokkurn veginn sambærileg við að keyra staðbundna Whisper tal-í-texta á CPU. Á eldri eða hitatakmörkuðum vélum getur þetta viðvarandi álag verið raunverulegt erfiði fyrir örgjörvann; virkjaðu það meðvitað, helst á vél með GPU eða með svigrúm fyrir langvarandi vinnu á fullu álagi.
 
-> **`ui_lang` — umfang staðfærslu.** Skel-úttak sjálfstæðu skriptanna (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) er staðfært gegnum `ui_lang`. **Staðalúttak minnisbókarinnar er ekki** staðfært — það er harðkóðað á rússnesku (aðeins skráarnafn tesanna fylgir greinda tungumáli safnsins). Lesendaham-skýrslan `analysis_report.html` heldur rússnesku frásögn minnisbókarinnar (rót hennar er `<html lang="ru">`); að fullu `ui_lang`-staðfærði notendaskjár-artefaktinn er **`diagnostic_report.html`** sem `generate_diagnostic.py` býr til. Þýðingar í `fi` / `is` / `it` / `de` / `es` / `fr` eru drög og óyfirfarnar — vinsamlegast tilkynntu ónákvæmni á GitHub.
+> **`ui_lang` — umfang staðfærslu.** Skel-úttak sjálfstæðu skriptanna (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`, `helsinki_reacts.py`) er staðfært gegnum `ui_lang`. **Staðalúttak minnisbókarinnar er ekki** staðfært — það er harðkóðað á rússnesku (aðeins skráarnafn tesanna fylgir greinda tungumáli safnsins). Lesendaham-skýrslan `analysis_report.html` heldur rússnesku frásögn minnisbókarinnar (rót hennar er `<html lang="ru">`); að fullu `ui_lang`-staðfærði notendaskjár-artefaktinn er **`diagnostic_report.html`** sem `generate_diagnostic.py` býr til. Þýðingar í `fi` / `is` / `it` / `de` / `es` / `fr` eru drög og óyfirfarnar — vinsamlegast tilkynntu ónákvæmni á GitHub.
 
 > **Windows-slóðir og regex — mikilvægt.** Innihald stillinganna er JSON og JSON hefur enga raw-strengja-málskipan. Ein bakskáslína sleppir næsta staf (`\U`, `\d`, `\n` eru sérstakir), þannig að Windows-slóð skrifuð sem `"C:\Users\marek\doc.pdf"` veldur villu við JSON-túlkun. Tvær réttar leiðir til að skrifa hana:
 >
@@ -382,6 +389,29 @@ Skriftan er ákveðni helmingurinn (síur, blokkir, sannleiksuppspretta, sannpr�
 
 > **Friðhelgi og kostnaður.** Þrjú stig, frá minnstu til mestu gagna: `fill` sendir aðeins þokukenndan texta færslunnar (ekki frumtextann); `draft` sendir orðréttar setningar úr frumtextanum (`truth.sentences`) og segir fyrir kallið hve margar þær eru; þjónn sem fylgir skillinu les brot úr frumtextanum og sendir þau til eigin líkanaþjónustu — og í skýjalotu vinnur hann á skýjaafriti skránna. Öll API-köll kosta. Notaðu þau aðeins á efni sem þú mátt deila með þessum þjónustum.
 
+### 8. Helsinki Reacts (valfrjálst, krefst LLM API-lykils)
+
+```bash
+python helsinki_reacts.py <project> [<project> …]
+# → export_results/_streams/<project>.md
+python helsinki_reacts.py notes.txt             # hvaða textaskrá sem er dugar líka
+python helsinki_reacts.py <project> --dry-run   # sýna hvað yrði sent, án þess að senda neitt
+python helsinki_reacts.py <project> --lang en   # tungumál streymisins í þessari keyrslu
+python helsinki_reacts.py <project> --kirja     # bæta við færslu möppunnar úr Bók hins ósagða
+```
+
+Háðskt handrit að streymi: Valtteri, streymari frá Helsinki, bregst ásamt spjallinu sínu við upptöku, og Lumi, köld talgervilsrödd, les upp framlögin. Inntakið er heiti möppu í `export_results/` (texti `accessible_text.html` hennar án merkja og fyrirsagna) eða hvaða textaskrá sem er; handritið er vistað í `export_results/_streams/<heiti>.md`, og ný keyrsla sama heitis bætir við `_2`, `_3`.
+
+**Fyrirmælin eru þín.** Kerfisfyrirmælin eru ekki í kóðanum: sjálfgefna skráin `helsinki_reacts.example.md` er viljandi hófleg. Afritaðu hana í `helsinki_reacts.md` (hún er í `.gitignore` og er notuð sjálfkrafa þegar hún er til) og breyttu því sem þú vilt, eða bentu á hvaða skrá sem er með `--prompt`. Ein regla til eða frá breytir streyminu mikið, svo berðu saman nokkrar keyrslur áður en þú velur útgáfu. Skriftan bætir sjálf aðeins við því sem verður að virka óháð fyrirmælunum: upptökunni, úttakstungumálinu og — með `--kirja` — kafla Bókar hins ósagða.
+
+**Tungumál.** `--lang`, svo `reacts_lang` úr stillingum, svo `ui_lang`. Finnska gefur streymið sjálft á venjulegri finnsku; hvert annað tungumál gefur þýðingu þess, þar sem stutt finnsk innskotsorð haldast óþýdd.
+
+**Bók hins ósagða (`--kirja`).** Fyrir möppu með færslu í `Sanomattomien_kirja.md` fær spjallið þokukenndan texta færslunnar og misheppnaðar ágiskanir blinda útfyllandans sem kenningar til að rífast um. Svarlykillinn nær aldrei til líkansins, og föst regla bannar Valtteri að bera eyðu saman við upptökuna, því eyðurnar fela orð úr sömu upptöku. Án færslu verður streymið til án Bókarinnar.
+
+Þjónusta og líkan: `reacts_llm_provider` / `reacts_model` (tómt = `llm_provider` / `llm_model`), sem `--provider` / `--model` ganga framar; hugsunarátak er sjálfgefið `low` (`--effort`). Svari styttra en `--min-chars` (1500) er hafnað sem neitun og það prentað í stjórnborðið.
+
+> **Friðhelgi og kostnaður.** Allur texti hverrar upptöku fer til stilltrar þjónustu, sem er greidd; skriftan segir frá því fyrir fyrsta kall. Niðurstaðan er háð um efnið, skrifað af gervigreind: lestu það áður en þú deilir því, sérstaklega ef raunverulegt fólk er nefnt — ekkert kannar hvað líkanið eignar því.
+
 ## Úttak
 
 Hver greint safn fær sína undirmöppu undir `export_results/`, nefnda eftir upprunaskránni (slóð og ending fjarlægð) eða eftir `domain_slug` fyrir URL. Innbyggða sýnishornssafnið notar `export_results/_default/`.
@@ -446,6 +476,9 @@ accessible_text_analyst/
 ├── shamanic_voice.py               # valfrjálst: ElevenLabs hljóðafgreiðari (keyrir einu sinni)
 ├── shamanic_locale.py              # staðfærsluböggull fyrir shamanístíska lagið
 ├── ksiega_niedomowien.py           # valfrjálst: Bók hins ósagða (aðeins finnska)
+├── helsinki_reacts.py              # valfrjálst: handrit Helsinki Reacts-streyma (LLM)
+├── helsinki_reacts.example.md      # sjálfgefin fyrirmæli Helsinki Reacts (í útgáfustýringu)
+├── helsinki_reacts.md              # þitt eintak af fyrirmælunum (í .gitignore)
 ├── skills/ksiega-niedomowien/SKILL.md  # hæfni gervigreindarþjóns fyrir ksiega_niedomowien.py
 ├── config.example.json             # stillingarsniðmát, JSON-ending (versjónað)
 ├── config.example.ini              # stillingarsniðmát, INI-ending (versjónað)
@@ -459,6 +492,7 @@ accessible_text_analyst/
 ├── release_notes.md                # release notes í öfugri tímaröð
 └── export_results/                 # greiningarútkomur (gitignored)
     ├── Sanomattomien_kirja.md      # Bók hins ósagða, bætt við smám saman
+    ├── _streams/                   # handrit Helsinki Reacts
     └── <project_name>/
         ├── sentences.csv
         ├── paragraphs.csv

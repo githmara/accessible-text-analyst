@@ -24,7 +24,11 @@ Multi-file project for accessibility-oriented multilingual text analytics. There
 
 - `ksiega_niedomowien.py` — deterministic helper for the agent skill shipped in `skills/ksiega-niedomowien/SKILL.md`. See *Book of the Unsaid* below.
 
-**Shared LLM client:** `llm_klient.py` — provider selection for `shamanic_ai.py` and `ksiega_niedomowien.py` (`draft` / `fill`). See *LLM providers* below.
+**Optional Helsinki Reacts** (any corpus, paid LLM; writes to `export_results/_streams/`, since v2.1.0):
+
+- `helsinki_reacts.py` — satirical stream script: Valtteri from Helsinki reacts with a Finnish chat to a recording (a bare export folder name → the text of its `accessible_text.html` without markup and headings, or any text file). **The system prompt is user data, not code** — the one tool here where the user is meant to steer the content: `helsinki_reacts.example.md` (versioned, deliberately modest) < `helsinki_reacts.md` (the user's copy, gitignored) < `--prompt`; HTML comments in the file are not sent. The code adds only what must hold whatever the prompt says, and these stay OUT of the editable file: the input data, the output-language block (`--lang` > `reacts_lang` > `ui_lang`; `fi` = the stream itself in plain Finnish, any other = its translation with Finnish interjections) and, with the opt-in `--kirja`, the Book bridge plus the fixed `KIRJA_RULES`. The answer key never leaves `kirja_bridge` (only open gap NUMBERS are read from it), and Valtteri must not compare a gap with the recording, because the gaps hide words of that same recording — measured 2026-11-20: without the rule he filled gaps from it. Provider: `reacts_llm_provider` / `reacts_model`, effort `low`. Tests: `.github/scripts/test_helsinki_reacts.py`.
+
+**Shared LLM client:** `llm_klient.py` — provider selection for `shamanic_ai.py`, `ksiega_niedomowien.py` (`draft` / `fill`) and `helsinki_reacts.py`. See *LLM providers* below.
 
 ## Common commands
 

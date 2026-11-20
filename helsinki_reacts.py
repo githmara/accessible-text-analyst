@@ -48,13 +48,16 @@ _HTML_COMMENT = re.compile("<!--.*?-->", re.S)
 
 LANGUAGE_FINNISH = (
     "OUTPUT LANGUAGE: Finnish. The script IS the stream, in natural, colloquial Finnish — "
-    "not a translation. Speaker tags stay **Valtteri:** and **Lumi:**."
+    "not a translation. Speaker tags stay **Valtteri:** and **Lumi:**. Fixed formulas the "
+    "prompt quotes in another language (the on-screen title line, Lumi's donation line) are "
+    "written in Finnish too."
 )
 LANGUAGE_TRANSLATED = (
     "OUTPUT LANGUAGE: {language}. The stream happens in Finnish and you write its {language} "
     "translation: every line in {language}, but keep short Finnish interjections (such as "
     "\"Moi\", \"Kiitos\", \"Perkele\") untranslated — they are the stream's flavour. Speaker "
-    "tags stay **Valtteri:** and **Lumi:**."
+    "tags stay **Valtteri:** and **Lumi:**. Fixed formulas the prompt quotes in another "
+    "language (the on-screen title line, Lumi's donation line) are written in {language} too."
 )
 
 # Added only with --kirja and only when the folder has an entry. It is in the code, not in

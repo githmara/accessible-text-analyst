@@ -18,6 +18,7 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 - `shamanic_voice.py` *(optional, requires ElevenLabs)* — a standalone, run-once dispatcher that synthesizes the four narrative artefacts produced by `shamanic_ai.py` into `.mp3` audio via the ElevenLabs API, logs each success/failure to the console, and exits (no bot, no server). Needs `ELEVENLABS_API_KEY` in `golden_key.env` and a `voices` mapping in the config.
 - `shamanic_locale.py` — the localization bundle for both shamanic scripts (templates, headers, and Lumi's fallback strings in all nine supported languages).
 - `ksiega_niedomowien.py` *(optional, Finnish only, agent-assisted)* — the Book of the Unsaid (*Sanomattomien kirja*): turns `raw_roots_chant.txt` into an incrementally growing cryptic diary whose gaps a blind model could not guess. It is the deterministic helper for the skill in `skills/ksiega-niedomowien/SKILL.md`; its console output follows `ui_lang`.
+- `helsinki_reacts.py` *(optional, LLM-driven)* — a satirical stream script: Valtteri from Helsinki reacts with a Finnish chat to a recording (an export folder or a text file). The system prompt lives outside the code (`helsinki_reacts.example.md`, your own copy in `helsinki_reacts.md`), and the stream language follows `ui_lang`. Requires the chosen provider's key in `golden_key.env`.
 
 ## What the pipeline does
 
@@ -193,6 +194,9 @@ Contents:
   "kirja_llm_provider": "",
   "kirja_drafter_model": "",
   "kirja_filler_model": "",
+  "reacts_llm_provider": "",
+  "reacts_model": "",
+  "reacts_lang": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -219,12 +223,15 @@ Contents:
 | `kirja_llm_provider` | string | Optional provider override for the Book (`ksiega_niedomowien.py draft` / `fill`). Empty = `llm_provider`. |
 | `kirja_drafter_model` | string | Model for `draft` (the Book's API drafter). Empty = the provider's default, or `llm_model` when the Book uses the global provider. |
 | `kirja_filler_model` | string | Model for `fill` (the Book's blind gap-filler). Same fallback as `kirja_drafter_model`. |
+| `reacts_llm_provider` | string | Optional provider override for `helsinki_reacts.py`. Empty = `llm_provider`. |
+| `reacts_model` | string | Model for `helsinki_reacts.py`. Empty = the provider's default, or `llm_model` when Helsinki Reacts uses the global provider. |
+| `reacts_lang` | string | Stream language of `helsinki_reacts.py` (a `ui_lang` code). Empty = `ui_lang`. `fi` = the stream in Finnish; any other = its translation with Finnish interjections. |
 
 > **LLM providers and keys.** A key is bound to one host and is never sent anywhere else: `openai` → `OPENAI_API_KEY` → `api.openai.com`; `openrouter` → `OPENROUTER_API_KEY` → `openrouter.ai`; `openai_compat` → `LLM_COMPAT_API_KEY` → `llm_base_url`. The provider is chosen explicitly and never inferred from an address, so pointing one script at another service can neither leak the first service's key nor break the other script. The pre-v1.7.0 key `kirja_filler_base_url` (which sent `OPENAI_API_KEY` to any address) is refused with a migration message. On OpenRouter, model ids carry a vendor prefix (`openai/gpt-4o`, `anthropic/claude-sonnet-5.5`), and the account's privacy settings let you exclude providers that may train on your prompts.
 
 > **Sentiment analysis — CPU cost.** With `enable_sentiment: true`, the per-paragraph pass is computationally heavy on CPU — roughly comparable to running local Whisper speech-to-text on CPU. On older or thermally-constrained machines this sustained load can be a real strain on the processor; enable it deliberately, ideally on a machine with a GPU or with headroom for prolonged full-load work.
 
-> **`ui_lang` — scope of localization.** The console output of the standalone scripts (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) is localized via `ui_lang`. The **notebook stdout is not** localized — it is hardcoded Russian (only the theses filename follows the detected corpus language). The reader-mode `analysis_report.html` keeps the notebook's Russian narrative (its root is `<html lang="ru">`); the fully `ui_lang`-localized, user-facing artefact is **`diagnostic_report.html`** produced by `generate_diagnostic.py`. Translations in `fi` / `is` / `it` / `de` / `es` / `fr` are drafted but unreviewed — please report rough edges on GitHub.
+> **`ui_lang` — scope of localization.** The console output of the standalone scripts (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`, `helsinki_reacts.py`) is localized via `ui_lang`. The **notebook stdout is not** localized — it is hardcoded Russian (only the theses filename follows the detected corpus language). The reader-mode `analysis_report.html` keeps the notebook's Russian narrative (its root is `<html lang="ru">`); the fully `ui_lang`-localized, user-facing artefact is **`diagnostic_report.html`** produced by `generate_diagnostic.py`. Translations in `fi` / `is` / `it` / `de` / `es` / `fr` are drafted but unreviewed — please report rough edges on GitHub.
 
 > **Windows paths and regex — important.** The config content is JSON, and JSON has no raw-string syntax. A single backslash escapes the next character (`\U`, `\d`, `\n` are special), so a Windows path written `"C:\Users\marek\doc.pdf"` will produce a JSON parse error. Two ways to write it correctly:
 >
@@ -382,6 +389,29 @@ The script is the deterministic half (filters, blocks, source of truth, validati
 
 > **Privacy & cost.** Three levels, from the least to the most data: `fill` sends only the entry's misty text (not the source); `draft` sends verbatim source sentences (`truth.sentences`) and prints how many before the call; an agent following the skill reads source excerpts and sends them to its own model provider — and, in a cloud session, works on a cloud copy of the files. All API calls are paid. Use them only on material you can share with those providers.
 
+### 8. Helsinki Reacts (optional, requires an LLM API key)
+
+```bash
+python helsinki_reacts.py <project> [<project> …]
+# → export_results/_streams/<project>.md
+python helsinki_reacts.py notes.txt             # any text file works too
+python helsinki_reacts.py <project> --dry-run   # show what would be sent, send nothing
+python helsinki_reacts.py <project> --lang en   # stream language for this run
+python helsinki_reacts.py <project> --kirja     # add the folder's Book of the Unsaid entry
+```
+
+A satirical stream script: Valtteri, a streamer from Helsinki, reacts to a recording with his chat, and Lumi, a cold text-to-speech voice, reads out the donations. The input is a bare folder name from `export_results/` (the text of its `accessible_text.html`, without markup and headings) or any text file; the script is written to `export_results/_streams/<name>.md`, and another run with the same name adds `_2`, `_3`.
+
+**The prompt is yours.** The system prompt is not in the code: the default `helsinki_reacts.example.md` is deliberately modest. Copy it to `helsinki_reacts.md` (it is in `.gitignore` and used automatically when present) and change whatever you like, or point at any file with `--prompt`. One rule more or less changes the stream a lot, so compare a few runs before you settle on a version. The script itself adds only what has to work whatever the prompt says: the recording, the output language and — with `--kirja` — the Book of the Unsaid block.
+
+**Language.** `--lang`, then `reacts_lang` from the config, then `ui_lang`. Finnish gives the stream itself, in plain Finnish; any other language gives its translation, with short Finnish interjections left untranslated.
+
+**The Book of the Unsaid (`--kirja`).** For a folder with an entry in `Sanomattomien_kirja.md`, the chat gets the entry's misty text and the blind filler's missed guesses as theories to argue about. The answer key never reaches the model, and a fixed rule keeps Valtteri from comparing a gap with the recording, because the gaps hide words from that same recording. Without an entry the stream is made without the Book.
+
+Provider and model: `reacts_llm_provider` / `reacts_model` (empty = `llm_provider` / `llm_model`), overridden by `--provider` / `--model`; thinking effort `low` by default (`--effort`). A reply shorter than `--min-chars` (1500) is rejected as a refusal and printed to the console.
+
+> **Privacy & cost.** The whole text of every recording goes to the configured provider, a paid API, and the script says so before the first call. The result is satire about the material written by AI: read it before you share it, especially when it names real people — nothing checks what the model attributes to them.
+
 ## Output
 
 Every analyzed corpus gets its own subdirectory under `export_results/`, named after the source file (path and extension stripped) or after a `domain_slug` for URLs. The built-in example corpus uses `export_results/_default/`.
@@ -446,6 +476,9 @@ accessible_text_analyst/
 ├── shamanic_voice.py               # optional: ElevenLabs audio dispatcher (run-once)
 ├── shamanic_locale.py              # localization bundle for the shamanic layer
 ├── ksiega_niedomowien.py           # optional: the Book of the Unsaid (Finnish only)
+├── helsinki_reacts.py              # optional: Helsinki Reacts stream scripts (LLM)
+├── helsinki_reacts.example.md      # default Helsinki Reacts prompt (versioned)
+├── helsinki_reacts.md              # your own copy of that prompt (gitignored)
 ├── skills/ksiega-niedomowien/SKILL.md  # agent skill for ksiega_niedomowien.py
 ├── config.example.json             # config template, JSON extension (versioned)
 ├── config.example.ini              # config template, INI extension (versioned)
@@ -459,6 +492,7 @@ accessible_text_analyst/
 ├── release_notes.md                # release notes appended in reverse-chrono order
 └── export_results/                 # analysis outputs (gitignored)
     ├── Sanomattomien_kirja.md      # the Book of the Unsaid, appended incrementally
+    ├── _streams/                   # Helsinki Reacts scripts
     └── <project_name>/
         ├── sentences.csv
         ├── paragraphs.csv

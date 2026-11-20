@@ -18,6 +18,7 @@ Pipeline NLP multilingue progettata per **l'accessibilità con i lettori di sche
 - `shamanic_voice.py` *(opzionale, richiede ElevenLabs)* — un dispatcher autonomo a esecuzione singola che sintetizza in audio `.mp3` i quattro artefatti narrativi prodotti da `shamanic_ai.py` tramite l'API ElevenLabs, registra ogni successo/fallimento sulla console ed esce (nessun bot, nessun server). Richiede `ELEVENLABS_API_KEY` in `golden_key.env` e una mappatura `voices` nella configurazione.
 - `shamanic_locale.py` — il pacchetto di localizzazione per entrambi gli script sciamanici (template, intestazioni e stringhe di fallback di Lumi in tutte e nove le lingue).
 - `ksiega_niedomowien.py` *(opzionale, solo finlandese, con un agente)* — il Libro del non detto (*Sanomattomien kirja*): trasforma `raw_roots_chant.txt` in un diario cifrato che cresce in modo incrementale, con lacune che un modello cieco non è riuscito a indovinare. È l'aiutante deterministico della skill in `skills/ksiega-niedomowien/SKILL.md`; l'output della console segue `ui_lang`.
+- `helsinki_reacts.py` *(opzionale, con LLM)* — copione satirico di una diretta: Valtteri di Helsinki reagisce con una chat finlandese a una registrazione (una cartella di esportazione o un file di testo). Il prompt di sistema sta fuori dal codice (`helsinki_reacts.example.md`, la tua copia in `helsinki_reacts.md`) e la lingua della diretta segue `ui_lang`. Richiede la chiave del provider scelto in `golden_key.env`.
 
 ## Cosa fa la pipeline
 
@@ -193,6 +194,9 @@ Contenuto:
   "kirja_llm_provider": "",
   "kirja_drafter_model": "",
   "kirja_filler_model": "",
+  "reacts_llm_provider": "",
+  "reacts_model": "",
+  "reacts_lang": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -219,12 +223,15 @@ Contenuto:
 | `kirja_llm_provider` | stringa | Sostituzione opzionale del fornitore per il Libro (`ksiega_niedomowien.py draft` / `fill`). Vuoto = `llm_provider`. |
 | `kirja_drafter_model` | stringa | Modello per `draft` (l'autore delle bozze del Libro via API). Vuoto = predefinito del fornitore, oppure `llm_model` quando il Libro usa il fornitore globale. |
 | `kirja_filler_model` | stringa | Modello per `fill` (l'indovino cieco delle lacune del Libro). Stesso ripiego di `kirja_drafter_model`. |
+| `reacts_llm_provider` | string | Sostituzione facoltativa del provider per `helsinki_reacts.py`. Vuoto = `llm_provider`. |
+| `reacts_model` | string | Modello per `helsinki_reacts.py`. Vuoto = predefinito del provider, oppure `llm_model` quando Helsinki Reacts usa il provider globale. |
+| `reacts_lang` | string | Lingua della diretta di `helsinki_reacts.py` (un codice `ui_lang`). Vuoto = `ui_lang`. `fi` = la diretta in finlandese; ogni altra = la sua traduzione con interiezioni finlandesi. |
 
 > **Fornitori LLM e chiavi.** Una chiave è legata a un solo host e non viene mai inviata altrove: `openai` → `OPENAI_API_KEY` → `api.openai.com`; `openrouter` → `OPENROUTER_API_KEY` → `openrouter.ai`; `openai_compat` → `LLM_COMPAT_API_KEY` → `llm_base_url`. Il fornitore si sceglie esplicitamente e non viene mai dedotto da un indirizzo, quindi puntare uno script verso un altro servizio non può né far trapelare la chiave del primo servizio né rompere l'altro script. La chiave precedente alla v1.7.0 `kirja_filler_base_url` (inviava `OPENAI_API_KEY` a qualsiasi indirizzo) viene rifiutata con un messaggio di migrazione. Su OpenRouter gli identificativi dei modelli hanno il prefisso del produttore (`openai/gpt-4o`, `anthropic/claude-sonnet-5.5`), e le impostazioni di privacy dell'account permettono di escludere i fornitori che potrebbero addestrarsi sui tuoi prompt.
 
 > **Analisi del sentiment — costo della CPU.** Con `enable_sentiment: true`, il passaggio per paragrafo è computazionalmente pesante sulla CPU — all'incirca paragonabile all'esecuzione locale del riconoscimento vocale Whisper su CPU. Su macchine più vecchie o con vincoli termici questo carico sostenuto può rappresentare una vera sollecitazione per il processore; attivalo deliberatamente, idealmente su una macchina con una GPU o con margine per un lavoro prolungato a pieno carico.
 
-> **`ui_lang` — ambito della localizzazione.** L'output della console degli script autonomi (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) è localizzato tramite `ui_lang`. Lo **stdout del notebook non è** localizzato — è russo hardcoded (solo il nome del file delle tesi segue la lingua del corpus rilevata). Il report in modalità lettore `analysis_report.html` mantiene la narrazione russa del notebook (la sua radice è `<html lang="ru">`); l'artefatto user-facing completamente localizzato tramite `ui_lang` è **`diagnostic_report.html`** prodotto da `generate_diagnostic.py`. Le traduzioni in `fi` / `is` / `it` / `de` / `es` / `fr` sono bozze non revisionate — segnala imprecisioni su GitHub.
+> **`ui_lang` — ambito della localizzazione.** L'output della console degli script autonomi (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`, `helsinki_reacts.py`) è localizzato tramite `ui_lang`. Lo **stdout del notebook non è** localizzato — è russo hardcoded (solo il nome del file delle tesi segue la lingua del corpus rilevata). Il report in modalità lettore `analysis_report.html` mantiene la narrazione russa del notebook (la sua radice è `<html lang="ru">`); l'artefatto user-facing completamente localizzato tramite `ui_lang` è **`diagnostic_report.html`** prodotto da `generate_diagnostic.py`. Le traduzioni in `fi` / `is` / `it` / `de` / `es` / `fr` sono bozze non revisionate — segnala imprecisioni su GitHub.
 
 > **Percorsi Windows e regex — importante.** Il contenuto della configurazione è JSON, e JSON non ha una sintassi raw-string. Una singola barra inversa fa l'escape del carattere successivo (`\U`, `\d`, `\n` sono speciali), quindi un percorso Windows scritto come `"C:\Users\marek\doc.pdf"` produrrà un errore di parsing JSON. Due modi corretti per scriverlo:
 >
@@ -382,6 +389,29 @@ Lo script è la metà deterministica (filtri, blocchi, fonte di verità, validaz
 
 > **Privacy e costo.** Tre livelli, dal minimo al massimo di dati: `fill` invia solo il testo nebuloso della voce (non la fonte); `draft` invia frasi letterali della fonte (`truth.sentences`) e prima della chiamata dice quante sono; un agente che segue lo skill legge estratti della fonte e li invia al proprio fornitore di modelli — e, in una sessione cloud, lavora su una copia dei file nel cloud. Tutte le chiamate API sono a pagamento. Usale solo su materiale che puoi condividere con quei fornitori.
 
+### 8. Helsinki Reacts (opzionale, richiede una chiave API LLM)
+
+```bash
+python helsinki_reacts.py <project> [<project> …]
+# → export_results/_streams/<project>.md
+python helsinki_reacts.py notes.txt             # va bene anche un qualsiasi file di testo
+python helsinki_reacts.py <project> --dry-run   # mostra cosa verrebbe inviato, senza inviare nulla
+python helsinki_reacts.py <project> --lang en   # lingua della diretta per questa esecuzione
+python helsinki_reacts.py <project> --kirja     # aggiunge la voce della cartella nel Libro del non detto
+```
+
+Copione satirico di una diretta: Valtteri, streamer di Helsinki, reagisce con la sua chat a una registrazione, e Lumi, una fredda voce di sintesi, legge le donazioni. L'input è il nome di una cartella di `export_results/` (il testo del suo `accessible_text.html` senza markup e titoli) o un qualsiasi file di testo; il copione viene scritto in `export_results/_streams/<nome>.md`, e una nuova esecuzione con lo stesso nome aggiunge `_2`, `_3`.
+
+**Il prompt è tuo.** Il prompt di sistema non è nel codice: quello predefinito, `helsinki_reacts.example.md`, è volutamente essenziale. Copialo in `helsinki_reacts.md` (è in `.gitignore` e viene usato automaticamente quando esiste) e cambia quello che vuoi, oppure indica un file qualsiasi con `--prompt`. Una regola in più o in meno cambia molto la diretta, quindi confronta alcune esecuzioni prima di scegliere una versione. Lo script aggiunge da sé solo ciò che deve funzionare qualunque cosa dica il prompt: la registrazione, la lingua di uscita e — con `--kirja` — il blocco del Libro del non detto.
+
+**Lingua.** `--lang`, poi `reacts_lang` dal config, poi `ui_lang`. Il finlandese dà la diretta stessa, in finlandese corrente; ogni altra lingua ne dà la traduzione, in cui le brevi interiezioni finlandesi restano non tradotte.
+
+**Il Libro del non detto (`--kirja`).** Per una cartella con una voce in `Sanomattomien_kirja.md` la chat riceve il testo nebbioso della voce e le ipotesi mancate del riempitore cieco come teorie su cui litigare. La chiave delle risposte non arriva mai al modello, e una regola fissa impedisce a Valtteri di confrontare una lacuna con la registrazione, perché le lacune nascondono parole della stessa registrazione. Senza una voce, la diretta nasce senza il Libro.
+
+Provider e modello: `reacts_llm_provider` / `reacts_model` (vuoti = `llm_provider` / `llm_model`), sostituiti da `--provider` / `--model`; impegno di ragionamento predefinito `low` (`--effort`). Una risposta più breve di `--min-chars` (1500) viene scartata come rifiuto e stampata nella console.
+
+> **Privacy e costo.** L'intero testo di ogni registrazione va al provider configurato, che è un'API a pagamento; lo script lo dice prima della prima chiamata. Il risultato è una satira sul materiale scritta dall'IA: leggila prima di condividerla, soprattutto se nomina persone reali — nulla verifica che cosa il modello attribuisce loro.
+
 ## Output
 
 Ogni corpus analizzato ottiene la propria sottodirectory sotto `export_results/`, denominata in base al file sorgente (percorso ed estensione rimossi) o in base a un `domain_slug` per gli URL. Il corpus di esempio integrato usa `export_results/_default/`.
@@ -446,6 +476,9 @@ accessible_text_analyst/
 ├── shamanic_voice.py               # opzionale: dispatcher audio ElevenLabs (esecuzione singola)
 ├── shamanic_locale.py              # pacchetto di localizzazione per lo strato sciamanico
 ├── ksiega_niedomowien.py           # opzionale: il Libro del non detto (solo finlandese)
+├── helsinki_reacts.py              # opzionale: copioni delle dirette Helsinki Reacts (LLM)
+├── helsinki_reacts.example.md      # prompt predefinito di Helsinki Reacts (versionato)
+├── helsinki_reacts.md              # la tua copia del prompt (in .gitignore)
 ├── skills/ksiega-niedomowien/SKILL.md  # skill dell'agente per ksiega_niedomowien.py
 ├── config.example.json             # template di configurazione, estensione JSON (versionato)
 ├── config.example.ini              # template di configurazione, estensione INI (versionato)
@@ -459,6 +492,7 @@ accessible_text_analyst/
 ├── release_notes.md                # release notes in ordine cronologico inverso
 └── export_results/                 # risultati dell'analisi (gitignored)
     ├── Sanomattomien_kirja.md      # il Libro del non detto, aggiornato in modo incrementale
+    ├── _streams/                   # copioni di Helsinki Reacts
     └── <project_name>/
         ├── sentences.csv
         ├── paragraphs.csv

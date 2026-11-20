@@ -4,6 +4,26 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v2.1.0 — Helsinki Reacts, a stream script with a prompt you edit
+
+**Theme.** A new optional LLM tool, `helsinki_reacts.py`: Valtteri, a streamer from Helsinki, reacts to a recording with a Finnish chat, and Lumi, a cold text-to-speech voice, reads out the donations. The other AI tools here carry their prompts in the code. This one does not, because it is the place where the user decides what the content is like, and one rule more or less changes a stream a lot.
+
+### What's new
+- **The prompt is outside the code.** The default system prompt is `helsinki_reacts.example.md`, deliberately modest. Your own copy in `helsinki_reacts.md` (gitignored) is used automatically, and `--prompt` takes any file. HTML comments in the file are not sent.
+- **Input from an export folder.** A bare folder name from `export_results/` takes the text of its `accessible_text.html`, without markup and headings; any text file works too. Scripts go to `export_results/_streams/<name>.md`; another run with the same name adds `_2`, `_3`.
+- **Stream language from the interface.** `--lang`, then the new `reacts_lang` config key, then `ui_lang`. Finnish gives the stream itself in plain Finnish; any other of the nine languages gives its translation with short Finnish interjections left as they are. The script adds this instruction itself, so it works whatever the prompt says.
+- **The Book of the Unsaid as chat material (`--kirja`, opt-in).** For a folder with an entry in the Book, the chat gets the entry's misty text and the blind filler's missed guesses as theories to argue about. The answer key never reaches the model: only the numbers of the open gaps are read from it. A fixed rule, added by the script and not part of the editable prompt, keeps Valtteri from comparing a gap with the recording. The gaps hide words of that same recording, and in test runs without this rule he filled them from it.
+- **Provider and model** as in the other tools: `reacts_llm_provider` / `reacts_model` (empty = the global ones), `--provider` / `--model`, thinking effort `low` by default. Before the first call the console says that the text of the recordings goes to a paid external API and that the result is AI-written satire to read before sharing.
+- **Environment.** `numpy` 2.5.5, `openai` 3.57.0, `winrt-runtime` 4.2.0 (Windows OCR), `markdownify` 1.2.4, `nbstripout` 0.9.2. Each was tested against the previous version: every export file, the Gemini Notebook reports and the Windows OCR words and boxes stay byte-identical, the warnings-as-errors diagnostics are clean, and the stripped notebook in git is unchanged.
+
+### Verified
+- New tests in `.github/scripts/test_helsinki_reacts.py` (16): prompt and language order, input from a folder and a file, the Book bridge numbering, and that no answer of the key reaches the message.
+- The translation-parity and console hard-code gates pass with the new strings in all nine languages and the new README section.
+- Live runs through OpenRouter (Claude Sonnet 5.5) with the default prompt: a Finnish stream written in plain Finnish, and an English one that keeps Finnish interjections. The first Finnish run kept Lumi's donation line in English, as the default prompt spells it; the language instruction added by the script now covers such fixed lines, and the rerun was Finnish throughout.
+- A run with a custom prompt and `--kirja`: the chat argued over the Book's theories, Valtteri judged them only by mood, and no gap answer appeared in the stream.
+
+---
+
 ## v2.0.2 — a format error no longer switches the thinking setting off
 
 **Theme.** OpenRouter does not say which request field an error is about, so the client reads the error message. Before this patch, a rejected answer format whose message mentioned reasoning was taken for a rejected thinking setting.

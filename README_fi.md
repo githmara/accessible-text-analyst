@@ -18,6 +18,7 @@ Monikielinen NLP-putki, joka on suunniteltu **ruudunlukijoiden saavutettavuutta*
 - `shamanic_voice.py` *(valinnainen, vaatii ElevenLabsin)* — itsenäinen, kertasuoritteinen dispatcher, joka syntetisoi `shamanic_ai.py`:n tuottamat neljä kerronnallista artefaktia `.mp3`-äänitiedostoiksi ElevenLabs-API:n kautta, kirjaa kunkin onnistumisen/epäonnistumisen konsoliin ja päättyy (ei bottia, ei palvelinta). Tarvitsee `ELEVENLABS_API_KEY`:n tiedostossa `golden_key.env` sekä `voices`-määrityksen asetuksissa.
 - `shamanic_locale.py` — molempien shamanististen skriptien lokalisointipaketti (mallit, otsikot ja Lumin fallback-merkkijonot kaikilla yhdeksällä kielellä).
 - `ksiega_niedomowien.py` *(valinnainen, vain suomi, agentin avulla)* — Sanomattomien kirja (*Księga Niedomówień*): muuttaa `raw_roots_chant.txt`-tiedoston vähitellen kasvavaksi salakirjoitetuksi päiväkirjaksi, jonka aukkoja sokea malli ei pystynyt arvaamaan. Se on deterministinen apuri tiedoston `skills/ksiega-niedomowien/SKILL.md` skillille; konsolitulosteet noudattavat `ui_lang`-asetusta.
+- `helsinki_reacts.py` *(valinnainen, LLM)* — satiirinen striimikäsikirjoitus: helsinkiläinen Valtteri reagoi suomalaisen chatin kanssa tallenteeseen (vientikansioon tai tekstitiedostoon). Järjestelmäkehote on koodin ulkopuolella (`helsinki_reacts.example.md`, oma kopio tiedostossa `helsinki_reacts.md`), ja striimin kieli seuraa `ui_lang`-asetusta. Vaatii valitun palveluntarjoajan avaimen tiedostossa `golden_key.env`.
 
 ## Mitä putki tekee
 
@@ -193,6 +194,9 @@ Sisältö:
   "kirja_llm_provider": "",
   "kirja_drafter_model": "",
   "kirja_filler_model": "",
+  "reacts_llm_provider": "",
+  "reacts_model": "",
+  "reacts_lang": "",
   "voices": {
     "katla": "",
     "vieno": "",
@@ -219,12 +223,15 @@ Sisältö:
 | `kirja_llm_provider` | string | Valinnainen palveluntarjoajan ohitus Kirjalle (`ksiega_niedomowien.py draft` / `fill`). Tyhjä = `llm_provider`. |
 | `kirja_drafter_model` | string | Malli komennolle `draft` (Kirjan luonnosten kirjoittaja API:n kautta). Tyhjä = palveluntarjoajan oletus tai `llm_model`, kun Kirja käyttää yleistä palveluntarjoajaa. |
 | `kirja_filler_model` | string | Malli komennolle `fill` (Kirjan sokea aukkojen täyttäjä). Sama varavaihtoehto kuin `kirja_drafter_model`. |
+| `reacts_llm_provider` | string | Valinnainen palveluntarjoajan ohitus `helsinki_reacts.py`:lle. Tyhjä = `llm_provider`. |
+| `reacts_model` | string | Malli `helsinki_reacts.py`:lle. Tyhjä = palveluntarjoajan oletus tai `llm_model`, kun Helsinki Reacts käyttää yleistä palveluntarjoajaa. |
+| `reacts_lang` | string | `helsinki_reacts.py`:n striimin kieli (`ui_lang`-koodi). Tyhjä = `ui_lang`. `fi` = striimi suomeksi; mikä tahansa muu = sen käännös suomenkielisin välihuudahduksin. |
 
 > **LLM-palveluntarjoajat ja avaimet.** Avain on sidottu yhteen palvelimeen, eikä sitä koskaan lähetetä muualle: `openai` → `OPENAI_API_KEY` → `api.openai.com`; `openrouter` → `OPENROUTER_API_KEY` → `openrouter.ai`; `openai_compat` → `LLM_COMPAT_API_KEY` → `llm_base_url`. Palveluntarjoaja valitaan erikseen eikä sitä koskaan päätellä osoitteesta, joten yhden skriptin ohjaaminen toiseen palveluun ei voi vuotaa ensimmäisen palvelun avainta eikä rikkoa toista skriptiä. Ennen v1.7.0:aa käytetty avain `kirja_filler_base_url` (se lähetti `OPENAI_API_KEY`-avaimen mihin tahansa osoitteeseen) hylätään siirto-ohjeen kanssa. OpenRouterissa mallitunnuksissa on toimittajan etuliite (`openai/gpt-4o`, `anthropic/claude-sonnet-5.5`), ja tilin yksityisyysasetuksilla voi sulkea pois toimittajat, jotka saattavat kouluttaa malleja kehotteillasi.
 
 > **Sentimenttianalyysi — CPU-kuorma.** Kun `enable_sentiment: true`, kappalekohtainen ajo on laskennallisesti raskas CPU:lla — suunnilleen verrattavissa paikallisen Whisper-puheentunnistuksen ajamiseen CPU:lla. Vanhemmilla tai lämmöllisesti rajoitetuilla koneilla tämä jatkuva kuorma voi todella rasittaa prosessoria; ota se käyttöön harkiten, mieluiten koneella jossa on GPU tai pelivaraa pitkäkestoiseen täyskuormatyöhön.
 
-> **`ui_lang` — lokalisoinnin laajuus.** Itsenäisten skriptien (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`) konsolituloste lokalisoidaan `ui_lang`-asetuksen kautta. Itse **notebookin stdout ei ole** lokalisoitu — se on kovakoodattu venäjäksi (vain teesien tiedostonimi seuraa tunnistettua korpuksen kieltä). Lukutila-artefakti `analysis_report.html` säilyttää notebookin venäjänkielisen kerronnan (sen juuri on `<html lang="ru">`); täysin `ui_lang`-lokalisoitu, käyttäjälle näkyvä artefakti on **`diagnostic_report.html`**, jonka tuottaa `generate_diagnostic.py`. Käännökset `fi` / `is` / `it` / `de` / `es` / `fr` ovat luonnoksia eivätkä tarkistettuja — ilmoita epätarkkuuksista GitHubissa.
+> **`ui_lang` — lokalisoinnin laajuus.** Itsenäisten skriptien (`generate_report.py`, `generate_md.py`, `generate_diagnostic.py`, `shamanic_pipeline.py`, `shamanic_ai.py`, `ksiega_niedomowien.py`, `helsinki_reacts.py`) konsolituloste lokalisoidaan `ui_lang`-asetuksen kautta. Itse **notebookin stdout ei ole** lokalisoitu — se on kovakoodattu venäjäksi (vain teesien tiedostonimi seuraa tunnistettua korpuksen kieltä). Lukutila-artefakti `analysis_report.html` säilyttää notebookin venäjänkielisen kerronnan (sen juuri on `<html lang="ru">`); täysin `ui_lang`-lokalisoitu, käyttäjälle näkyvä artefakti on **`diagnostic_report.html`**, jonka tuottaa `generate_diagnostic.py`. Käännökset `fi` / `is` / `it` / `de` / `es` / `fr` ovat luonnoksia eivätkä tarkistettuja — ilmoita epätarkkuuksista GitHubissa.
 
 > **Windows-polut ja regexit — tärkeää.** Asetussisältö on JSON, eikä JSONissa ole raw-string-syntaksia. Yksittäinen kenoviiva escapeaa seuraavan merkin (`\U`, `\d`, `\n` ovat erikoismerkkejä), joten Windows-polku kirjoitettuna `"C:\Users\marek\doc.pdf"` aiheuttaa JSON-jäsennysvirheen. Kaksi oikeaa tapaa kirjoittaa se:
 >
@@ -382,6 +389,29 @@ Skripti on deterministinen puolikas (suodattimet, lohkot, totuuden lähde, tarki
 
 > **Yksityisyys ja kustannukset.** Kolme tasoa vähiten dataa lähettävästä eniten lähettävään: `fill` lähettää vain merkinnän sumuisen tekstin (ei lähdettä); `draft` lähettää lähdelauseet sanatarkasti (`truth.sentences`) ja kertoo ennen kutsua, kuinka monta niitä on; skillin mukaan toimiva agentti lukee otteita lähteestä ja lähettää ne oman mallinsa palveluntarjoajalle — ja pilvi-istunnossa työskentelee tiedostojen pilvikopion päällä. Kaikki API-kutsut ovat maksullisia. Käytä niitä vain aineistoon, jonka voit jakaa näille palveluntarjoajille.
 
+### 8. Helsinki Reacts (valinnainen, vaatii LLM-API-avaimen)
+
+```bash
+python helsinki_reacts.py <project> [<project> …]
+# → export_results/_streams/<project>.md
+python helsinki_reacts.py notes.txt             # myös mikä tahansa tekstitiedosto käy
+python helsinki_reacts.py <project> --dry-run   # näytä, mitä lähetettäisiin, lähettämättä mitään
+python helsinki_reacts.py <project> --lang en   # striimin kieli tälle ajolle
+python helsinki_reacts.py <project> --kirja     # liitä kansion merkintä Sanomattomien kirjasta
+```
+
+Satiirinen striimikäsikirjoitus: helsinkiläinen striimaaja Valtteri reagoi chattinsa kanssa tallenteeseen, ja Lumi, kylmä puhesyntetisaattori, lukee lahjoitukset. Syötteenä on `export_results/`-kansion pelkkä nimi (sen `accessible_text.html`-tiedoston teksti ilman merkintäkieltä ja otsikoita) tai mikä tahansa tekstitiedosto; käsikirjoitus tallentuu tiedostoon `export_results/_streams/<nimi>.md`, ja saman nimen uusi ajo saa päätteen `_2`, `_3`.
+
+**Kehote on sinun.** Järjestelmäkehote ei ole koodissa: oletus `helsinki_reacts.example.md` on tarkoituksella niukka. Kopioi se tiedostoksi `helsinki_reacts.md` (se on `.gitignore`-tiedostossa ja otetaan käyttöön automaattisesti, kun se on olemassa) ja muuta mitä haluat, tai osoita mikä tahansa tiedosto valitsimella `--prompt`. Yksi sääntö enemmän tai vähemmän muuttaa striimiä paljon, joten vertaa muutamaa ajoa ennen kuin valitset version. Skripti lisää itse vain sen, minkä täytyy toimia kehotteesta riippumatta: tallenteen, tulostekielen ja — valitsimella `--kirja` — Sanomattomien kirjan lohkon.
+
+**Kieli.** `--lang`, sitten configin `reacts_lang`, sitten `ui_lang`. Suomi antaa itse striimin tavallisella suomella; mikä tahansa muu kieli antaa sen käännöksen, jossa lyhyet suomenkieliset välihuudahdukset jäävät kääntämättä.
+
+**Sanomattomien kirja (`--kirja`).** Kansiolle, jolla on merkintä tiedostossa `Sanomattomien_kirja.md`, chat saa merkinnän usvaisen tekstin ja sokean täyttäjän ohilaukaukset teorioiksi, joista kiistellä. Vastausavain ei koskaan päädy mallille, ja kiinteä sääntö estää Valtteria vertaamasta aukkoa tallenteeseen, koska aukot kätkevät saman tallenteen sanoja. Ilman merkintää striimi tehdään ilman kirjaa.
+
+Palveluntarjoaja ja malli: `reacts_llm_provider` / `reacts_model` (tyhjä = `llm_provider` / `llm_model`), jotka valitsimet `--provider` / `--model` ohittavat; ajattelun taso on oletuksena `low` (`--effort`). Valitsimen `--min-chars` (1500) arvoa lyhyempi vastaus hylätään kieltäytymisenä ja tulostetaan konsoliin.
+
+> **Yksityisyys ja kustannukset.** Jokaisen tallenteen koko teksti lähetetään määritetylle palveluntarjoajalle, ja se on maksullinen rajapinta; skripti kertoo tästä ennen ensimmäistä kutsua. Tulos on tekoälyn kirjoittamaa satiiria aineistosta: lue se ennen jakamista, varsinkin jos siinä mainitaan oikeita ihmisiä — mikään ei tarkista, mitä malli heistä väittää.
+
 ## Tuloste
 
 Jokainen analysoitu korpus saa oman alihakemistonsa kohdassa `export_results/`, nimettynä lähdetiedoston mukaan (polku ja pääte poistettuna) tai `domain_slug`:n mukaan URL-osoitteille. Sisäänrakennettu esimerkkikorpus käyttää `export_results/_default/`.
@@ -446,6 +476,9 @@ accessible_text_analyst/
 ├── shamanic_voice.py               # valinnainen: ElevenLabs-äänidispatcher (kertasuoritteinen)
 ├── shamanic_locale.py              # lokalisointipaketti shamanistiselle kerrokselle
 ├── ksiega_niedomowien.py           # valinnainen: Sanomattomien kirja (vain suomi)
+├── helsinki_reacts.py              # valinnainen: Helsinki Reacts -striimikäsikirjoitukset (LLM)
+├── helsinki_reacts.example.md      # Helsinki Reactsin oletuskehote (versionhallinnassa)
+├── helsinki_reacts.md              # oma kopiosi kehotteesta (gitignore)
 ├── skills/ksiega-niedomowien/SKILL.md  # agentin skill ksiega_niedomowien.py:lle
 ├── config.example.json             # asetusmalli, JSON-pääte (versioidaan)
 ├── config.example.ini              # asetusmalli, INI-pääte (versioidaan)
@@ -459,6 +492,7 @@ accessible_text_analyst/
 ├── release_notes.md                # release notes käänteisessä aikajärjestyksessä
 └── export_results/                 # analyysin tulokset (gitignored)
     ├── Sanomattomien_kirja.md      # Sanomattomien kirja, kasvaa merkintä kerrallaan
+    ├── _streams/                   # Helsinki Reacts -käsikirjoitukset
     └── <project_name>/
         ├── sentences.csv
         ├── paragraphs.csv
