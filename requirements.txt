@@ -29,6 +29,11 @@
 # Reżysera 19.20.0 żywe wywołania 6/6 (w tym OpenRouter i produkcyjna sonda Sami), więc
 # tu tylko zestaw testów wydania (240) z atrapą klienta; własnego żywego wywołania
 # nie było (decyzja maintainera 2026-11-17).
+# Upgrade 2026-11-20 (hold 2.1.0, pierwszy krok środowiska cyklu 2.1): numpy 2.5.5 —
+# run_all.py (komórki 0–39 z sentymentem, raport, shamanic_pipeline, scan Księgi) na
+# korpusie fińskim: 65 plików eksportu bajtowo identycznych z przebiegiem na 2.5.4
+# (docx: identyczne członki XML); `run_all.py --warnings-as-errors`: czysto (znany
+# TqdmWarning); pip check czysty.
 # Minimalny Python wynika z zależności: 3.12 (numpy 2.5).
 # Nowsze wydania sprawdza `python audyt_zaleznosci.py` (tylko ostrzega).
 # KANON ŚRODOWISKA (od 2026-11-12, bliźniak Reżysera 19.18): każda granica nosi
@@ -61,7 +66,7 @@ requests<2.35  # hold: 1.8.0
 
 # Analiza tekstu i NLP
 spacy<3.9  # hold: 1.13.0
-numpy<2.6  # hold: 1.8.0
+numpy<2.6  # hold: 2.1.0
 pandas<3.2  # hold: 1.13.0
 scikit-learn<1.10  # hold: 1.8.0
 tqdm<4.71  # hold: 1.8.0
