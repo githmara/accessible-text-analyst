@@ -7,6 +7,8 @@ __pycache__/
 export_results/
 config.json
 config.ini
+# własna kopia promptu Helsinki Reacts (domyślny: helsinki_reacts.example.md)
+helsinki_reacts.md
 *.env
 # automaty omorfi pobierane przez omorfi-download (opcjonalne wsparcie fińskiego)
 *.hfst

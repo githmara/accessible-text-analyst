@@ -85,6 +85,8 @@ jobs:
           python .github/scripts/test_glosowanie_ocr.py
           # Effort myślenia per provider i rola Księgi — atrapa klienta, zero sieci.
           python .github/scripts/test_llm_effort.py
+          # Helsinki Reacts: wybór promptu i języka, wejście, pomost z Księgą bez odpowiedzi klucza.
+          python .github/scripts/test_helsinki_reacts.py
           # Wspólny moduł z Reżyserem (bajt w bajt) — runner i wektory też wspólne, sam stdlib.
           python czyszczenie_tekstu_wektory.py
           # Drugi wspólny moduł (bajt w bajt): pismo tekstu i język cyrylicy z alfabetów.
