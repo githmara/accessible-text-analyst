@@ -34,6 +34,14 @@
 # korpusie fińskim: 65 plików eksportu bajtowo identycznych z przebiegiem na 2.5.4
 # (docx: identyczne członki XML); `run_all.py --warnings-as-errors`: czysto (znany
 # TqdmWarning); pip check czysty.
+# Upgrade 2026-11-20 (hold 2.1.0, wygasłe holdy po otwarciu cyklu): openai 3.57.0,
+# winrt-runtime 4.2.0 (projekcje winrt-Windows.* bez zmian, 10.0.28000) — OCR Windows:
+# sonda 5 obrazów × silniki en/fi/pl/ru, 413 słów, słowa i ramki identyczne z 4.1.0;
+# test_ocr_windows (14), test_glosowanie_ocr (27), test_llm_effort: OK; run_all.py:
+# 65 plików eksportu bajtowo identycznych (docx: członki XML); `run_all.py
+# --warnings-as-errors`: czysto (znany TqdmWarning). openai: żywe wywołania
+# llm_klient.chat_text (OpenRouter, anthropic/claude-sonnet-5.5, effort low) — 8
+# streamów Helsinki Reacts; json_schema tym razem NIE wywołany na żywo.
 # Minimalny Python wynika z zależności: 3.12 (numpy 2.5).
 # Nowsze wydania sprawdza `python audyt_zaleznosci.py` (tylko ostrzega).
 # KANON ŚRODOWISKA (od 2026-11-12, bliźniak Reżysera 19.18): każda granica nosi
@@ -92,7 +100,7 @@ tqdm<4.71  # hold: 1.8.0
 # Generowanie raportu
 markdown<3.12  # hold: 1.13.0
 markdownify<1.3  # hold: 1.8.0
-openai<3.53  # hold: 2.0.2
+openai<3.58  # hold: 2.1.0
 python-dotenv<1.3  # hold: 1.8.0
 
 # Opcjonalna analiza sentymentu (pożywka dla rytuału Vieno i lokalnego rytuału
@@ -128,7 +136,7 @@ python-dotenv<1.3  # hold: 1.8.0
 # OCR wbudowany w Windows 10/11 (ocr_windows.py, migracja 2026-11-13): projekcje
 # WinRT przez pywinrt, razem poniżej 1 MB — silniki języków instaluje sam Windows
 # (Ustawienia > Język). Tylko Windows; odkomentuj wszystkie sześć linii naraz.
-# winrt-runtime<4.2  # hold: 2.0.0
+# winrt-runtime<4.3  # hold: 2.1.0
 # winrt-Windows.Media.Ocr<4!10.0.28001  # hold: 2.0.0
 # winrt-Windows.Graphics.Imaging<4!10.0.28001  # hold: 2.0.0
 # winrt-Windows.Storage.Streams<4!10.0.28001  # hold: 2.0.0
