@@ -1,7 +1,8 @@
 """helsinki_reacts.py — satirical stream script: Valtteri from Helsinki reacts to a recording.
 
-Input: an export folder name (`export_results/<name>/accessible_text.html`, text without
-markup and headings) or any text file. Output: `export_results/_streams/<name>.md`.
+Input: an export folder (a bare name from `export_results/` or a path to the folder; the
+text of its `accessible_text.html` without markup and without ATA's own heading) or any
+text file. Output: `export_results/_streams/<name>.md`.
 
 The system prompt lives OUTSIDE the code, because it is where the user decides what the
 stream is like: `helsinki_reacts.md` (the user's copy, gitignored) wins over the shipped
@@ -13,8 +14,11 @@ Stream language: `--lang` > config `reacts_lang` > `ui_lang`. Finnish = the stre
 in plain Finnish; any other language = its translation with Finnish interjections.
 
 Provider: llm_klient, `reacts_llm_provider` / `reacts_model` (empty = the global ones);
-`--provider` / `--model` override both. Paid API: the text of every recording leaves the
-machine, and the script says so before the first call.
+`--provider` / `--model` override both. Thinking effort: `medium` where the thinking comes
+back readable (Claude via OpenRouter), `low` elsewhere, unless `--effort` says otherwise.
+Paid API: the text of every recording leaves the machine, and the script says so before
+the first call. Everything is read and checked BEFORE that call, so a broken input costs
+nothing.
 """
 
 import argparse
@@ -22,10 +26,12 @@ import html.parser
 import json
 import re
 import sys
+import unicodedata
+from dataclasses import dataclass
 from pathlib import Path
 
 import llm_klient
-from shamanic_locale import LANGUAGE_NAMES, get_ui_lang, t
+from shamanic_locale import LANGUAGE_NAMES, t
 
 ROOT = Path(__file__).resolve().parent
 EXPORT_DIR = ROOT / "export_results"
@@ -38,11 +44,12 @@ KIRJA_TYOTILA = EXPORT_DIR / "_kirja_tyotila"
 HTML_NAME = "accessible_text.html"
 GAP = "— … —"
 
-UI_LANG = get_ui_lang()
-DEFAULT_EFFORT = "low"
+EFFORTS = ("low", "medium", "high")
 TEMPERATURE = 1.0
 # A full stream is several thousand characters; a refusal is a few dozen.
 DEFAULT_MIN_CHARS = 1500
+# A theory sharing a word stem this long with a hidden answer is withheld (audit 2.1.0, #1).
+STEM = 5
 
 _HTML_COMMENT = re.compile("<!--.*?-->", re.S)
 
@@ -66,7 +73,7 @@ LANGUAGE_TRANSLATED = (
 # (measured 2026-11-20: without this rule Valtteri filled gaps from the recording).
 KIRJA_RULES = """THE BOOK OF THE UNSAID
 Below the recording there is an entry from "Sanomattomien kirja" (The Book of the Unsaid). In the stream it is an anonymous diary "from the far North" circulating on the Finnish internet: KATLA, an automated warning system, reads root words, and VIENO weaves a misty text around them. The places marked "— … —(n)" are unsaid on purpose. The entry is about the same drama as the recording, and part of the chat knows it.
-- The entry is material for the CHAT, not for Valtteri. Viewers bring it to the stream: they quote short fragments (the gaps stay "— … —"), link them to the recording and argue about what the images mean. Two or three fragments in the whole stream are enough.
+- The entry is material for the CHAT, not for Valtteri. Viewers bring it to the stream: they quote short fragments (the gaps stay "— … —"), link them to the recording and argue about what the images mean. Two or three fragments in the whole stream are enough. Fragments are quoted in the language of the script; a short Finnish original next to the translation is allowed.
 - "Chat theories" are words someone once used to fill the gaps. Viewers present them as certainties and argue about them. They are only theories.
 - Valtteri does not know the diary until the chat brings it. He may laugh at a theory or find it interesting, but he never says which word hides in a gap: the diary stays unsaid.
 - The gaps hide words that really occur in the recording, so Valtteri does NOT compare a gap with the recording. Answering a theory, he gives no concrete detail from the recording (a name, number, date, place) as fitting the gap, does not list candidates and never says the recording answers it. He may judge only the mood and the image of a theory. He talks about facts of the recording when he discusses the recording, not in reply to a fragment of the diary.
@@ -75,7 +82,50 @@ Below the recording there is an entry from "Sanomattomien kirja" (The Book of th
 
 
 # ==========================================
-# Prompt
+# Configuration (one place: the repo root, like read_config of the Book)
+# ==========================================
+
+def _load_json(path, warn_lang=None):
+    """Dict from a JSON file. Missing file -> {}. Unreadable or not a dict -> {} plus a
+    warning (when warn_lang is given), so a broken file is never mistaken for an empty one."""
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        data = None
+    if isinstance(data, dict):
+        return data
+    if warn_lang:
+        print(t(warn_lang, "reacts.warn_json_invalid", path=path), file=sys.stderr)
+    return {}
+
+
+def _config_path():
+    for name in ("config.json", "config.ini"):
+        p = ROOT / name
+        if p.is_file():
+            return p
+    return None
+
+
+def read_config(warn_lang=None):
+    path = _config_path()
+    return _load_json(path, warn_lang) if path else {}
+
+
+def _ui_lang_of(cfg):
+    code = str(cfg.get("ui_lang") or "").strip().lower()
+    return code if code in LANGUAGE_NAMES else "en"
+
+
+# The console follows ui_lang from the SAME config the tool reads (audit 2.1.0, #8): reading
+# it from the working directory made the console and the stream language differ.
+UI_LANG = _ui_lang_of(read_config())
+
+
+# ==========================================
+# Prompt and language
 # ==========================================
 
 def prompt_path(explicit):
@@ -86,13 +136,15 @@ def prompt_path(explicit):
 
 
 def load_prompt(path):
-    """Prompt text without HTML comments; None when the file is missing or empty."""
+    """(prompt text without HTML comments, error key or None)."""
     try:
         text = path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        return None, "reacts.err_prompt_encoding"
     except OSError:
-        return None
+        return None, "reacts.err_prompt"
     text = _HTML_COMMENT.sub("", text).strip()
-    return text or None
+    return (text, None) if text else (None, "reacts.err_prompt")
 
 
 def stream_language(cli_lang, cfg):
@@ -107,58 +159,113 @@ def language_block(code):
     return LANGUAGE_TRANSLATED.format(language=LANGUAGE_NAMES[code])
 
 
+def effort_for(settings, cli_effort):
+    """--effort, otherwise medium where the thinking is readable and low elsewhere.
+
+    A rule-heavy creative task needs some thinking; llm_klient forces anything above low
+    down to low on models whose thinking cannot be read (paid and never seen), so the
+    automatic choice asks for medium only where it is actually sent.
+    """
+    if cli_effort:
+        return cli_effort
+    return "medium" if llm_klient.reads_thinking(settings) else "low"
+
+
 # ==========================================
 # Input: export folder or file
 # ==========================================
 
 class _HtmlText(html.parser.HTMLParser):
-    """Paragraph text of accessible_text.html, without <title> and headings."""
+    """Text of an HTML file, one paragraph per block element.
 
-    SKIP = {"title", "h1", "h2", "h3", "h4", "h5", "h6", "script", "style"}
-    BLOCKS = {"p", "li", "div", "br"}
+    `skip_heading=True` (ATA's own accessible_text.html) drops its <h1>, which is the
+    export's title, not the recording; any other HTML keeps its headings (audit 2.1.0, #7).
+    """
 
-    def __init__(self):
+    SKIP = {"title", "script", "style"}
+    BLOCKS = {"p", "li", "div", "br", "tr", "table", "ul", "ol", "section", "article",
+              "blockquote", "header", "footer", "pre", "h1", "h2", "h3", "h4", "h5", "h6"}
+    CELLS = {"td", "th"}
+
+    def __init__(self, skip_heading):
         super().__init__(convert_charrefs=True)
         self.parts = []
         self.skip = 0
+        self.pre = 0
+        if skip_heading:
+            self.SKIP = self.SKIP | {"h1"}
 
     def handle_starttag(self, tag, attrs):
         if tag in self.SKIP:
             self.skip += 1
         elif tag in self.BLOCKS:
             self.parts.append("\n\n")
+            self.pre += tag == "pre"
+        elif tag in self.CELLS:
+            self.parts.append(" ")
 
     def handle_endtag(self, tag):
         if tag in self.SKIP:
             self.skip = max(0, self.skip - 1)
         elif tag in self.BLOCKS:
             self.parts.append("\n\n")
+            if tag == "pre":
+                self.pre = max(0, self.pre - 1)
+        elif tag in self.CELLS:
+            self.parts.append(" ")
 
     def handle_data(self, data):
         if not self.skip:
-            self.parts.append(data)
+            self.parts.append(data.replace("\n", "\n\n") if self.pre else data)
 
 
 def html_to_text(path):
-    parser = _HtmlText()
+    parser = _HtmlText(skip_heading=path.name == HTML_NAME)
     parser.feed(path.read_text(encoding="utf-8-sig"))
     paragraphs = (" ".join(p.split()) for p in "".join(parser.parts).split("\n\n"))
     return "\n\n".join(p for p in paragraphs if p)
 
 
-def resolve_source(arg):
-    """(source path, name, export folder name or None), or None when nothing matches.
+@dataclass
+class Source:
+    path: Path
+    name: str
+    folder: str | None
+    shadows_folder: bool = False
+    text: str = ""
 
-    An existing file wins, so a plain .txt keeps working. Otherwise a bare folder name
-    in export_results/ with accessible_text.html.
-    """
+
+def _nfc(s):
+    return unicodedata.normalize("NFC", s)
+
+
+def _export_folder(arg):
+    """Real export folder for a bare name, matched without case (Windows paths are
+    case-insensitive, but the Book is keyed by the real name — audit 2.1.0, #4)."""
+    if not EXPORT_DIR.is_dir():
+        return None
+    wanted = _nfc(arg).casefold()
+    for d in EXPORT_DIR.iterdir():
+        if d.is_dir() and _nfc(d.name).casefold() == wanted and (d / HTML_NAME).is_file():
+            return d
+    return None
+
+
+def resolve_source(arg):
+    """Source or None. Order: an existing file, a folder path with accessible_text.html,
+    a bare export folder name (audit 2.1.0, #6)."""
     path = Path(arg)
     if path.is_file():
-        folder = path.parent.name if path.name == HTML_NAME else None
-        return path, folder or path.stem, folder
-    folder_dir = EXPORT_DIR / arg
-    if folder_dir.is_dir() and (folder_dir / HTML_NAME).is_file():
-        return folder_dir / HTML_NAME, folder_dir.name, folder_dir.name
+        real = path.resolve()
+        folder = real.parent.name if real.name == HTML_NAME else None
+        shadows = folder is None and _export_folder(arg) is not None
+        return Source(path, folder or path.stem, folder, shadows)
+    if path.is_dir() and (path / HTML_NAME).is_file():
+        real = path.resolve()
+        return Source(real / HTML_NAME, real.name, real.name)
+    folder_dir = _export_folder(arg)
+    if folder_dir is not None:
+        return Source(folder_dir / HTML_NAME, folder_dir.name, folder_dir.name)
     return None
 
 
@@ -176,14 +283,6 @@ def title_from_name(name):
 # ==========================================
 # Book of the Unsaid bridge (--kirja)
 # ==========================================
-
-def _load_json(path):
-    try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
-
 
 def _strip_audio_tags(line):
     """Drops ElevenLabs audio tags ([whispers] etc.) from the start of a fragment."""
@@ -222,37 +321,59 @@ def parse_kirja_entries(text):
     return entries
 
 
+def _stems(text):
+    """Word stems (first STEM letters, casefolded) of the words with 3+ letters."""
+    words = "".join(c if c.isalnum() else " " for c in str(text).casefold()).split()
+    return {w[:STEM] for w in words if len(w) >= 3}
+
+
 def kirja_bridge(folder):
     """(text for the model, entries, theories) for one export folder.
 
-    Gaps in the Book text appear in the order of the OPEN gap numbers of the key
-    (gaps removed as obvious are already written into the text). Missed blind guesses
-    come from `_kirja_tyotila/<id>/guesses.json`. The answers of the key never leave
-    this function: only the gap NUMBERS are read from it.
+    Gaps in the Book text appear in the order of the OPEN gap numbers of the key (gaps
+    removed as obvious are already written into the text). Missed blind guesses come from
+    `_kirja_tyotila/<id>/guesses.json`. The answers of the key never leave this function:
+    they are read only to withhold a theory that shares a word stem with any hidden answer
+    of the entry — a near miss would point at the answer (audit 2.1.0, #1). Gap numbers
+    run on across the entries of one folder, so every "(n)" is unique in the message.
     """
     if not folder or not KIRJA.is_file():
         return "", 0, 0
-    avain = _load_json(KIRJA_AVAIN)
-    blocks, theories_total = [], 0
+    avain = _load_json(KIRJA_AVAIN, UI_LANG)
+    blocks, theories_total, k = [], 0, 0
     for entry in parse_kirja_entries(KIRJA.read_text(encoding="utf-8-sig")):
-        if entry["folder"] != folder:
+        if _nfc(entry["folder"]) != _nfc(folder):
             continue
-        open_gaps = sorted((avain.get(entry["id"], {}).get("open") or {}), key=int)
-        guesses = _load_json(KIRJA_TYOTILA / entry["id"] / "guesses.json").get("guesses") or {}
+        key = avain.get(entry["id"])
+        open_map = key.get("open") if isinstance(key, dict) else None
+        valid_key = isinstance(open_map, dict) and all(str(g).isdigit() for g in open_map)
+        guesses_path = KIRJA_TYOTILA / entry["id"] / "guesses.json"
+        guesses = _load_json(guesses_path, UI_LANG).get("guesses") or {}
+        if not isinstance(guesses, dict):
+            print(t(UI_LANG, "reacts.warn_json_invalid", path=guesses_path), file=sys.stderr)
+            guesses = {}
         body = "\n".join(entry["fragments"])
-        theories = []
-        if body.count(GAP) == len(open_gaps):
+        theories, withheld = [], 0
+        if not valid_key:
+            print(t(UI_LANG, "reacts.warn_kirja_key_invalid", id=entry["id"]), file=sys.stderr)
+        elif body.count(GAP) != len(open_map):
+            print(t(UI_LANG, "reacts.warn_kirja_mismatch", id=entry["id"],
+                    gaps=body.count(GAP), keys=len(open_map)), file=sys.stderr)
+        else:
+            answer_stems = set().union(*(_stems(a) for a in open_map.values()))
             pieces = body.split(GAP)
             out = [pieces[0]]
-            for k, (gap_no, piece) in enumerate(zip(open_gaps, pieces[1:]), start=1):
+            for gap_no, piece in zip(sorted(open_map, key=int), pieces[1:]):
+                k += 1
                 out += [f"{GAP}({k})", piece]
                 guess = str(guesses.get(gap_no) or "").strip()
-                if guess:
+                if guess and _stems(guess) & answer_stems:
+                    withheld += 1
+                elif guess:
                     theories.append(f"({k}) {guess}")
             body = "".join(out)
-        else:
-            print(t(UI_LANG, "reacts.warn_kirja_mismatch", id=entry["id"],
-                    gaps=body.count(GAP), keys=len(open_gaps)), file=sys.stderr)
+        if withheld:
+            print(t(UI_LANG, "reacts.warn_theories_withheld", id=entry["id"], count=withheld))
         block = [f"KATLA: {entry['katla']}", "VIENO:", body]
         if theories:
             block += ["Chat theories:"] + theories
@@ -263,12 +384,11 @@ def kirja_bridge(folder):
 
 def build_user_message(source, lang_code, use_kirja):
     """(message, entries, theories). Data first, then the tool's own instructions."""
-    path, name, folder = source
-    parts = [f"Recording title: {title_from_name(name)}",
-             f"Recording text:\n<<<\n{read_source(path)}\n>>>"]
+    parts = [f"Recording title: {title_from_name(source.name)}",
+             f"Recording text:\n<<<\n{source.text}\n>>>"]
     entries = theories = 0
     if use_kirja:
-        bridge, entries, theories = kirja_bridge(folder)
+        bridge, entries, theories = kirja_bridge(source.folder)
         if bridge:
             parts.append(f"Entry from Sanomattomien kirja:\n<<<\n{bridge}\n>>>")
             parts.append(KIRJA_RULES)
@@ -277,40 +397,49 @@ def build_user_message(source, lang_code, use_kirja):
 
 
 # ==========================================
-# Model call
+# Output and model call
 # ==========================================
 
-def read_config():
-    for name in ("config.json", "config.ini"):
-        p = ROOT / name
-        if p.is_file():
-            return _load_json(p)
-    return {}
+def write_unique(name, content, suffix=""):
+    """Writes `_streams/<name><suffix>.md`, or `_2`, `_3`… when taken.
+
+    The file is created exclusively, so two parallel runs never pick the same name and
+    overwrite a paid result (audit 2.1.0, #9); CRLF from the model is normalised (#10).
+    """
+    STREAMS_DIR.mkdir(parents=True, exist_ok=True)
+    content = content.replace("\r\n", "\n").rstrip("\n") + "\n"
+    counter = 1
+    while True:
+        tail = f"_{counter}" if counter > 1 else ""
+        path = STREAMS_DIR / f"{name}{tail}{suffix}.md"
+        try:
+            with open(path, "x", encoding="utf-8", newline="\n") as f:
+                f.write(content)
+            return path
+        except FileExistsError:
+            counter += 1
 
 
-def unique_output_path(name):
-    path = STREAMS_DIR / f"{name}.md"
-    counter = 2
-    while path.exists():
-        path = STREAMS_DIR / f"{name}_{counter}.md"
-        counter += 1
-    return path
+def _rel(path):
+    try:
+        return path.relative_to(ROOT)
+    except ValueError:
+        return path
 
 
-def process(source, system_prompt, llm, args, lang_code):
+def process(source, system_prompt, llm, args, lang_code, effort):
     """True when the stream was saved."""
     settings, client = llm
     message, entries, theories = build_user_message(source, lang_code, args.kirja)
-    name = source[1]
     kirja = t(UI_LANG, "reacts.kirja_info", entries=entries, theories=theories) if entries else ""
-    print(t(UI_LANG, "reacts.processing", name=name, provider=settings.provider,
+    print(t(UI_LANG, "reacts.processing", name=source.name, provider=settings.provider,
             model=settings.model, kirja=kirja))
     if args.kirja and not entries:
-        print(t(UI_LANG, "reacts.info_no_kirja", name=name))
+        print(t(UI_LANG, "reacts.info_no_kirja", name=source.name))
     resp = llm_klient.chat_text(
         client, settings,
         [{"role": "system", "content": system_prompt}, {"role": "user", "content": message}],
-        TEMPERATURE, UI_LANG, effort=args.effort)
+        TEMPERATURE, UI_LANG, effort=effort)
 
     choice = resp.choices[0] if getattr(resp, "choices", None) else None
     msg = getattr(choice, "message", None)
@@ -319,20 +448,42 @@ def process(source, system_prompt, llm, args, lang_code):
     usage = getattr(resp, "usage", None)
 
     if len(content) < args.min_chars:
+        # A rejected reply was paid for: keep it in a file instead of only on the console
+        # (audit 2.1.0, #12) — copying a long reply out of a console is hard with a screen reader.
+        kept = write_unique(source.name, content or t(UI_LANG, "reacts.empty_reply"), ".rejected")
         print(t(UI_LANG, "reacts.err_rejected", chars=len(content), min=args.min_chars,
-                finish=finish), file=sys.stderr)
-        print(content or t(UI_LANG, "reacts.empty_reply"), file=sys.stderr)
+                finish=finish, path=_rel(kept)), file=sys.stderr)
         return False
     if finish == "length":
         print(t(UI_LANG, "reacts.warn_truncated"), file=sys.stderr)
 
-    STREAMS_DIR.mkdir(parents=True, exist_ok=True)
-    out = unique_output_path(name)
-    out.write_text(content + "\n", encoding="utf-8")
-    print(t(UI_LANG, "reacts.ok_saved", path=out.relative_to(ROOT), chars=len(content),
+    out = write_unique(source.name, content)
+    print(t(UI_LANG, "reacts.ok_saved", path=_rel(out), chars=len(content),
             prompt_tokens=getattr(usage, "prompt_tokens", None),
             completion_tokens=getattr(usage, "completion_tokens", None)))
     return True
+
+
+def _read_all(sources):
+    """Reads every source before any paid call; False when one of them is unusable."""
+    ok = True
+    for source in sources:
+        if source.shadows_folder:
+            print(t(UI_LANG, "reacts.info_file_shadows", name=source.name))
+        try:
+            source.text = read_source(source.path)
+        except UnicodeDecodeError:
+            print(t(UI_LANG, "reacts.err_source_encoding", name=source.path))
+            ok = False
+            continue
+        except OSError as error:
+            print(t(UI_LANG, "reacts.err_call", name=source.path, error=error))
+            ok = False
+            continue
+        if not source.text.strip():
+            print(t(UI_LANG, "reacts.err_empty_source", name=source.path))
+            ok = False
+    return ok
 
 
 def main(argv=None):
@@ -347,14 +498,13 @@ def main(argv=None):
     parser.add_argument("--kirja", action="store_true", help=t(UI_LANG, "reacts.help_kirja"))
     parser.add_argument("--provider", help=t(UI_LANG, "reacts.help_provider"))
     parser.add_argument("--model", help=t(UI_LANG, "reacts.help_model"))
-    parser.add_argument("--effort", default=DEFAULT_EFFORT,
-                        help=t(UI_LANG, "reacts.help_effort", default=DEFAULT_EFFORT))
+    parser.add_argument("--effort", choices=EFFORTS, help=t(UI_LANG, "reacts.help_effort"))
     parser.add_argument("--min-chars", type=int, default=DEFAULT_MIN_CHARS,
                         help=t(UI_LANG, "reacts.help_min_chars", default=DEFAULT_MIN_CHARS))
     parser.add_argument("--dry-run", action="store_true", help=t(UI_LANG, "reacts.help_dry_run"))
     args = parser.parse_args(argv)
 
-    cfg = read_config()
+    cfg = read_config(UI_LANG)
     lang_code = stream_language(args.lang, cfg)
     if lang_code is None:
         print(t(UI_LANG, "reacts.err_lang", code=args.lang or cfg.get("reacts_lang"),
@@ -373,9 +523,11 @@ def main(argv=None):
         return 1
 
     path = prompt_path(args.prompt)
-    system_prompt = load_prompt(path)
+    system_prompt, error_key = load_prompt(path)
     if system_prompt is None:
-        print(t(UI_LANG, "reacts.err_prompt", path=path))
+        print(t(UI_LANG, error_key, path=path))
+        return 1
+    if not _read_all(resolved):
         return 1
     print(t(UI_LANG, "reacts.info_prompt", path=path))
     print(t(UI_LANG, "reacts.info_lang", language=LANGUAGE_NAMES[lang_code]))
@@ -384,7 +536,7 @@ def main(argv=None):
         for source in resolved:
             message, entries, theories = build_user_message(source, lang_code, args.kirja)
             print(message)
-            print(t(UI_LANG, "reacts.dry_summary", name=source[1], chars=len(message),
+            print(t(UI_LANG, "reacts.dry_summary", name=source.name, chars=len(message),
                     entries=entries, theories=theories))
         return 0
 
@@ -396,6 +548,7 @@ def main(argv=None):
     except llm_klient.LLMConfigError as error:
         print(error)
         return 1
+    effort = effort_for(settings, args.effort)
     print(t(UI_LANG, "llm.info_provider", provider=settings.provider, model=settings.model,
             endpoint=settings.endpoint))
     print(t(UI_LANG, "reacts.info_privacy", count=len(resolved), endpoint=settings.endpoint))
@@ -403,10 +556,10 @@ def main(argv=None):
     saved = 0
     for source in resolved:
         try:
-            if process(source, system_prompt, llm, args, lang_code):
+            if process(source, system_prompt, llm, args, lang_code, effort):
                 saved += 1
         except Exception as error:  # one failed recording does not stop the others
-            print(t(UI_LANG, "reacts.err_call", name=source[1], error=error), file=sys.stderr)
+            print(t(UI_LANG, "reacts.err_call", name=source.name, error=error), file=sys.stderr)
     print(t(UI_LANG, "reacts.done", ok=saved, total=len(resolved)))
     return 0 if saved == len(resolved) else 1
 

@@ -18,7 +18,7 @@ Fjöltyngd NLP-leiðsla hönnuð með **aðgengi fyrir skjálesara** í huga (NV
 - `shamanic_voice.py` *(valfrjálst, krefst ElevenLabs)* — sjálfstæður afgreiðari sem keyrir einu sinni og myndgerir frásagnargripina fjóra sem `shamanic_ai.py` bjó til í `.mp3`-hljóð gegnum ElevenLabs API-ið, skráir hvern árangur/villu í skelina og hættir svo (enginn botni, enginn þjónn). Þarf `ELEVENLABS_API_KEY` í `golden_key.env` og `voices`-vörpun í stillingunum.
 - `shamanic_locale.py` — staðfærsluböggull fyrir bæði shamanísku forritin (sniðmát, hausa og fallback-strengi Lumi á öllum níu tungumálum).
 - `ksiega_niedomowien.py` *(valfrjálst, aðeins finnska, með aðstoð gervigreindarþjóns)* — Bók hins ósagða (*Sanomattomien kirja*): breytir `raw_roots_chant.txt` í dulkóðaða dagbók sem vex smám saman, með eyðum sem blint líkan gat ekki giskað á. Þetta er ákveðinn (deterministic) hjálpari fyrir hæfnina í `skills/ksiega-niedomowien/SKILL.md`; skelúttakið fylgir `ui_lang`.
-- `helsinki_reacts.py` *(valfrjálst, með LLM)* — háðskt handrit að streymi: Valtteri frá Helsinki bregst ásamt finnsku spjalli við upptöku (útflutningsmöppu eða textaskrá). Kerfisfyrirmælin eru utan kóðans (`helsinki_reacts.example.md`, eigið eintak í `helsinki_reacts.md`) og tungumál streymisins fylgir `ui_lang`. Krefst lykils valinnar þjónustu í `golden_key.env`.
+- `helsinki_reacts.py` *(valfrjálst, með LLM)* — háðskt handrit að streymi: Valtteri frá Helsinki bregst ásamt finnsku spjalli við upptöku (útflutningsmöppu eða textaskrá). Kerfisfyrirmælin eru utan kóðans (`helsinki_reacts.example.md`, eigið eintak í `helsinki_reacts.md`) og tungumál streymisins fylgir `reacts_lang`, svo `ui_lang`. Krefst lykils valinnar þjónustu í `golden_key.env`.
 
 ## Hvað gerir leiðslan
 
@@ -408,7 +408,7 @@ Háðskt handrit að streymi: Valtteri, streymari frá Helsinki, bregst ásamt s
 
 **Bók hins ósagða (`--kirja`).** Fyrir möppu með færslu í `Sanomattomien_kirja.md` fær spjallið þokukenndan texta færslunnar og misheppnaðar ágiskanir blinda útfyllandans sem kenningar til að rífast um. Svarlykillinn nær aldrei til líkansins, og föst regla bannar Valtteri að bera eyðu saman við upptökuna, því eyðurnar fela orð úr sömu upptöku. Án færslu verður streymið til án Bókarinnar.
 
-Þjónusta og líkan: `reacts_llm_provider` / `reacts_model` (tómt = `llm_provider` / `llm_model`), sem `--provider` / `--model` ganga framar; hugsunarátak er sjálfgefið `low` (`--effort`). Svari styttra en `--min-chars` (1500) er hafnað sem neitun og það prentað í stjórnborðið.
+Þjónusta og líkan: `reacts_llm_provider` / `reacts_model` (tómt = `llm_provider` / `llm_model`), sem `--provider` / `--model` ganga framar. Hugsunarátak: `medium` þar sem hugsunin kemur læsileg til baka (Claude um OpenRouter), annars `low`; `--effort low|medium|high` gengur framar. Allt inntak er lesið fyrir fyrsta kall, svo tóm skrá eða skrá sem er ekki UTF-8 stöðvar keyrsluna án kostnaðar. Svari styttra en `--min-chars` (1500) er hafnað sem neitun og það geymt í `_streams/<heiti>.rejected.md`.
 
 > **Friðhelgi og kostnaður.** Allur texti hverrar upptöku fer til stilltrar þjónustu, sem er greidd; skriftan segir frá því fyrir fyrsta kall. Niðurstaðan er háð um efnið, skrifað af gervigreind: lestu það áður en þú deilir því, sérstaklega ef raunverulegt fólk er nefnt — ekkert kannar hvað líkanið eignar því.
 

@@ -18,7 +18,7 @@ Wielojęzyczny potok NLP zaprojektowany z myślą o **dostępności dla czytnik�
 - `shamanic_voice.py` *(opcjonalny, wymaga ElevenLabs)* — samodzielny skrypt jednorazowy, który syntetyzuje cztery artefakty narracyjne wytworzone przez `shamanic_ai.py` do plików audio `.mp3` przez API ElevenLabs, loguje każdy sukces/błąd do konsoli i kończy działanie (bez bota, bez serwera). Wymaga `ELEVENLABS_API_KEY` w `golden_key.env` oraz mapowania `voices` w konfiguracji.
 - `shamanic_locale.py` — pakiet lokalizacyjny dla obu skryptów szamańskich (szablony, nagłówki i fallbacki Lumi we wszystkich dziewięciu językach).
 - `ksiega_niedomowien.py` *(opcjonalny, tylko fiński, z udziałem agenta)* — Księga Niedomówień (*Sanomattomien kirja*): zamienia `raw_roots_chant.txt` w przyrostowo rosnący kryptograficzny dziennik z lukami, których ślepy model nie zdołał odgadnąć. To deterministyczny pomocnik skilla z `skills/ksiega-niedomowien/SKILL.md`; komunikaty konsoli podążają za `ui_lang`.
-- `helsinki_reacts.py` *(opcjonalnie, z LLM)* — satyryczny scenariusz streamu: Valtteri z Helsinek reaguje razem z fińskim czatem na nagranie (folder eksportu albo plik tekstowy). Prompt systemowy leży poza kodem (`helsinki_reacts.example.md`, własna kopia w `helsinki_reacts.md`), a język streama idzie za `ui_lang`. Wymaga klucza wybranego providera w `golden_key.env`.
+- `helsinki_reacts.py` *(opcjonalnie, z LLM)* — satyryczny scenariusz streamu: Valtteri z Helsinek reaguje razem z fińskim czatem na nagranie (folder eksportu albo plik tekstowy). Prompt systemowy leży poza kodem (`helsinki_reacts.example.md`, własna kopia w `helsinki_reacts.md`), a język streama idzie za `reacts_lang`, potem `ui_lang`. Wymaga klucza wybranego providera w `golden_key.env`.
 
 ## Co robi potok
 
@@ -408,7 +408,7 @@ Satyryczny scenariusz streamu: Valtteri, streamer z Helsinek, reaguje razem ze s
 
 **Księga Niedomówień (`--kirja`).** Dla folderu z wpisem w `Sanomattomien_kirja.md` czat dostaje mglisty tekst wpisu i chybione odpowiedzi ślepego wypełniacza jako teorie do kłótni. Klucz odpowiedzi nigdy nie trafia do modelu, a stała reguła nie pozwala Valtteriemu zestawiać luki z nagraniem, bo luki kryją słowa z tego samego nagrania. Bez wpisu stream powstaje bez Księgi.
 
-Provider i model: `reacts_llm_provider` / `reacts_model` (puste = `llm_provider` / `llm_model`), nadpisywane przez `--provider` / `--model`; effort myślenia domyślnie `low` (`--effort`). Odpowiedź krótsza niż `--min-chars` (1500) jest odrzucana jako odmowa i wypisywana w konsoli.
+Provider i model: `reacts_llm_provider` / `reacts_model` (puste = `llm_provider` / `llm_model`), nadpisywane przez `--provider` / `--model`. Effort myślenia: `medium` tam, gdzie myślenie wraca czytelne (Claude przez OpenRouter), gdzie indziej `low`; nadpisuje go `--effort low|medium|high`. Każde wejście jest czytane przed pierwszym wywołaniem, więc pusty plik albo plik spoza UTF-8 zatrzymuje przebieg bez kosztu. Odpowiedź krótsza niż `--min-chars` (1500) jest odrzucana jako odmowa i zachowywana w `_streams/<nazwa>.rejected.md`.
 
 > **Prywatność i koszt.** Cały tekst każdego nagrania trafia do skonfigurowanego providera, a to płatne API; skrypt mówi o tym przed pierwszym wywołaniem. Wynik to satyra o materiale napisana przez AI: przeczytaj ją przed udostępnieniem, zwłaszcza gdy wymienia prawdziwe osoby — nic nie sprawdza, co model im przypisuje.
 

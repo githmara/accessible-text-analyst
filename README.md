@@ -18,7 +18,7 @@ A multilingual NLP pipeline designed for **accessibility with screen readers** (
 - `shamanic_voice.py` *(optional, requires ElevenLabs)* — a standalone, run-once dispatcher that synthesizes the four narrative artefacts produced by `shamanic_ai.py` into `.mp3` audio via the ElevenLabs API, logs each success/failure to the console, and exits (no bot, no server). Needs `ELEVENLABS_API_KEY` in `golden_key.env` and a `voices` mapping in the config.
 - `shamanic_locale.py` — the localization bundle for both shamanic scripts (templates, headers, and Lumi's fallback strings in all nine supported languages).
 - `ksiega_niedomowien.py` *(optional, Finnish only, agent-assisted)* — the Book of the Unsaid (*Sanomattomien kirja*): turns `raw_roots_chant.txt` into an incrementally growing cryptic diary whose gaps a blind model could not guess. It is the deterministic helper for the skill in `skills/ksiega-niedomowien/SKILL.md`; its console output follows `ui_lang`.
-- `helsinki_reacts.py` *(optional, LLM-driven)* — a satirical stream script: Valtteri from Helsinki reacts with a Finnish chat to a recording (an export folder or a text file). The system prompt lives outside the code (`helsinki_reacts.example.md`, your own copy in `helsinki_reacts.md`), and the stream language follows `ui_lang`. Requires the chosen provider's key in `golden_key.env`.
+- `helsinki_reacts.py` *(optional, LLM-driven)* — a satirical stream script: Valtteri from Helsinki reacts with a Finnish chat to a recording (an export folder or a text file). The system prompt lives outside the code (`helsinki_reacts.example.md`, your own copy in `helsinki_reacts.md`), and the stream language follows `reacts_lang`, then `ui_lang`. Requires the chosen provider's key in `golden_key.env`.
 
 ## What the pipeline does
 
@@ -408,7 +408,7 @@ A satirical stream script: Valtteri, a streamer from Helsinki, reacts to a recor
 
 **The Book of the Unsaid (`--kirja`).** For a folder with an entry in `Sanomattomien_kirja.md`, the chat gets the entry's misty text and the blind filler's missed guesses as theories to argue about. The answer key never reaches the model, and a fixed rule keeps Valtteri from comparing a gap with the recording, because the gaps hide words from that same recording. Without an entry the stream is made without the Book.
 
-Provider and model: `reacts_llm_provider` / `reacts_model` (empty = `llm_provider` / `llm_model`), overridden by `--provider` / `--model`; thinking effort `low` by default (`--effort`). A reply shorter than `--min-chars` (1500) is rejected as a refusal and printed to the console.
+Provider and model: `reacts_llm_provider` / `reacts_model` (empty = `llm_provider` / `llm_model`), overridden by `--provider` / `--model`. Thinking effort: `medium` where the thinking comes back readable (Claude via OpenRouter), `low` elsewhere; `--effort low|medium|high` overrides it. Every input is read before the first call, so an empty or non-UTF-8 file stops the run at no cost. A reply shorter than `--min-chars` (1500) is rejected as a refusal and kept in `_streams/<name>.rejected.md`.
 
 > **Privacy & cost.** The whole text of every recording goes to the configured provider, a paid API, and the script says so before the first call. The result is satire about the material written by AI: read it before you share it, especially when it names real people — nothing checks what the model attributes to them.
 
