@@ -74,6 +74,8 @@ jobs:
           python .github/scripts/test_bramka_printow.py
           python .github/scripts/test_audyt_podstaw.py
           python .github/scripts/test_zrodlo_raportu.py
+          # Treść .docx w kolejności dokumentu: tabele, obrazy (alt / OCR-atrapa / pominięte z numerem).
+          python .github/scripts/test_docx_tresc.py
           python .github/scripts/test_wzorce_raportu.py
           python .github/scripts/test_naprawa_zrodel.py
           python .github/scripts/test_python_ci.py

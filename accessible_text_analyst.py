@@ -722,8 +722,51 @@ def _print_text_cleanup(kind, c):
               f"с сохранением дефиса: {_h[1]}, оставлено: {_h[3]}, не переносы: {_h[4]}.")
 
 
+def _docx_ocr(obraz, nr, razem):
+    """OCR одного изображения из .docx тем же голосованием, что и сканы PDF.
+    Нехватка движка или словаря → docx_tresc.OcrNiedostepny: остальные
+    изображения пропускаются и перечисляются номерами, текст документа остаётся."""
+    import docx_tresc
+    try:
+        _ocr_plan(CORPUS_LANGS)
+    except (RuntimeError, ImportError) as _e:
+        raise docx_tresc.OcrNiedostepny(str(_e)) from None
+    text, wynik = _ocr_obraz(obraz, CORPUS_LANGS)
+    print(f"  OCR: изображение {nr}/{razem} — {len(text.strip())} символов "
+          f"(основа: {wynik.baza}, заменено слов: {wynik.zmiany}, добавлено: {wynik.dodane}).")
+    return text
+
+
+def _print_docx_contents(w):
+    """Отчёт о таблицах и изображениях .docx: ни одно изображение не пропадает молча."""
+    from docx_tresc import zakresy
+    if w.tabele:
+        print(f"  DOCX: таблиц: {w.tabele}, ячеек с текстом: {w.komorki}.")
+    if not w.obrazy:
+        return
+    print(f"  DOCX: изображений: {w.obrazy} — распознано OCR: {len(w.ocr_ok)}, "
+          f"взято из замещающего текста (alt): {len(w.z_alt)}, декоративных: {len(w.dekoracyjne)}.")
+    if w.ocr_puste:
+        print(f"  [ВНИМАНИЕ] DOCX: OCR не нашёл текста на изображениях: {zakresy(w.ocr_puste)}.")
+    if w.bez_ocr:
+        print(f"  [ВНИМАНИЕ] DOCX: OCR недоступен, пропущено изображений: {len(w.bez_ocr)} "
+              f"(номера: {zakresy(w.bez_ocr)}). Причина выше; исправление: установить "
+              f"компоненты OCR из requirements.txt или поправить corpus_languages.")
+    for _ext in sorted({e for _, e in w.format}):
+        _nums = [n for n, e in w.format if e == _ext]
+        print(f"  [ВНИМАНИЕ] DOCX: формат {_ext} не читается, пропущено изображений: "
+              f"{len(_nums)} (номера: {zakresy(_nums)}).")
+    if w.zewnetrzne:
+        print(f"  [ВНИМАНИЕ] DOCX: изображения по внешней ссылке (не внутри файла) пропущены: "
+              f"{zakresy(w.zewnetrzne)}.")
+    for _nr, _msg in w.bledy:
+        print(f"  [ВНИМАНИЕ] DOCX: ошибка чтения изображения {_nr}: {_msg}")
+
+
 def load_docx(path, page_size=2000):
-    """Загружает файл .docx и извлекает текст из всех абзацев документа."""
+    """Загружает файл .docx: абзацы, ячейки таблиц и изображения В ПОРЯДКЕ ДОКУМЕНТА.
+    Изображение даёт свой замещающий текст (alt), а без него читается OCR
+    (docx_tresc.py; до 2026-11-22 таблицы и изображения терялись молча)."""
     try:
         from docx import Document
     except ImportError:
@@ -735,11 +778,13 @@ def load_docx(path, page_size=2000):
     # rozstrzelenia („у с т о й ч и в о е”), przeniesienia „по- священного”
     # (reguły 1–4; zawieszony łącznik „двух- и трёх…”, myślniki
     # i „по-английски” zostają). Liczba akapitów się nie zmienia.
-    from czyszczenie_tekstu import oczysc_akapity_docx
-    from shamanic_locale import alfabety_paczek
-    _paras, _cz = oczysc_akapity_docx([p.text for p in doc.paragraphs], alfabety_paczek())
-    _print_text_cleanup("DOCX", _cz)
-    raw = "  ".join(p for p in _paras if p.strip())
+    # `docx_tresc.tresc_docx` czyści tak tekst dokumentu (akapity, komórki, alt),
+    # tekstu z OCR — nie.
+    import docx_tresc
+    _w = docx_tresc.tresc_docx(doc, ocr=_docx_ocr)
+    _print_text_cleanup("DOCX", _w.czyszczenie)
+    _print_docx_contents(_w)
+    raw = "  ".join(p for p in _w.akapity if p.strip())
     raw = re.sub(r"\s+", " ", raw).strip()
     # Применяем CUSTOM_PATTERNS (если определены)
     if 'CUSTOM_PATTERNS' in globals():

@@ -226,12 +226,17 @@ def _kawalki_docx(sciezka, stan=None, wzorce=()):
     """Akapity po tym samym czyszczeniu co w `load_docx`
     (`czyszczenie_tekstu.oczysc_akapity_docx`: U+F020, mojibake, rozstrzelenia,
     przeniesienia). Mojibake zmienia litery, reszta nie — bramka czyta
-    dokładnie ten tekst, który trafił do korpusu."""
+    dokładnie ten tekst, który trafił do korpusu: akapity, komórki tabel
+    i teksty alternatywne obrazów w kolejności dokumentu (`docx_tresc`).
+    Obrazy bez tekstu alternatywnego loader czyta OCR-em; bramka OCR nie
+    uruchamia, tylko zapisuje ich liczbę w `stan["obrazy"]` — rozjazd przy
+    takich obrazach jest wtedy niesprawdzalny („ocr”), nie odmową."""
     from docx import Document
-    from czyszczenie_tekstu import oczysc_akapity_docx
-    from shamanic_locale import alfabety_paczek
-    akapity = [p.text for p in Document(sciezka).paragraphs]
-    akapity = oczysc_akapity_docx(akapity, alfabety_paczek())[0]
+    from docx_tresc import tresc_docx
+    wynik = tresc_docx(Document(sciezka), ocr=None)
+    if stan is not None and wynik.bez_ocr:
+        stan["obrazy"] = len(wynik.bez_ocr)
+    akapity = wynik.akapity
     if not wzorce:
         yield from akapity
         return
