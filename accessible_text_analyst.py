@@ -722,17 +722,20 @@ def _print_text_cleanup(kind, c):
               f"с сохранением дефиса: {_h[1]}, оставлено: {_h[3]}, не переносы: {_h[4]}.")
 
 
-def _docx_ocr(obraz, nr, razem):
+def _docx_ocr(obraz, nr, k, razem):
     """OCR одного изображения из .docx тем же голосованием, что и сканы PDF.
-    Нехватка движка или словаря → docx_tresc.OcrNiedostepny: остальные
-    изображения пропускаются и перечисляются номерами, текст документа остаётся."""
+    ЛЮБАЯ ошибка подготовки OCR (нет движка или словаря, нет сети для первой
+    загрузки моделей RapidOCR, Tesseract без tessdata) → docx_tresc.OcrNiedostepny:
+    подготовка не повторяется для каждого изображения (аудит 2.2.0: 46 изображений =
+    46 попыток загрузки), остальные изображения перечисляются номерами, текст
+    документа остаётся. Ошибка одного изображения идёт из _ocr_obraz — вне этого try."""
     import docx_tresc
     try:
         _ocr_plan(CORPUS_LANGS)
-    except (RuntimeError, ImportError) as _e:
-        raise docx_tresc.OcrNiedostepny(str(_e)) from None
+    except Exception as _e:  # noqa: BLE001 — см. docstring
+        raise docx_tresc.OcrNiedostepny(f"{type(_e).__name__}: {_e}") from None
     text, wynik = _ocr_obraz(obraz, CORPUS_LANGS)
-    print(f"  OCR: изображение {nr}/{razem} — {len(text.strip())} символов "
+    print(f"  OCR: изображение {nr} ({k} из {razem}) — {len(text.strip())} символов "
           f"(основа: {wynik.baza}, заменено слов: {wynik.zmiany}, добавлено: {wynik.dodane}).")
     return text
 
@@ -742,20 +745,38 @@ def _print_docx_contents(w):
     from docx_tresc import zakresy
     if w.tabele:
         print(f"  DOCX: таблиц: {w.tabele}, ячеек с текстом: {w.komorki}.")
+    if w.pola_tekstowe:
+        print(f"  DOCX: прочитано текстовых полей (надписей): {w.pola_tekstowe}.")
+    if w.naglowki or w.stopki:
+        print(f"  [ВНИМАНИЕ] DOCX: колонтитулы не входят в текст — верхних с содержимым: "
+              f"{w.naglowki}, нижних: {w.stopki}.")
+    if w.diagramy:
+        print(f"  [ВНИМАНИЕ] DOCX: диаграммы и SmartArt не читаются: {w.diagramy}; "
+              f"их замещающий текст взят в текст у {w.diagramy_alt}.")
     if not w.obrazy:
         return
     print(f"  DOCX: изображений: {w.obrazy} — распознано OCR: {len(w.ocr_ok)}, "
           f"взято из замещающего текста (alt): {len(w.z_alt)}, декоративных: {len(w.dekoracyjne)}.")
+    if w.powtorki:
+        print(f"  DOCX: повторы того же изображения (OCR один раз, текст на каждом месте): "
+              f"{len(w.powtorki)} — " + ", ".join(f"{n} = {p}" for n, p in w.powtorki) + ".")
     if w.ocr_puste:
         print(f"  [ВНИМАНИЕ] DOCX: OCR не нашёл текста на изображениях: {zakresy(w.ocr_puste)}.")
     if w.bez_ocr:
         print(f"  [ВНИМАНИЕ] DOCX: OCR недоступен, пропущено изображений: {len(w.bez_ocr)} "
-              f"(номера: {zakresy(w.bez_ocr)}). Причина выше; исправление: установить "
-              f"компоненты OCR из requirements.txt или поправить corpus_languages.")
+              f"(номера: {zakresy(w.bez_ocr)}).")
+        if w.ocr_niedostepny:
+            print(f"    Причина: {w.ocr_niedostepny}")
+        print("    Исправление: установить компоненты OCR из requirements.txt "
+              "или поправить corpus_languages.")
     for _ext in sorted({e for _, e in w.format}):
         _nums = [n for n, e in w.format if e == _ext]
-        print(f"  [ВНИМАНИЕ] DOCX: формат {_ext} не читается, пропущено изображений: "
+        print(f"  [ВНИМАНИЕ] DOCX: данные не распознаны как изображение {_ext}, пропущено: "
               f"{len(_nums)} (номера: {zakresy(_nums)}).")
+    if w.puste_pliki:
+        print(f"  [ВНИМАНИЕ] DOCX: пустые файлы изображений (0 байт): {zakresy(w.puste_pliki)}.")
+    for _nr, _wym in w.za_duze:
+        print(f"  [ВНИМАНИЕ] DOCX: изображение {_nr} слишком большое ({_wym} пикселей), пропущено.")
     if w.zewnetrzne:
         print(f"  [ВНИМАНИЕ] DOCX: изображения по внешней ссылке (не внутри файла) пропущены: "
               f"{zakresy(w.zewnetrzne)}.")
