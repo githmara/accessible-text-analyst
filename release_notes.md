@@ -23,6 +23,7 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 - The README in all nine languages describes what a `.docx` gives and what it does not.
 
 ---
+
 ## v2.1.0 — Helsinki Reacts, a stream script with a prompt you edit
 
 **Theme.** A new optional LLM tool, `helsinki_reacts.py`: Valtteri, a streamer from Helsinki, reacts to a recording with a Finnish chat, and Lumi, a cold text-to-speech voice, reads out the donations. The other AI tools here carry their prompts in the code. This one does not, because it is the place where the user decides what the content is like, and one rule more or less changes a stream a lot.
