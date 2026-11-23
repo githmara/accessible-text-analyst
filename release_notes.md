@@ -4,6 +4,25 @@ All release entries are appended in reverse-chronological order. On GitHub, the 
 
 ---
 
+## v2.2.0 — Word documents read whole: tables, text boxes and images
+
+**Theme.** Up to 2.1 a `.docx` gave only its body paragraphs. A presentation pasted into Word as slide images loaded as a few captions, and a table lost its cells, without a word about it. Now the document is read in its own order, and whatever cannot be read is named.
+
+### What's new
+- **Tables and text boxes.** Table cells (nested tables and content controls included) and text boxes are read where they stand in the document. A text box saved by Word in two versions for older readers is read once.
+- **Images.** An image gives its alt text; an image marked as decorative gives nothing. An image without alt text is read by the same OCR as a scanned PDF, with transparency placed on a white background. The same image file repeated in the document, such as a logo on every slide, is read once and repeated with the same text. Real EMF/WMF pictures are rendered for OCR on Windows.
+- **No silence.** An image that could not be read is reported by its number with the reason: OCR not available (and why, once, in the summary), a linked image outside the file, a format that cannot be read, an image over the Pillow size limit, an empty file. Headers, footers, charts and SmartArt are not read, but the load summary says how many there are; a chart's alt text does go into the text.
+- **Tracked changes.** The version after the changes counts: deleted and moved-away text and images are skipped, inserted and moved-in ones are read. On 300 real `.docx` files the only text that changed against 2.1 was such tracked insertions.
+- **Shared policy with Reżyser Audio GPT.** Both projects now read `.docx` structure by the same seven rules (listed in the `docx_tresc.py` docstring), checked by a separate code audit of each project with a reproduction for every finding.
+- **The report gate reads the same text.** `zrodlo_raportu` checks a report against the document text without OCR; a preview that needed OCR is marked as not checkable instead of being refused.
+- **Environment.** `transformers` 5.24.0 (optional, Icelandic and sentiment), `pyyaml` 6.0.4, `pdfplumber` 0.11.11, `jupytext` 1.19.7. A full run on the Finnish corpus with sentiment gave 59 export files byte-identical to the run on the previous versions, and the warnings-as-errors run is clean.
+
+### Verified
+- New tests in `.github/scripts/test_docx_tresc.py` (22), part of the release self-test: document order, alt text and decorative images, the same image read once, text boxes in place, content controls in rows and cells, tracked changes, linked and broken images, headers and charts reported, OCR failures reported once, and a real EMF picture (Windows only).
+- A code audit by a separate agent found 11 defects in the first version of the `.docx` reader; all are fixed and each has a test.
+- The README in all nine languages describes what a `.docx` gives and what it does not.
+
+---
 ## v2.1.0 — Helsinki Reacts, a stream script with a prompt you edit
 
 **Theme.** A new optional LLM tool, `helsinki_reacts.py`: Valtteri, a streamer from Helsinki, reacts to a recording with a Finnish chat, and Lumi, a cold text-to-speech voice, reads out the donations. The other AI tools here carry their prompts in the code. This one does not, because it is the place where the user decides what the content is like, and one rule more or less changes a stream a lot.
